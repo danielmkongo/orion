@@ -10,14 +10,14 @@ export default defineConfig({
     },
   },
   server: {
-    port: 5173,
+    port: 7001,
     proxy: {
       '/api': {
-        target: 'http://localhost:3001',
+        target: 'http://localhost:7001',
         changeOrigin: true,
       },
       '/socket.io': {
-        target: 'http://localhost:3001',
+        target: 'http://localhost:7001',
         changeOrigin: true,
         ws: true,
       },
