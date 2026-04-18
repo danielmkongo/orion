@@ -10,14 +10,15 @@ export default defineConfig({
     },
   },
   server: {
-    port: 7001,
+    port: 6002,
+    host: '0.0.0.0',
     proxy: {
       '/api': {
-        target: 'http://0.0.0.0:7001',
+        target: 'http://localhost:7001',
         changeOrigin: true,
       },
       '/socket.io': {
-        target: 'http://0.0.0.0:7001',
+        target: 'http://localhost:7001',
         changeOrigin: true,
         ws: true,
       },

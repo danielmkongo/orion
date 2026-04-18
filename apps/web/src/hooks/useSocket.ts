@@ -12,7 +12,7 @@ export function getSocket(): Socket | null {
 }
 
 export function useSocket() {
-  const { accessToken, isAuthenticated } = useAuthStore();
+  const { accessToken, isAuthenticated } =  useAuthStore();
   const socketRef = useRef<Socket | null>(null);
 
   useEffect(() => {
