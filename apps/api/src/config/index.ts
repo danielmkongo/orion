@@ -2,7 +2,7 @@ import 'dotenv/config';
 
 export const config = {
   env: process.env.NODE_ENV ?? 'development',
-  port: parseInt(process.env.PORT ?? '3001', 10),
+  port: parseInt(process.env.PORT ?? '7001', 10),
   host: process.env.HOST ?? '0.0.0.0',
 
   mongoUri: process.env.MONGODB_URI ?? 'mongodb+srv://orion-vortan:I4f1F41qZUXsnwHz@data.xiftiun.mongodb.net/orion?appName=database&retryWrites=true&w=majority',
@@ -16,7 +16,7 @@ export const config = {
   },
 
   cors: {
-    origin: process.env.CORS_ORIGIN ?? 'http://localhost:5173',
+    origin: process.env.CORS_ORIGIN ?? 'http://localhost:6002',
   },
 
   uploadDir: process.env.UPLOAD_DIR ?? './uploads',
@@ -24,5 +24,5 @@ export const config = {
 
   mqttBrokerUrl: process.env.MQTT_BROKER_URL,
   ingestionSecret: process.env.INGESTION_SECRET ?? 'orion-ingestion-secret',
-  frontendUrl: process.env.FRONTEND_URL ?? 'http://localhost:5173',
+  frontendUrl: process.env.FRONTEND_URL ?? 'http://localhost:6002',
 } as const;
