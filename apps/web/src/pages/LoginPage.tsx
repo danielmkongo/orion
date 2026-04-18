@@ -1,18 +1,25 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Satellite, Eye, EyeOff, ArrowRight, Loader2 } from 'lucide-react';
+import { Eye, EyeOff, ArrowRight, Loader2, Wifi, BarChart2, Shield, Cpu } from 'lucide-react';
 import { authApi } from '@/api/auth';
 import { useAuthStore } from '@/store/auth.store';
+import { OrionMark } from '@/components/ui/OrionLogo';
 import toast from 'react-hot-toast';
-import { cn } from '@/lib/utils';
+
+const FEATURES = [
+  { icon: Wifi,      label: 'Any Protocol',    desc: 'MQTT · HTTP · WebSocket' },
+  { icon: BarChart2, label: 'Live Analytics',   desc: 'Real-time dashboards'    },
+  { icon: Shield,    label: 'Rules Engine',     desc: 'Automated responses'     },
+  { icon: Cpu,       label: 'Fleet Control',    desc: 'OTA · Commands · Alerts' },
+];
 
 export function LoginPage() {
   const navigate = useNavigate();
   const { setAuth } = useAuthStore();
   const [email, setEmail] = useState('admin@vortan.io');
   const [password, setPassword] = useState('demo1234');
-  const [showPassword, setShowPassword] = useState(false);
+  const [showPwd, setShowPwd] = useState(false);
   const [loading, setLoading] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -23,119 +30,108 @@ export function LoginPage() {
       setAuth(result.user as any, result.accessToken, result.refreshToken);
       navigate('/dashboard');
     } catch (err: any) {
-      toast.error(err.response?.data?.error ?? 'Login failed');
+      toast.error(err.response?.data?.error ?? 'Invalid credentials');
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div className="min-h-screen bg-surface-0 flex">
-      {/* Left panel — branding */}
-      <div className="hidden lg:flex lg:w-1/2 xl:w-3/5 relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-surface-1 via-surface-2 to-[#0d0e1f]" />
-
-        {/* Grid pattern */}
+    <div className="min-h-screen flex bg-background">
+      {/* ── Left brand panel ── */}
+      <div className="hidden lg:flex flex-col lg:w-[52%] xl:w-[56%] relative overflow-hidden bg-foreground">
+        {/* Subtle dot grid */}
         <div
-          className="absolute inset-0 opacity-[0.03]"
+          className="absolute inset-0 opacity-[0.04]"
           style={{
-            backgroundImage: `linear-gradient(rgba(98,114,242,1) 1px, transparent 1px), linear-gradient(90deg, rgba(98,114,242,1) 1px, transparent 1px)`,
-            backgroundSize: '40px 40px',
+            backgroundImage: `radial-gradient(circle, white 1px, transparent 1px)`,
+            backgroundSize: '28px 28px',
           }}
         />
 
-        {/* Glow orbs */}
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-orion-600/10 rounded-full blur-3xl" />
-        <div className="absolute bottom-1/4 right-1/4 w-64 h-64 bg-accent-violet/10 rounded-full blur-3xl" />
+        {/* Warm orange gradient wash */}
+        <div className="absolute inset-0 bg-gradient-to-br from-transparent via-transparent to-primary/20" />
 
-        <div className="relative z-10 flex flex-col justify-between p-12 w-full">
+        {/* Large "O" background watermark */}
+        <div className="absolute right-[-80px] top-1/2 -translate-y-1/2 opacity-[0.06]">
+          <OrionMark size={480} className="text-white" />
+        </div>
+
+        <div className="relative flex flex-col justify-between h-full p-14">
           {/* Logo */}
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl orion-gradient flex items-center justify-center shadow-glow">
-              <Satellite className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <span className="text-xl font-bold text-gradient">Orion</span>
-              <span className="block text-[11px] text-slate-500 uppercase tracking-widest">by Vortan</span>
-            </div>
+            <OrionMark size={28} className="text-primary" />
+            <span className="text-[17px] font-semibold text-white tracking-tight">Orion</span>
           </div>
 
-          {/* Center content */}
-          <div className="max-w-lg">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
-            >
-              <h1 className="text-5xl font-bold text-white leading-tight mb-6">
-                Device intelligence,<br />
-                <span className="text-gradient">redefined.</span>
-              </h1>
-              <p className="text-lg text-slate-400 leading-relaxed mb-10">
-                Monitor, control, and analyze any connected device — from GPS trackers to industrial sensors — in one intelligent platform.
-              </p>
-            </motion.div>
+          {/* Headline */}
+          <motion.div
+            initial={{ opacity: 0, y: 24 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.1 }}
+            className="max-w-[480px]"
+          >
+            <h1 className="text-[3.25rem] font-semibold text-white leading-[1.12] tracking-tight mb-5">
+              Device intelligence,<br />
+              <span className="text-primary">redefined.</span>
+            </h1>
+            <p className="text-[1.0625rem] text-white/55 leading-relaxed">
+              Monitor, control, and analyze any connected device — from GPS trackers
+              to industrial sensors — in one cohesive platform.
+            </p>
 
-            {/* Feature points */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-              className="grid grid-cols-2 gap-4"
-            >
-              {[
-                { label: 'Live Map Tracking', desc: 'Real-time GPS & geofencing' },
-                { label: 'Multi-Protocol', desc: 'MQTT, HTTP, WebSocket, CoAP' },
-                { label: 'Rules Engine', desc: 'Intelligent automation' },
-                { label: 'OTA Updates', desc: 'Safe staged firmware rollouts' },
-              ].map(feature => (
-                <div key={feature.label} className="bg-surface-2/50 border border-surface-border/50 rounded-xl p-4">
-                  <p className="text-sm font-semibold text-slate-200 mb-1">{feature.label}</p>
-                  <p className="text-xs text-slate-500">{feature.desc}</p>
+            {/* Feature grid */}
+            <div className="grid grid-cols-2 gap-3 mt-10">
+              {FEATURES.map(({ icon: Icon, label, desc }) => (
+                <div
+                  key={label}
+                  className="rounded-xl p-4 border border-white/10 bg-white/5 backdrop-blur-sm"
+                >
+                  <div className="w-7 h-7 rounded-lg bg-primary/20 flex items-center justify-center mb-3">
+                    <Icon size={14} className="text-primary" />
+                  </div>
+                  <p className="text-[13px] font-semibold text-white">{label}</p>
+                  <p className="text-[12px] text-white/45 mt-0.5">{desc}</p>
                 </div>
               ))}
-            </motion.div>
-          </div>
+            </div>
+          </motion.div>
 
-          {/* Footer */}
-          <p className="text-xs text-slate-600">
-            © 2024 Vortan Technologies. All rights reserved.
-          </p>
+          <p className="text-[12px] text-white/30">© {new Date().getFullYear()} Orion by Vortan</p>
         </div>
       </div>
 
-      {/* Right panel — form */}
+      {/* ── Right form panel ── */}
       <div className="flex-1 flex items-center justify-center p-8">
         <motion.div
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          className="w-full max-w-md"
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35 }}
+          className="w-full max-w-[400px]"
         >
           {/* Mobile logo */}
-          <div className="flex items-center gap-3 mb-10 lg:hidden">
-            <div className="w-9 h-9 rounded-xl orion-gradient flex items-center justify-center">
-              <Satellite className="w-4 h-4 text-white" />
-            </div>
-            <span className="text-xl font-bold text-gradient">Orion</span>
+          <div className="flex items-center gap-2.5 mb-10 lg:hidden">
+            <OrionMark size={24} className="text-primary" />
+            <span className="text-[16px] font-semibold text-foreground">Orion</span>
           </div>
 
-          <h2 className="text-2xl font-bold text-white mb-2">Welcome back</h2>
-          <p className="text-slate-400 text-sm mb-8">Sign in to your Orion workspace</p>
+          <h2 className="text-[1.625rem] font-semibold text-foreground tracking-tight">Welcome back</h2>
+          <p className="text-[14px] text-muted-foreground mt-1 mb-8">Sign in to your workspace</p>
 
-          {/* Demo credentials hint */}
-          <div className="bg-orion-600/10 border border-orion-500/20 rounded-xl p-4 mb-6 text-sm">
-            <p className="text-orion-300 font-medium mb-1">Demo credentials</p>
-            <p className="text-orion-400/70">admin@vortan.io / demo1234</p>
+          {/* Demo hint */}
+          <div className="rounded-xl border border-primary/20 bg-primary/5 p-3.5 mb-7">
+            <p className="text-[12px] font-semibold text-primary mb-0.5">Demo access</p>
+            <p className="text-[12px] text-muted-foreground font-mono">admin@vortan.io / demo1234</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1.5">Email</label>
+              <label className="block text-[13px] font-medium text-foreground mb-1.5">Email</label>
               <input
                 type="email"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
-                className="input-field"
+                className="input"
                 placeholder="you@company.com"
                 required
                 autoComplete="email"
@@ -144,25 +140,25 @@ export function LoginPage() {
 
             <div>
               <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-sm font-medium text-slate-300">Password</label>
-                <button type="button" className="text-xs text-orion-400 hover:text-orion-300">Forgot password?</button>
+                <label className="text-[13px] font-medium text-foreground">Password</label>
+                <button type="button" className="text-[12px] text-primary hover:underline">Forgot password?</button>
               </div>
               <div className="relative">
                 <input
-                  type={showPassword ? 'text' : 'password'}
+                  type={showPwd ? 'text' : 'password'}
                   value={password}
                   onChange={e => setPassword(e.target.value)}
-                  className="input-field pr-10"
+                  className="input pr-10"
                   placeholder="••••••••"
                   required
                   autoComplete="current-password"
                 />
                 <button
                   type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
+                  onClick={() => setShowPwd(v => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
                 >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  {showPwd ? <EyeOff size={15} /> : <Eye size={15} />}
                 </button>
               </div>
             </div>
@@ -170,20 +166,19 @@ export function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className={cn('btn-primary w-full mt-2', loading && 'opacity-70')}
+              className="btn btn-primary btn-lg w-full mt-1"
             >
-              {loading ? (
-                <><Loader2 className="w-4 h-4 animate-spin" /> Signing in...</>
-              ) : (
-                <>Sign in <ArrowRight className="w-4 h-4" /></>
-              )}
+              {loading
+                ? <><Loader2 size={16} className="animate-spin" /> Signing in…</>
+                : <>Sign in <ArrowRight size={16} /></>
+              }
             </button>
           </form>
 
-          <p className="text-center text-sm text-slate-500 mt-6">
-            Don't have an account?{' '}
-            <Link to="/register" className="text-orion-400 hover:text-orion-300 font-medium">
-              Create one
+          <p className="text-center text-[13px] text-muted-foreground mt-6">
+            No account?{' '}
+            <Link to="/register" className="font-medium text-primary hover:underline">
+              Create workspace
             </Link>
           </p>
         </motion.div>

@@ -1,322 +1,282 @@
-import { useEffect, useState, useRef } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Polyline, Circle, useMap } from 'react-leaflet';
-import L from 'leaflet';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState, useEffect, useCallback } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
+import { APIProvider, Map, AdvancedMarker, Pin, InfoWindow } from '@vis.gl/react-google-maps';
+import { Search, MapPin, Navigation, Wifi, WifiOff, X, ExternalLink, AlertTriangle } from 'lucide-react';
 import { devicesApi } from '@/api/devices';
-import { telemetryApi } from '@/api/telemetry';
 import { useSocket } from '@/hooks/useSocket';
-import { cn, timeAgo, categoryIcon, statusColor } from '@/lib/utils';
-import { Search, Layers, Filter, X, MapPin, Activity, Navigation, History } from 'lucide-react';
+import { timeAgo, categoryIcon } from '@/lib/utils';
 import { Link } from 'react-router-dom';
+import type { Device } from '@orion/shared';
 
-// Fix Leaflet default icons
-delete (L.Icon.Default.prototype as any)._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
-  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
-});
+const GMAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY ?? '';
 
-function createDeviceIcon(category: string, status: string, isSelected: boolean) {
-  const emoji = categoryIcon(category);
-  const color = status === 'online' ? '#10b981' : status === 'error' ? '#f43f5e' : '#64748b';
-  const size = isSelected ? 44 : 36;
-  const border = isSelected ? `3px solid ${color}` : `2px solid ${color}`;
-  const shadow = isSelected ? `0 0 0 4px ${color}20, 0 4px 16px rgba(0,0,0,0.5)` : '0 2px 8px rgba(0,0,0,0.4)';
-
-  return L.divIcon({
-    html: `<div style="
-      width:${size}px;height:${size}px;border-radius:50%;
-      background:rgba(15,16,33,0.95);border:${border};
-      display:flex;align-items:center;justify-content:center;
-      font-size:${isSelected ? 20 : 16}px;
-      box-shadow:${shadow};
-      transition:all 0.2s ease;
-    ">${emoji}</div>`,
-    iconSize: [size, size],
-    iconAnchor: [size / 2, size / 2],
-    popupAnchor: [0, -size / 2],
-    className: '',
-  });
-}
-
-function LiveMarkers({ devices, selectedId, onSelect }: {
-  devices: any[]; selectedId: string | null; onSelect: (d: any) => void;
-}) {
-  const map = useMap();
-  const { on } = useSocket();
-  const [positions, setPositions] = useState<Record<string, { lat: number; lng: number }>>({});
-
-  useEffect(() => {
-    const unsub = on('location.update', (event: any) => {
-      const { deviceId, lat, lng } = event.data ?? event;
-      if (deviceId && lat && lng) {
-        setPositions(prev => ({ ...prev, [deviceId]: { lat, lng } }));
-      }
-    });
-    return unsub;
-  }, [on]);
-
+function NoApiKey() {
   return (
-    <>
-      {devices.map(device => {
-        if (!device.location?.lat) return null;
-        const live = positions[device._id];
-        const lat = live?.lat ?? device.location.lat;
-        const lng = live?.lng ?? device.location.lng;
-        const isSelected = device._id === selectedId;
-
-        return (
-          <Marker
-            key={device._id}
-            position={[lat, lng]}
-            icon={createDeviceIcon(device.category, device.status, isSelected)}
-            eventHandlers={{ click: () => onSelect(device) }}
-          >
-            <Popup>
-              <div className="font-sans">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className={cn('w-2 h-2 rounded-full',
-                    device.status === 'online' ? 'bg-emerald-400' :
-                    device.status === 'error' ? 'bg-rose-400' : 'bg-slate-500'
-                  )} />
-                  <strong className="text-sm">{device.name}</strong>
-                </div>
-                <p className="text-xs text-gray-400 capitalize mb-1">{device.category} · {device.status}</p>
-                <p className="text-xs text-gray-500">
-                  {lat.toFixed(5)}, {lng.toFixed(5)}
-                </p>
-                {device.location?.speed && (
-                  <p className="text-xs text-gray-500">{device.location.speed.toFixed(1)} km/h</p>
-                )}
-              </div>
-            </Popup>
-          </Marker>
-        );
-      })}
-    </>
+    <div className="flex flex-col items-center justify-center h-full text-center p-10">
+      <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
+        <MapPin size={24} className="text-primary" />
+      </div>
+      <h3 className="text-[17px] font-semibold text-foreground mb-2">Google Maps API key required</h3>
+      <p className="text-[14px] text-muted-foreground max-w-sm mb-5">
+        Add your key to the <code className="font-mono text-primary text-[13px] bg-primary/5 px-1.5 py-0.5 rounded">apps/web/.env</code> file:
+      </p>
+      <div className="card p-4 font-mono text-[13px] text-foreground bg-muted/40 text-left w-full max-w-sm">
+        VITE_GOOGLE_MAPS_API_KEY=your_key_here
+      </div>
+      <p className="text-[12px] text-muted-foreground mt-4">
+        Get a free key at{' '}
+        <span className="text-primary font-medium">Google Cloud Console</span>
+        {' '}→ Maps JavaScript API
+      </p>
+    </div>
   );
 }
 
-function RouteTrail({ points }: { points: Array<{ lat: number; lng: number }> }) {
-  if (points.length < 2) return null;
-  const positions = points.map(p => [p.lat, p.lng] as [number, number]);
-  return <Polyline positions={positions} color="#6272f2" weight={2.5} opacity={0.8} dashArray="6 4" />;
+function DeviceMarker({
+  device,
+  selected,
+  onSelect,
+  liveIds,
+}: {
+  device: Device;
+  selected: boolean;
+  onSelect: (d: Device | null) => void;
+  liveIds: Set<string>;
+}) {
+  const id = (device as any)._id ?? device.id;
+  const isLive = liveIds.has(id);
+  const position = device.location ? { lat: device.location.lat, lng: device.location.lng } : null;
+  if (!position) return null;
+
+  const color =
+    device.status === 'online' ? '#22c55e' :
+    device.status === 'error'  ? '#ef4444' : '#9ca3af';
+
+  return (
+    <AdvancedMarker
+      position={position}
+      onClick={() => onSelect(selected ? null : device)}
+    >
+      <div
+        className="relative cursor-pointer transition-transform"
+        style={{ transform: selected ? 'scale(1.2)' : 'scale(1)' }}
+      >
+        <div
+          className={`w-9 h-9 rounded-full border-2 flex items-center justify-center shadow-lg text-base ${isLive ? 'animate-pulse' : ''}`}
+          style={{ backgroundColor: `${color}20`, borderColor: color }}
+        >
+          {categoryIcon(device.category)}
+        </div>
+        {/* Status dot */}
+        <div
+          className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white"
+          style={{ backgroundColor: color }}
+        />
+        {/* Live pulse ring */}
+        {isLive && (
+          <div
+            className="absolute inset-0 rounded-full animate-ping opacity-30"
+            style={{ backgroundColor: color }}
+          />
+        )}
+      </div>
+    </AdvancedMarker>
+  );
 }
 
 export function MapPage() {
-  const [search, setSearch] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState('all');
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [selectedDevice, setSelectedDevice] = useState<any | null>(null);
-  const [showRoute, setShowRoute] = useState(false);
-  const mapRef = useRef<any>(null);
+  const [search, setSearch]       = useState('');
+  const [selected, setSelected]   = useState<Device | null>(null);
+  const [liveIds, setLiveIds]     = useState<Set<string>>(new Set());
+  const { on } = useSocket();
 
-  const { data: devicesData } = useQuery({
-    queryKey: ['devices', 'map'],
+  const { data: devicesData, isLoading } = useQuery({
+    queryKey: ['devices', 'all'],
     queryFn: () => devicesApi.list({ limit: 500 }),
     refetchInterval: 30_000,
   });
 
-  const { data: routeData } = useQuery({
-    queryKey: ['location-history', selectedDevice?._id],
-    queryFn: () => telemetryApi.locationHistory(selectedDevice._id, undefined, undefined, 200),
-    enabled: !!selectedDevice && showRoute,
-  });
+  useEffect(() => {
+    const unsub = on<any>('location.update', (e) => {
+      const id = e?.deviceId ?? e?.data?.deviceId;
+      if (!id) return;
+      setLiveIds(prev => new Set([...prev, id]));
+      setTimeout(() => setLiveIds(prev => { const n = new Set(prev); n.delete(id); return n; }), 4000);
+    });
+    return () => unsub();
+  }, [on]);
 
-  const allDevices = devicesData?.devices ?? [];
-  const devicesWithLocation = allDevices.filter((d: any) => d.location?.lat);
+  const allDevices   = devicesData?.devices ?? [];
+  const withLocation = allDevices.filter(d => d.location?.lat && d.location?.lng);
+  const filtered     = withLocation.filter(d =>
+    !search || d.name.toLowerCase().includes(search.toLowerCase())
+  );
 
-  const filtered = devicesWithLocation.filter((d: any) => {
-    if (search && !d.name.toLowerCase().includes(search.toLowerCase())) return false;
-    if (categoryFilter !== 'all' && d.category !== categoryFilter) return false;
-    if (statusFilter !== 'all' && d.status !== statusFilter) return false;
-    return true;
-  });
-
-  const categories = ['all', ...new Set(devicesWithLocation.map((d: any) => d.category))];
-  const routePoints = (routeData?.data ?? []).map((p: any) => p.location).filter(Boolean);
-
-  function flyToDevice(device: any) {
-    if (device.location?.lat && mapRef.current) {
-      mapRef.current.flyTo([device.location.lat, device.location.lng], 15, { duration: 1.5 });
-    }
-  }
-
-  const center: [number, number] = devicesWithLocation[0]?.location
-    ? [devicesWithLocation[0].location.lat, devicesWithLocation[0].location.lng]
-    : [1.3521, 103.8198];
+  const onlineCount  = withLocation.filter(d => d.status === 'online').length;
+  const defaultCenter = withLocation.length > 0
+    ? { lat: withLocation[0].location!.lat, lng: withLocation[0].location!.lng }
+    : { lat: 0, lng: 0 };
 
   return (
-    <div className="flex h-[calc(100vh-64px)] overflow-hidden">
-      {/* Left panel */}
-      <div className="w-72 xl:w-80 shrink-0 flex flex-col bg-surface-1 border-r border-surface-border overflow-hidden">
-        {/* Header */}
-        <div className="p-4 border-b border-surface-border">
-          <h2 className="text-sm font-semibold text-slate-200 mb-3">Map & Tracking</h2>
-          <div className="relative mb-2">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
-            <input
-              type="text"
-              placeholder="Search devices..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              className="input-field pl-8 text-xs py-2"
-            />
+    <div className="flex gap-4 h-[calc(100vh-120px)]">
+      {/* Sidebar */}
+      <div className="w-72 flex-shrink-0 flex flex-col gap-3">
+        {/* Stats */}
+        <div className="card p-4">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-[13px] font-semibold text-foreground">Device Map</span>
+            <span className="badge badge-primary">{withLocation.length} pinned</span>
           </div>
-          <div className="flex gap-1.5">
-            <select
-              value={categoryFilter}
-              onChange={e => setCategoryFilter(e.target.value)}
-              className="flex-1 bg-surface-3 border border-surface-border rounded-lg px-2 py-1.5 text-xs text-slate-300"
-            >
-              {categories.map(c => <option key={c} value={c}>{c === 'all' ? 'All types' : c}</option>)}
-            </select>
-            <select
-              value={statusFilter}
-              onChange={e => setStatusFilter(e.target.value)}
-              className="flex-1 bg-surface-3 border border-surface-border rounded-lg px-2 py-1.5 text-xs text-slate-300"
-            >
-              {['all', 'online', 'offline'].map(s => <option key={s} value={s}>{s === 'all' ? 'All statuses' : s}</option>)}
-            </select>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="bg-muted rounded-xl p-3 text-center">
+              <p className="text-[18px] font-semibold text-green-600 dark:text-green-400">{onlineCount}</p>
+              <p className="text-[11px] text-muted-foreground">Online</p>
+            </div>
+            <div className="bg-muted rounded-xl p-3 text-center">
+              <p className="text-[18px] font-semibold text-muted-foreground">{withLocation.length - onlineCount}</p>
+              <p className="text-[11px] text-muted-foreground">Offline</p>
+            </div>
           </div>
         </div>
 
-        {/* Stats */}
-        <div className="grid grid-cols-3 border-b border-surface-border">
-          <div className="p-3 text-center border-r border-surface-border">
-            <p className="text-lg font-bold text-slate-200">{devicesWithLocation.length}</p>
-            <p className="text-[10px] text-slate-500">on map</p>
-          </div>
-          <div className="p-3 text-center border-r border-surface-border">
-            <p className="text-lg font-bold text-emerald-400">{allDevices.filter((d: any) => d.status === 'online').length}</p>
-            <p className="text-[10px] text-slate-500">online</p>
-          </div>
-          <div className="p-3 text-center">
-            <p className="text-lg font-bold text-orion-400">{allDevices.filter((d: any) => d.category === 'tracker').length}</p>
-            <p className="text-[10px] text-slate-500">trackers</p>
-          </div>
+        {/* Search */}
+        <div className="relative">
+          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <input
+            className="input !pl-9"
+            placeholder="Search devices…"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+          />
         </div>
 
         {/* Device list */}
-        <div className="flex-1 overflow-y-auto">
-          {filtered.map((device: any) => (
-            <button
-              key={device._id}
-              onClick={() => { setSelectedDevice(device); flyToDevice(device); }}
-              className={cn(
-                'w-full flex items-center gap-2.5 p-3 border-b border-surface-border/50 text-left hover:bg-surface-3/50 transition-colors',
-                selectedDevice?._id === device._id ? 'bg-orion-600/10 border-l-2 border-l-orion-500' : ''
-              )}
-            >
-              <span className="text-sm leading-none">{categoryIcon(device.category)}</span>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium text-slate-200 truncate">{device.name}</p>
-                <p className="text-[10px] text-slate-500 mt-0.5">
-                  {device.location?.lat?.toFixed(4)}, {device.location?.lng?.toFixed(4)}
-                </p>
-              </div>
-              <span className={cn('w-1.5 h-1.5 rounded-full shrink-0',
-                device.status === 'online' ? 'bg-emerald-400' :
-                device.status === 'error' ? 'bg-rose-400' : 'bg-slate-500'
-              )} />
-            </button>
-          ))}
+        <div className="card flex-1 overflow-y-auto">
+          {isLoading && (
+            <div className="p-4 space-y-2">
+              {[...Array(5)].map((_, i) => (
+                <div key={i} className="skeleton h-10 w-full" />
+              ))}
+            </div>
+          )}
+          {!isLoading && filtered.length === 0 && (
+            <div className="p-6 text-center">
+              <MapPin size={20} className="text-muted-foreground mx-auto mb-2" />
+              <p className="text-[13px] text-muted-foreground">
+                {search ? 'No matches' : 'No devices with location'}
+              </p>
+            </div>
+          )}
+          {filtered.map((device: any) => {
+            const id = device._id ?? device.id;
+            const isSelected = selected && ((selected as any)._id ?? selected.id) === id;
+            return (
+              <button
+                key={id}
+                onClick={() => setSelected(isSelected ? null : device)}
+                className={`w-full flex items-center gap-3 px-4 py-3 border-b border-border/50 last:border-0 transition-colors text-left ${
+                  isSelected ? 'bg-primary/5' : 'hover:bg-muted/50'
+                }`}
+              >
+                <span className={`status-dot flex-shrink-0 ${
+                  device.status === 'online' ? 'status-dot-online' :
+                  device.status === 'error'  ? 'status-dot-error'  : 'status-dot-offline'
+                }`} />
+                <span className="text-[14px] flex-shrink-0">{categoryIcon(device.category)}</span>
+                <div className="flex-1 min-w-0">
+                  <p className={`text-[13px] font-medium truncate ${isSelected ? 'text-primary' : 'text-foreground'}`}>{device.name}</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    {device.location ? `${device.location.lat.toFixed(4)}, ${device.location.lng.toFixed(4)}` : 'No location'}
+                  </p>
+                </div>
+                {liveIds.has(id) && (
+                  <Navigation size={11} className="text-green-500 flex-shrink-0 animate-pulse" />
+                )}
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      {/* Map */}
-      <div className="flex-1 relative">
-        <MapContainer
-          center={center}
-          zoom={11}
-          className="w-full h-full"
-          ref={mapRef}
-          zoomControl={false}
-        >
-          <TileLayer
-            attribution='© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          />
-          <LiveMarkers
-            devices={filtered}
-            selectedId={selectedDevice?._id ?? null}
-            onSelect={(d) => setSelectedDevice(d)}
-          />
-          {showRoute && routePoints.length > 0 && <RouteTrail points={routePoints} />}
-        </MapContainer>
-
-        {/* Device info overlay */}
-        <AnimatePresence>
-          {selectedDevice && (
-            <motion.div
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 16 }}
-              className="absolute bottom-6 left-1/2 -translate-x-1/2 w-96 bg-surface-2/95 backdrop-blur border border-surface-border rounded-2xl shadow-elevated z-[500]"
+      {/* Map area */}
+      <div className="flex-1 card overflow-hidden relative">
+        {!GMAPS_API_KEY ? (
+          <NoApiKey />
+        ) : (
+          <APIProvider apiKey={GMAPS_API_KEY}>
+            <Map
+              defaultCenter={defaultCenter}
+              defaultZoom={withLocation.length > 0 ? 10 : 2}
+              gestureHandling="greedy"
+              disableDefaultUI={false}
+              mapId="orion-fleet-map"
+              style={{ width: '100%', height: '100%' }}
             >
-              <div className="p-4">
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex items-center gap-3">
-                    <span className="text-2xl">{categoryIcon(selectedDevice.category)}</span>
-                    <div>
-                      <p className="font-semibold text-slate-200">{selectedDevice.name}</p>
-                      <p className="text-xs text-slate-500 capitalize">{selectedDevice.category} · {selectedDevice.status}</p>
-                    </div>
-                  </div>
-                  <button onClick={() => setSelectedDevice(null)} className="text-slate-500 hover:text-slate-300">
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
+              {filtered.map((device: any) => (
+                <DeviceMarker
+                  key={(device._id ?? device.id)}
+                  device={device}
+                  selected={!!selected && ((selected as any)._id ?? selected.id) === (device._id ?? device.id)}
+                  onSelect={setSelected}
+                  liveIds={liveIds}
+                />
+              ))}
 
-                <div className="grid grid-cols-2 gap-2 mb-3">
-                  <div className="bg-surface-3 rounded-xl p-3">
-                    <p className="text-[10px] text-slate-500 mb-0.5">Coordinates</p>
-                    <p className="text-xs font-mono text-slate-300">
-                      {selectedDevice.location?.lat?.toFixed(5)}, {selectedDevice.location?.lng?.toFixed(5)}
-                    </p>
-                  </div>
-                  <div className="bg-surface-3 rounded-xl p-3">
-                    <p className="text-[10px] text-slate-500 mb-0.5">Last Seen</p>
-                    <p className="text-xs text-slate-300">
-                      {selectedDevice.lastSeenAt ? timeAgo(selectedDevice.lastSeenAt) : 'Unknown'}
-                    </p>
-                  </div>
-                  {selectedDevice.location?.speed != null && (
-                    <div className="bg-surface-3 rounded-xl p-3">
-                      <p className="text-[10px] text-slate-500 mb-0.5">Speed</p>
-                      <p className="text-xs font-semibold text-orion-300">{selectedDevice.location.speed.toFixed(1)} km/h</p>
+              {/* InfoWindow for selected device */}
+              {selected && selected.location && (
+                <InfoWindow
+                  position={{ lat: selected.location.lat, lng: selected.location.lng }}
+                  onCloseClick={() => setSelected(null)}
+                >
+                  <div className="p-2 min-w-[180px]">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-lg">{categoryIcon(selected.category)}</span>
+                      <div>
+                        <p className="font-semibold text-[13px] text-gray-900">{selected.name}</p>
+                        <p className="text-[11px] capitalize text-gray-500">{selected.status}</p>
+                      </div>
                     </div>
-                  )}
-                  {selectedDevice.location?.heading != null && (
-                    <div className="bg-surface-3 rounded-xl p-3">
-                      <p className="text-[10px] text-slate-500 mb-0.5">Heading</p>
-                      <p className="text-xs font-semibold text-orion-300">{selectedDevice.location.heading.toFixed(0)}°</p>
+                    <div className="text-[11px] text-gray-500 space-y-0.5 mb-3">
+                      <p>Lat: {selected.location.lat.toFixed(6)}</p>
+                      <p>Lng: {selected.location.lng.toFixed(6)}</p>
+                      {selected.lastSeenAt && (
+                        <p>Last seen: {timeAgo(selected.lastSeenAt)}</p>
+                      )}
                     </div>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <Link
-                    to={`/devices/${selectedDevice._id}`}
-                    className="btn-primary flex-1 text-xs py-2"
-                  >
-                    <Activity className="w-3.5 h-3.5" /> Device Details
-                  </Link>
-                  {selectedDevice.category === 'tracker' && (
-                    <button
-                      onClick={() => setShowRoute(!showRoute)}
-                      className={cn('btn-secondary text-xs py-2 px-3', showRoute ? 'border-orion-500 text-orion-300' : '')}
+                    <a
+                      href={`/devices/${(selected as any)._id ?? selected.id}`}
+                      className="text-[12px] font-medium text-orange-600 flex items-center gap-1"
                     >
-                      <History className="w-3.5 h-3.5" /> {showRoute ? 'Hide' : 'Route'}
-                    </button>
-                  )}
-                </div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+                      View details <ExternalLink size={10} />
+                    </a>
+                  </div>
+                </InfoWindow>
+              )}
+            </Map>
+          </APIProvider>
+        )}
+
+        {/* Live tracking badge */}
+        {liveIds.size > 0 && (
+          <div className="absolute top-3 right-3 flex items-center gap-1.5 bg-surface/90 backdrop-blur-sm border border-border rounded-full px-3 py-1.5 text-[12px] text-foreground shadow-card">
+            <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+            {liveIds.size} device{liveIds.size !== 1 ? 's' : ''} moving
+          </div>
+        )}
+
+        {/* No location devices notice */}
+        {!isLoading && allDevices.length > 0 && withLocation.length === 0 && (
+          <div className="absolute inset-0 flex items-center justify-center bg-background/80 backdrop-blur-sm">
+            <div className="text-center p-8">
+              <AlertTriangle size={24} className="text-warning mx-auto mb-3" />
+              <p className="text-[15px] font-semibold text-foreground">No location data</p>
+              <p className="text-[13px] text-muted-foreground mt-1">
+                Enable location on a device to see it here
+              </p>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
