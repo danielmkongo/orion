@@ -11,7 +11,7 @@
       "Bash(pnpm --filter=@orion/web typecheck)",
       "Bash(pnpm --filter=@orion/web list leaflet)",
       "Read(//c/Program Files/MongoDB/**)",
-      "Bash(curl -s http://localhost:3001/health)"
+      "Bash(curl -s http://0.0.0.0:7001/health)"
     ]
   }
 }
