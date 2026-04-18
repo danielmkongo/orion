@@ -5,7 +5,7 @@ export const config = {
   port: parseInt(process.env.PORT ?? '3001', 10),
   host: process.env.HOST ?? '0.0.0.0',
 
-  mongoUri: process.env.MONGODB_URI ?? 'mongodb://localhost:27017/orion',
+  mongoUri: process.env.MONGODB_URI ?? 'mongodb+srv://orion-vortan:I4f1F41qZUXsnwHz@data.xiftiun.mongodb.net/orion?appName=database&retryWrites=true&w=majority',
   redisUrl: process.env.REDIS_URL ?? '',
 
   jwt: {
