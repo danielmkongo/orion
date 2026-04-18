@@ -13,11 +13,11 @@ export default defineConfig({
     port: 7001,
     proxy: {
       '/api': {
-        target: 'http://localhost:7001',
+        target: 'http://0.0.0.0:7001',
         changeOrigin: true,
       },
       '/socket.io': {
-        target: 'http://localhost:7001',
+        target: 'http://0.0.0.0:7001',
         changeOrigin: true,
         ws: true,
       },
