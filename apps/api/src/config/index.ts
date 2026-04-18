@@ -16,7 +16,7 @@ export const config = {
   },
 
   cors: {
-    origin: process.env.CORS_ORIGIN ?? 'http://localhost:6002',
+    origin: process.env.CORS_ORIGIN ?? 'http://0.0.0.0:6002',
   },
 
   uploadDir: process.env.UPLOAD_DIR ?? './uploads',
@@ -24,5 +24,5 @@ export const config = {
 
   mqttBrokerUrl: process.env.MQTT_BROKER_URL,
   ingestionSecret: process.env.INGESTION_SECRET ?? 'orion-ingestion-secret',
-  frontendUrl: process.env.FRONTEND_URL ?? 'http://localhost:6002',
+  frontendUrl: process.env.FRONTEND_URL ?? 'http://0.0.0.0:6002',
 } as const;
