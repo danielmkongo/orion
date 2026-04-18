@@ -1,0 +1,34 @@
+{
+  "name": "orion",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Orion — Device Intelligence Platform by Vortan",
+  "packageManager": "pnpm@9.0.0",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "clean": "turbo run clean && rm -rf node_modules",
+    "dev:api": "turbo run dev --filter=@orion/api",
+    "dev:web": "turbo run dev --filter=@orion/web",
+    "dev:ingestion": "turbo run dev --filter=@orion/ingestion",
+    "db:seed": "pnpm --filter=@orion/api run db:seed"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "devDependencies": {
+    "turbo": "^2.0.0",
+    "typescript": "^5.4.0",
+    "@types/node": "^20.12.0",
+    "prettier": "^3.2.0",
+    "eslint": "^8.57.0"
+  }
+}

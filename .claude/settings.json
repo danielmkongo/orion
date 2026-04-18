@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm --version)",
+      "Bash(npx --version)",
+      "Bash(pnpm install *)",
+      "Bash(curl -s --max-time 5 https://registry.npmjs.org/fastify)",
+      "Bash(curl -s --max-time 5 https://registry.npmmirror.com/fastify)",
+      "Bash(pnpm --filter=@orion/shared build)",
+      "Bash(pnpm --filter=@orion/api typecheck)",
+      "Bash(pnpm --filter=@orion/web typecheck)",
+      "Bash(pnpm --filter=@orion/web list leaflet)",
+      "Read(//c/Program Files/MongoDB/**)",
+      "Bash(curl -s http://localhost:3001/health)"
+    ]
+  }
+}
