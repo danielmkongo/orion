@@ -2,7 +2,6 @@ import 'dotenv/config';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import { Server as SocketIOServer } from 'socket.io';
-import { createServer } from 'http';
 import { config } from './config/index.js';
 import { connectMongoDB } from './db/mongoose.js';
 import { connectRedis } from './db/redis.js';
@@ -55,10 +54,15 @@ async function bootstrap() {
     service: 'orion-api',
   }));
 
-  // Create HTTP server for Socket.IO
-  const httpServer = createServer(app.server);
+  // Connect databases
+  await connectMongoDB();
+  // Redis is optional — platform runs without it
+  if (config.redisUrl) {
+    await connectRedis();
+  }
 
-  const io = new SocketIOServer(httpServer, {
+  // Attach Socket.IO to Fastify's underlying server before listen
+  const io = new SocketIOServer(app.server, {
     cors: {
       origin: [config.cors.origin, config.frontendUrl],
       credentials: true,
@@ -69,21 +73,10 @@ async function bootstrap() {
 
   realtimeService.setIO(io);
 
-  // Connect databases
-  await connectMongoDB();
-  // Redis is optional — platform runs without it
-  if (config.redisUrl) {
-    await connectRedis();
-  }
-
-  // Start server
-  await app.ready();
-
-  httpServer.listen({ port: config.port, host: config.host }, () => {
-    console.log(`\n🚀 Orion API running at http://${config.host}:${config.port}`);
-    console.log(`📡 Socket.IO ready at ws://${config.host}:${config.port}/socket.io`);
-    console.log(`🌍 Environment: ${config.env}\n`);
-  });
+  await app.listen({ port: config.port, host: config.host });
+  console.log(`\n🚀 Orion API running at http://${config.host}:${config.port}`);
+  console.log(`📡 Socket.IO ready at ws://${config.host}:${config.port}/socket.io`);
+  console.log(`🌍 Environment: ${config.env}\n`);
 }
 
 bootstrap().catch(err => {
