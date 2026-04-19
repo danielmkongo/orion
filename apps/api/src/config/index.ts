@@ -22,7 +22,11 @@ export const config = {
   uploadDir: process.env.UPLOAD_DIR ?? './uploads',
   firmwareDir: process.env.FIRMWARE_DIR ?? './firmware',
 
-  mqttBrokerUrl: process.env.MQTT_BROKER_URL,
+  mqttBrokerUrl: process.env.MQTT_BROKER_URL ?? 'mqtt://45.79.206.183:1883',
   ingestionSecret: process.env.INGESTION_SECRET ?? 'orion-ingestion-secret',
   frontendUrl: process.env.FRONTEND_URL ?? 'http://0.0.0.0:6002',
+
+  tcpPort:  parseInt(process.env.TCP_PORT  ?? '8883'),
+  udpPort:  parseInt(process.env.UDP_PORT  ?? '8884'),
+  coapPort: parseInt(process.env.COAP_PORT ?? '5683'),
 } as const;

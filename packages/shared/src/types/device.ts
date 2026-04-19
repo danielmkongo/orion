@@ -16,7 +16,7 @@ export type DeviceStatus = 'online' | 'offline' | 'idle' | 'error' | 'provisioni
 
 export type DeviceProtocol = 'mqtt' | 'http' | 'websocket' | 'tcp' | 'udp' | 'coap' | 'custom';
 
-export type DevicePayloadFormat = 'json' | 'csv' | 'xml' | 'raw' | 'msgpack' | 'cbor' | 'protobuf' | 'binary' | 'custom';
+export type DevicePayloadFormat = 'json' | 'xml' | 'csv' | 'raw';
 
 export interface DeviceLocation {
   lat: number;

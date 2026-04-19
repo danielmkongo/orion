@@ -24,13 +24,13 @@ export interface DataField {
 
 interface Command {
   name: string;
-  ctype: 'boolean' | 'number' | 'enum' | 'action';
+  ctype: 'boolean' | 'number' | 'enum' | 'action' | 'string';
   label: string;
   min?: number;
   max?: number;
   step?: number;
   unit?: string;
-  def?: boolean | number;
+  def?: boolean | number | string;
   values?: string;
 }
 
@@ -335,13 +335,18 @@ function GraphPreview({ field, compact }: { field: DataField; compact?: boolean 
 /* ─── Command preview ────────────────────────────────────────────────── */
 function CommandPreview({ cmd, payloadFormat = 'json' }: { cmd: Command; payloadFormat?: string }) {
   const [bv, setBv] = useState(cmd.def as boolean ?? false);
-  const [nv, setNv] = useState(cmd.def as number ?? 0);
+  const [nv, setNv] = useState(typeof cmd.def === 'number' ? cmd.def : 0);
   const [ev, setEv] = useState((cmd.values || '').split(',')[0] || '');
+  const [sv, setSv] = useState(typeof cmd.def === 'string' ? cmd.def : '');
   const [pressed, setPressed] = useState(false);
 
   const previewStr = cmd.name
     ? formatPayloadStr(
-        { [cmd.name]: cmd.ctype === 'boolean' ? bv : cmd.ctype === 'number' ? nv : cmd.ctype === 'enum' ? ev || 'option' : cmd.ctype === 'action' ? null : '' },
+        { [cmd.name]: cmd.ctype === 'boolean' ? bv
+            : cmd.ctype === 'number' ? nv
+            : cmd.ctype === 'enum' ? ev || 'option'
+            : cmd.ctype === 'action' ? (typeof cmd.def === 'string' && cmd.def ? cmd.def : null)
+            : sv },
         payloadFormat
       )
     : null;
@@ -438,6 +443,23 @@ function CommandPreview({ cmd, payloadFormat = 'json' }: { cmd: Command; payload
             {vals.map(v => <option key={v}>{v}</option>)}
             {vals.length === 0 && <option>(define values)</option>}
           </select>
+        </div>
+        <PreviewLine />
+      </motion.div>
+    );
+  }
+
+  if (cmd.ctype === 'string') {
+    return (
+      <motion.div layout className="space-y-2">
+        <div className="flex items-center gap-2">
+          <span className="text-[13px] flex-shrink-0">{cmd.label || cmd.name}</span>
+          <input
+            className="input text-[11px] font-mono flex-1"
+            placeholder="Type value…"
+            value={sv}
+            onChange={e => setSv(e.target.value)}
+          />
         </div>
         <PreviewLine />
       </motion.div>
@@ -629,6 +651,7 @@ export function DeviceForm({ onClose }: { onClose: () => void }) {
   const [wsDataEvent, setWsDataEvent] = useState('telemetry');
   const [wsCommandEvent] = useState('command');
   const [wsAckEvent] = useState('command_ack');
+  const [httpCmdMode, setHttpCmdMode] = useState<'response' | 'poll'>('poll');
 
   // Step 2
   const [fields, setFields] = useState<DataField[]>([EMPTY_FIELD()]);
@@ -709,6 +732,8 @@ export function DeviceForm({ onClose }: { onClose: () => void }) {
           ? { topicPrefix: mqttTopicPrefix || serialNumber.trim() || name.trim().toLowerCase().replace(/\s+/g, '_') }
           : protocol === 'websocket'
           ? { dataEvent: wsDataEvent, commandEvent: wsCommandEvent, ackEvent: wsAckEvent }
+          : protocol === 'http'
+          ? { cmdMode: httpCmdMode }
           : {},
         commands: commands.map(c => ({
           name: c.name,
@@ -717,6 +742,8 @@ export function DeviceForm({ onClose }: { onClose: () => void }) {
           ...(c.ctype === 'number' ? { min: c.min, max: c.max, step: c.step, unit: c.unit, default: c.def } : {}),
           ...(c.ctype === 'enum' ? { values: (c.values || '').split(',').map(s => s.trim()).filter(Boolean) } : {}),
           ...(c.ctype === 'boolean' ? { default: c.def } : {}),
+          ...(c.ctype === 'string' ? { default: c.def ?? '' } : {}),
+          ...(c.ctype === 'action' ? { value: c.def ?? '' } : {}),
         })),
       },
     };
@@ -811,9 +838,10 @@ export function DeviceForm({ onClose }: { onClose: () => void }) {
                     <div>
                       <label className="eyebrow text-[9px] block mb-2">Payload Format</label>
                       <select value={payloadFormat} onChange={e => setFormat(e.target.value as DevicePayloadFormat)} className="select">
-                        {['json','csv','xml','raw','msgpack','cbor','protobuf','binary','custom'].map(f => (
-                          <option key={f} value={f}>{f.toUpperCase()}</option>
-                        ))}
+                        <option value="json">JSON</option>
+                        <option value="xml">XML</option>
+                        <option value="csv">CSV</option>
+                        <option value="raw">Raw key=value</option>
                       </select>
                     </div>
                   </div>
@@ -874,11 +902,31 @@ export function DeviceForm({ onClose }: { onClose: () => void }) {
                   )}
 
                   {protocol === 'http' && (
-                    <div className="border border-[hsl(var(--rule))] p-3 space-y-1.5 text-[10px] font-mono text-muted-foreground">
-                      <p className="eyebrow text-[9px] text-primary mb-2">HTTP Endpoints</p>
-                      <div><span className="text-[#0F7A3D]">POST</span> /telemetry/ingest — send data (api_key in body)</div>
-                      <div><span className="text-[#0284c7]">GET </span> /commands/pending?apiKey=… — poll for commands</div>
-                      <div><span className="text-[#FF5B1F]">POST</span> /commands/&#123;id&#125;/ack — acknowledge execution</div>
+                    <div className="border border-[hsl(var(--rule))] p-3 space-y-3">
+                      <p className="eyebrow text-[9px] text-primary">HTTP Command Delivery</p>
+                      <div className="space-y-2">
+                        <label className="flex items-start gap-3 cursor-pointer group">
+                          <input type="radio" name="httpCmdMode" value="poll" checked={httpCmdMode === 'poll'}
+                            onChange={() => setHttpCmdMode('poll')} className="mt-0.5 accent-[hsl(var(--primary))]" />
+                          <div>
+                            <div className="text-[12px] font-medium">Device polls for commands</div>
+                            <div className="text-[10px] text-muted-foreground font-mono mt-0.5">GET /commands/pending?apiKey=… at any interval</div>
+                          </div>
+                        </label>
+                        <label className="flex items-start gap-3 cursor-pointer group">
+                          <input type="radio" name="httpCmdMode" value="response" checked={httpCmdMode === 'response'}
+                            onChange={() => setHttpCmdMode('response')} className="mt-0.5 accent-[hsl(var(--primary))]" />
+                          <div>
+                            <div className="text-[12px] font-medium">Command in POST response</div>
+                            <div className="text-[10px] text-muted-foreground font-mono mt-0.5">Server replies to POST /telemetry/ingest with any pending command</div>
+                          </div>
+                        </label>
+                      </div>
+                      <div className="border-t border-[hsl(var(--rule))] pt-2 space-y-1 text-[10px] font-mono text-muted-foreground">
+                        <div><span className="text-[#0F7A3D]">POST</span> /telemetry/ingest — send data (api_key in body)</div>
+                        {httpCmdMode === 'poll' && <div><span className="text-[#0284c7]">GET </span> /commands/pending?apiKey=… — poll for commands</div>}
+                        <div><span className="text-[#FF5B1F]">POST</span> /commands/&#123;id&#125;/ack — acknowledge execution</div>
+                      </div>
                     </div>
                   )}
                 </motion.div>
@@ -1100,6 +1148,7 @@ export function DeviceForm({ onClose }: { onClose: () => void }) {
                               <option value="number">Slider</option>
                               <option value="enum">Dropdown</option>
                               <option value="action">Button</option>
+                              <option value="string">Text input</option>
                             </select>
                             <button onClick={() => removeCommand(i)} className="w-8 h-8 flex items-center justify-center text-muted-foreground hover:text-red-500">
                               <Trash2 size={12} />
@@ -1152,6 +1201,24 @@ export function DeviceForm({ onClose }: { onClose: () => void }) {
                                   onChange={e => updateCommand(i, { def: e.target.checked })} />
                                 <span />
                               </label>
+                            </div>
+                          )}
+
+                          {cmd.ctype === 'action' && (
+                            <div>
+                              <label className="eyebrow text-[9px] block mb-2">Payload value <span className="text-muted-foreground normal-case">(sent when triggered)</span></label>
+                              <input className="input text-[11px] font-mono" placeholder='e.g. "on", "1", "trigger"'
+                                value={typeof cmd.def === 'string' ? cmd.def : ''}
+                                onChange={e => updateCommand(i, { def: e.target.value })} />
+                            </div>
+                          )}
+
+                          {cmd.ctype === 'string' && (
+                            <div>
+                              <label className="eyebrow text-[9px] block mb-2">Default value</label>
+                              <input className="input text-[11px] font-mono" placeholder="Optional default text"
+                                value={typeof cmd.def === 'string' ? cmd.def : ''}
+                                onChange={e => updateCommand(i, { def: e.target.value })} />
                             </div>
                           )}
 

@@ -27,7 +27,7 @@ const CAT_EMOJI: Record<string, string> = {
   industrial:    '⚙️',
   gateway:       '📡',
   research:      '🔬',
-  custom:        '📟',
+  custom:        '🔧',
 };
 
 const CAT_COLOR: Record<string, string> = {

@@ -44,6 +44,9 @@ importers:
       bcryptjs:
         specifier: ^2.4.3
         version: 2.4.3
+      coap:
+        specifier: ^1.5.0
+        version: 1.5.0
       csv-parse:
         specifier: ^5.5.6
         version: 5.6.0
@@ -1711,6 +1714,9 @@ packages:
   caniuse-lite@1.0.30001788:
     resolution: {integrity: sha512-6q8HFp+lOQtcf7wBK+uEenxymVWkGKkjFpCvw5W25cmMwEDU45p1xQFBQv8JDlMMry7eNxyBaR+qxgmTUZkIRQ==}
 
+  capitalize@2.0.4:
+    resolution: {integrity: sha512-wcSyiFqXRYyCoqu0o0ekXzJAKCLMkqWS5QWGlgTJFJKwRmI6pzcN2hBl5VPq9RzLW5Uf4FF/V/lcFfjCtVak2w==}
+
   chalk@4.1.2:
     resolution: {integrity: sha512-oKnbhFyRIXpUuez8iBMmyEa4nbj4IOQyuhc/wy9kY7/WVPcwIO9VA668Pu8RkO7+0G76SLROeyw9CpQ061i4mA==}
     engines: {node: '>=10'}
@@ -1729,6 +1735,14 @@ packages:
   cluster-key-slot@1.1.2:
     resolution: {integrity: sha512-RMr0FhtfXemyinomL4hrWcYJxmX6deFdCxpJzhDttxgO1+bcCnkk+9drydLVDmAMG7NE6aN/fl4F7ucU/90gAA==}
     engines: {node: '>=0.10.0'}
+
+  coap-packet@1.1.1:
+    resolution: {integrity: sha512-Bkz2ZKI/7hU2gm6nUuo5l+MBSkdFJx7My1ZgNEhKUC7K2yYfQYVbBPRa64BBYLcEcYgaSlau4A1Uw5xfM2I0zw==}
+    engines: {node: '>= 0.10'}
+
+  coap@1.5.0:
+    resolution: {integrity: sha512-lp0saLVt78XlwzCaFwvkcuJaCitN/XhYOgRLuOUrbm9OY0p42pkZb2WVfzop8hy652ViUMMqluXZHNWLOaccAw==}
+    engines: {node: '>=18'}
 
   color-convert@2.0.1:
     resolution: {integrity: sha512-RRECPsj7iu/xb5oKYcsFHSppFNnsj/52OVTRKb4zP5onXwVF3zVmmToNcOfGC+CRDpfK/U584fMg38ZHCaElKQ==}
@@ -1988,6 +2002,9 @@ packages:
 
   fastq@1.20.1:
     resolution: {integrity: sha512-GGToxJ/w1x32s/D2EKND7kTil4n8OVk/9mycTc4VDza13lOvpUZTGX3mFSCtV9ksdGBVzvsyAVLM6mHFThxXxw==}
+
+  fastseries@2.0.0:
+    resolution: {integrity: sha512-XBU9RXeoYc2/VnvMhplAxEmZLfIk7cvTBu+xwoBuTI8pL19E03cmca17QQycKIdxgwCeFA/a4u27gv1h3ya5LQ==}
 
   fdir@6.5.0:
     resolution: {integrity: sha512-tIbYtZbucOs0BRGqPJkshJUYdL+SDH7dVM8gjy+ERp3WAUjLEFJE+02kanyHtwjWOnwrKYBiwAmM0p4kLJAnXg==}
@@ -2310,6 +2327,10 @@ packages:
 
   lru-cache@10.4.3:
     resolution: {integrity: sha512-JNAzZcXrCt42VGLuYz0zfAzDfAvJWW6AfYlDBQyDV5DClI2m5sAmK+OIO7s59XfsRsWHp02jAJrRadPRGTt6SQ==}
+
+  lru-cache@11.3.5:
+    resolution: {integrity: sha512-NxVFwLAnrd9i7KUBxC4DrUhmgjzOs+1Qm50D3oF1/oL+r1NpZ4gA7xvG0/zJ8evR7zIKn4vLf7qTNduWFtCrRw==}
+    engines: {node: 20 || >=22}
 
   lru-cache@5.1.1:
     resolution: {integrity: sha512-KpNARQA3Iwv+jTA0utUVVbrh+Jlrr1Fv0e56GGzAFOXN7dk/FviaDW8LHmK52DlcH4WP2n6gI8vN1aesBFgo9w==}
@@ -4425,6 +4446,8 @@ snapshots:
 
   caniuse-lite@1.0.30001788: {}
 
+  capitalize@2.0.4: {}
+
   chalk@4.1.2:
     dependencies:
       ansi-styles: 4.3.0
@@ -4449,6 +4472,21 @@ snapshots:
   clsx@2.1.1: {}
 
   cluster-key-slot@1.1.2: {}
+
+  coap-packet@1.1.1: {}
+
+  coap@1.5.0:
+    dependencies:
+      '@types/readable-stream': 4.0.23
+      bl: 6.1.6
+      capitalize: 2.0.4
+      coap-packet: 1.1.1
+      debug: 4.4.3
+      fastseries: 2.0.0
+      lru-cache: 11.3.5
+      readable-stream: 4.7.0
+    transitivePeerDependencies:
+      - supports-color
 
   color-convert@2.0.1:
     dependencies:
@@ -4804,6 +4842,8 @@ snapshots:
     dependencies:
       reusify: 1.1.0
 
+  fastseries@2.0.0: {}
+
   fdir@6.5.0(picomatch@4.0.4):
     optionalDependencies:
       picomatch: 4.0.4
@@ -5094,6 +5134,8 @@ snapshots:
       js-tokens: 4.0.0
 
   lru-cache@10.4.3: {}
+
+  lru-cache@11.3.5: {}
 
   lru-cache@5.1.1:
     dependencies:

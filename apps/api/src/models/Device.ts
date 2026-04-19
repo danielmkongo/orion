@@ -58,7 +58,7 @@ const DeviceSchema = new Schema<IDevice>(
     },
     payloadFormat: {
       type: String,
-      enum: ['json', 'csv', 'xml', 'raw', 'msgpack', 'cbor', 'protobuf', 'binary', 'custom'],
+      enum: ['json', 'xml', 'csv', 'raw'],
       default: 'json',
     },
     apiKey: { type: String, required: true, unique: true, index: true },

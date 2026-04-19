@@ -1,4 +1,5 @@
 import { nanoid } from 'nanoid';
+import { Types } from 'mongoose';
 import { Device, IDevice } from '../models/Device.js';
 import { Telemetry } from '../models/Telemetry.js';
 import type { DeviceCreateInput, DeviceUpdateInput } from '@orion/shared';
@@ -89,7 +90,7 @@ export class DeviceService {
       Device.countDocuments({ orgId, status: 'online' }),
       Device.countDocuments({ orgId, status: 'offline' }),
       Device.aggregate([
-        { $match: { orgId: { $eq: orgId } } },
+        { $match: { orgId: new Types.ObjectId(orgId) } },
         { $group: { _id: '$category', count: { $sum: 1 } } },
       ]),
     ]);

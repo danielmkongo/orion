@@ -21,6 +21,19 @@ export async function commandRoutes(app: FastifyInstance) {
     return reply.send(cmd);
   });
 
+  // Device-side: poll for pending commands
+  app.get('/commands/pending', async (req, reply) => {
+    const apiKey = (req.headers['x-api-key'] as string) ?? (req.query as any).apiKey;
+    if (!apiKey) return reply.code(401).send({ error: 'API key required' });
+
+    const { deviceService } = await import('../services/device.service.js');
+    const device = await deviceService.getByApiKey(apiKey);
+    if (!device) return reply.code(401).send({ error: 'Invalid API key' });
+
+    const cmds = await commandService.getPending(String((device as any)._id));
+    return reply.send({ commands: cmds });
+  });
+
   // Device-side: acknowledge a command
   app.post('/commands/ack', async (req, reply) => {
     const apiKey = req.headers['x-api-key'] as string;

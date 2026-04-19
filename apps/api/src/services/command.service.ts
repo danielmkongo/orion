@@ -1,6 +1,7 @@
 import { Command } from '../models/Command.js';
 import type { CommandCreateInput } from '@orion/shared';
 import { realtimeService } from './realtime.service.js';
+import { commandBus } from './command-bus.js';
 
 export class CommandService {
   async create(orgId: string, userId: string, input: CommandCreateInput) {
@@ -23,7 +24,9 @@ export class CommandService {
       data: { commandId: cmd.id, name: cmd.name, deviceId: input.deviceId },
     });
 
-    return cmd.toObject();
+    const obj = cmd.toObject();
+    commandBus.emit('command.created', { deviceId: input.deviceId, command: obj });
+    return obj;
   }
 
   async list(orgId: string, deviceId?: string, limit = 50) {
@@ -58,6 +61,10 @@ export class CommandService {
     }
 
     return cmd;
+  }
+
+  async getPending(deviceId: string) {
+    return Command.find({ deviceId, status: 'pending' }).sort({ createdAt: 1 }).limit(10).lean();
   }
 
   async cancel(commandId: string, orgId: string) {

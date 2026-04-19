@@ -1,11 +1,16 @@
 import 'dotenv/config';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
+import websocketPlugin from '@fastify/websocket';
 import { Server as SocketIOServer } from 'socket.io';
 import { config } from './config/index.js';
 import { connectMongoDB } from './db/mongoose.js';
 import { connectRedis } from './db/redis.js';
 import { realtimeService } from './services/realtime.service.js';
+import { mqttService } from './services/mqtt.service.js';
+import { registerDeviceWs } from './services/device-ws.service.js';
+import { startTcpServer } from './services/tcp.service.js';
+import { startUdpServer } from './services/udp.service.js';
 import { authRoutes } from './routes/auth.routes.js';
 import { deviceRoutes } from './routes/device.routes.js';
 import { telemetryRoutes } from './routes/telemetry.routes.js';
@@ -32,9 +37,13 @@ async function bootstrap() {
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   });
 
-  // JSON body parsing is built-in with Fastify
+  // WebSocket plugin (needed for device WS route)
+  await app.register(websocketPlugin);
 
-  // Routes — all under /api/v1
+  // Device-facing WebSocket at /ws?apiKey=…
+  await registerDeviceWs(app);
+
+  // REST routes under /api/v1
   const prefix = '/api/v1';
   await app.register(async api => {
     await api.register(authRoutes);
@@ -58,12 +67,9 @@ async function bootstrap() {
 
   // Connect databases
   await connectMongoDB();
-  // Redis is optional — platform runs without it
-  if (config.redisUrl) {
-    await connectRedis();
-  }
+  if (config.redisUrl) await connectRedis();
 
-  // Attach Socket.IO to Fastify's underlying server before listen
+  // Attach Socket.IO for dashboard real-time updates
   const io = new SocketIOServer(app.server, {
     cors: {
       origin: [config.cors.origin, config.frontendUrl],
@@ -72,12 +78,28 @@ async function bootstrap() {
     transports: ['websocket', 'polling'],
     path: '/socket.io',
   });
-
   realtimeService.setIO(io);
 
   await app.listen({ port: config.port, host: config.host });
   console.log(`\n🚀 Orion API running at http://${config.host}:${config.port}`);
-  console.log(`📡 Socket.IO ready at ws://${config.host}:${config.port}/socket.io`);
+  console.log(`📡 Socket.IO (dashboard) at ws://${config.host}:${config.port}/socket.io`);
+  console.log(`🔗 Device WebSocket at ws://${config.host}:${config.port}/ws`);
+
+  // MQTT bridge
+  mqttService.start();
+
+  // TCP & UDP servers
+  startTcpServer();
+  startUdpServer();
+
+  // CoAP server (requires 'coap' package: pnpm add coap --filter @orion/api)
+  try {
+    const { startCoapServer } = await import('./services/coap.service.js');
+    startCoapServer();
+  } catch {
+    console.warn('⚠️  CoAP disabled — run: pnpm add coap --filter @orion/api');
+  }
+
   console.log(`🌍 Environment: ${config.env}\n`);
 }
 

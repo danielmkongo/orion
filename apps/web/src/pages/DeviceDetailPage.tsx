@@ -15,7 +15,13 @@ import type { DeviceCommand } from '@/components/devices/CommandWidget';
 
 const COLORS = ['hsl(var(--primary))', 'hsl(var(--info))', 'hsl(var(--good))', 'hsl(var(--warn))', '#A06CD5', '#06B6D4'];
 
-const API_BASE = (import.meta as any).env?.VITE_API_URL ?? 'https://orion.vortan.io/api/v1';
+const API_BASE       = (import.meta as any).env?.VITE_API_URL ?? 'https://orion.vortan.io/api/v1';
+const MQTT_BROKER    = (import.meta as any).env?.VITE_MQTT_BROKER ?? '45.79.206.183';
+const MQTT_PORT      = (import.meta as any).env?.VITE_MQTT_PORT   ?? '1883';
+const TCP_PORT       = (import.meta as any).env?.VITE_TCP_PORT    ?? '8883';
+const UDP_PORT       = (import.meta as any).env?.VITE_UDP_PORT    ?? '8884';
+const COAP_PORT      = (import.meta as any).env?.VITE_COAP_PORT   ?? '5683';
+const API_HOST       = API_BASE.replace(/^https?:\/\//, '').replace(/\/.*/, '').replace(/:.*/, '');
 
 /* ── Google Maps satellite view ─────────────────────────────────────── */
 const GMAPS_KEY = (import.meta as any).env?.VITE_GOOGLE_MAPS_API_KEY ?? '';
@@ -639,6 +645,7 @@ export function DeviceDetailPage() {
               <thead>
                 <tr>
                   <th>Command</th>
+                  <th>Value sent</th>
                   <th>Status</th>
                   <th>Sent</th>
                   <th>Response</th>
@@ -646,11 +653,24 @@ export function DeviceDetailPage() {
               </thead>
               <tbody>
                 {(commands?.data ?? []).length === 0 ? (
-                  <tr><td colSpan={4} style={{ textAlign: 'center', padding: '24px 0' }} className="dim">No commands sent yet</td></tr>
+                  <tr><td colSpan={5} style={{ textAlign: 'center', padding: '24px 0' }} className="dim">No commands sent yet</td></tr>
                 ) : (
-                  (commands?.data ?? []).map((cmd: any) => (
+                  (commands?.data ?? []).map((cmd: any) => {
+                    const payloadStr = cmd.payload
+                      ? (() => {
+                          const entries = Object.entries(cmd.payload);
+                          if (entries.length === 0) return '—';
+                          if (entries.length === 1) return String(entries[0][1]);
+                          return JSON.stringify(cmd.payload).slice(0, 60);
+                        })()
+                      : '—';
+                    return (
                     <tr key={cmd._id}>
                       <td className="mono acc" style={{ fontSize: 12 }}>{cmd.name}</td>
+                      <td className="mono" style={{ fontSize: 11, color: 'hsl(var(--primary))', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                        title={cmd.payload ? JSON.stringify(cmd.payload) : undefined}>
+                        {payloadStr}
+                      </td>
                       <td>
                         {['pending', 'sent', 'acknowledged'].includes(cmd.status) ? (
                           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, fontFamily: 'var(--font-mono)' }}>
@@ -667,11 +687,12 @@ export function DeviceDetailPage() {
                         )}
                       </td>
                       <td className="mono faint" style={{ fontSize: 11 }}>{timeAgo(cmd.createdAt)}</td>
-                      <td className="mono faint" style={{ fontSize: 11, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <td className="mono faint" style={{ fontSize: 11, maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {cmd.errorMessage ?? (cmd.response ? JSON.stringify(cmd.response).slice(0, 60) : '—')}
                       </td>
                     </tr>
-                  ))
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -684,38 +705,50 @@ export function DeviceDetailPage() {
         <div>
           <div className="ssh">Integration</div>
           <p className="dim" style={{ fontSize: 13, marginTop: 8, maxWidth: '28ch' }}>
-            {d.protocol === 'mqtt' ? 'MQTT broker topics and payload format.'
-              : d.protocol === 'websocket' ? 'WebSocket events and connection details.'
-              : 'HTTP endpoints for telemetry and commands.'}
+            {d.protocol === 'mqtt'      ? 'MQTT broker topics, payload format, and ACK flow.'
+              : d.protocol === 'websocket' ? 'WebSocket connection URL, events, and ACK flow.'
+              : d.protocol === 'coap'      ? 'CoAP resources for telemetry and command polling.'
+              : d.protocol === 'tcp'       ? 'Raw TCP socket protocol — newline-delimited messages.'
+              : d.protocol === 'udp'       ? 'UDP datagrams for telemetry (fire-and-forget).'
+              : 'HTTP endpoints for telemetry ingest and command polling.'}
           </p>
           <div className="mono faint" style={{ marginTop: 12, fontSize: 10, letterSpacing: '0.12em' }}>
-            PROTOCOL · {d.protocol?.toUpperCase()}<br />
-            FORMAT · {d.payloadFormat?.toUpperCase() ?? 'JSON'}
+            PROTOCOL · {d.protocol?.toUpperCase() ?? 'HTTP'}<br />
+            FORMAT · {d.payloadFormat?.toUpperCase() ?? 'JSON'}<br />
+            SERIAL · {d.serialNumber ?? (d as any)._id?.slice(-8) ?? '—'}
           </div>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
 
           {/* ── MQTT ── */}
           {d.protocol === 'mqtt' && (() => {
-            const serial = d.serialNumber ?? d._id?.slice(-8) ?? 'device';
-            const dataTopic    = `/${serial}/data`;
-            const cmdTopic     = `/${serial}/commands`;
-            const pendingTopic = `/${serial}/commands/pending`;
-            const ackTopic     = `/${serial}/commands/{commandId}/ack`;
-            const dataPayload = (() => {
-              const obj: Record<string, unknown> = {};
-              (schemaFields.length > 0 ? schemaFields : [{ key: 'temperature', type: 'number' }, { key: 'humidity', type: 'number' }])
-                .forEach((f: any) => { obj[f.key] = f.type === 'number' ? 24.3 : f.type === 'boolean' ? false : ''; });
-              return formatPayloadStr(obj, d.payloadFormat ?? 'json');
-            })();
+            const serial    = d.serialNumber ?? (d as any)._id?.slice(-8) ?? 'device';
+            const dataTopic = `/${serial}/data`;
+            const cmdTopic  = `/${serial}/commands`;
+            const ackTopic  = `/${serial}/commands/{commandId}/ack`;
+            const fmt       = d.payloadFormat ?? 'json';
+            const dataObj: Record<string, unknown> = {};
+            (schemaFields.length > 0 ? schemaFields : [{ key: 'temperature', type: 'number' }, { key: 'humidity', type: 'number' }])
+              .forEach((f: any) => { dataObj[f.key] = f.type === 'number' ? 24.3 : f.type === 'boolean' ? false : ''; });
+            const dataPayload = formatPayloadStr(dataObj, fmt);
+            const brokerUrl = `mqtt://${MQTT_BROKER}:${MQTT_PORT}`;
             const rows = [
-              { label: 'PUBLISH · data', topic: dataTopic, color: 'hsl(var(--good))' },
+              { label: 'PUBLISH · telemetry', topic: dataTopic, color: 'hsl(var(--good))' },
               { label: 'SUBSCRIBE · commands', topic: cmdTopic, color: 'hsl(var(--info))' },
-              { label: 'PUBLISH · poll pending', topic: pendingTopic, color: 'hsl(var(--warn))' },
               { label: 'PUBLISH · acknowledge', topic: ackTopic, color: 'hsl(var(--primary))' },
             ];
             return (
               <>
+                <div>
+                  <div className="eyebrow" style={{ marginBottom: 8 }}>Broker</div>
+                  <div className="panel" style={{ padding: '10px 14px', fontFamily: 'var(--font-mono)', fontSize: 11, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>{brokerUrl}</span>
+                    <button onClick={() => copyText(brokerUrl).then(() => toast.success('Copied!'))} className="btn btn-ghost btn-sm btn-icon"><Copy size={10} /></button>
+                  </div>
+                  <p className="dim" style={{ fontSize: 11, marginTop: 6 }}>
+                    Use <code className="mono acc">{serial}</code> as Client ID. Include <code className="mono acc">api_key</code> in every published payload.
+                  </p>
+                </div>
                 <div>
                   <div className="eyebrow" style={{ marginBottom: 8 }}>Topics</div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
@@ -732,17 +765,16 @@ export function DeviceDetailPage() {
                 </div>
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                    <div className="eyebrow">Data payload ({d.payloadFormat?.toUpperCase()})</div>
+                    <div className="eyebrow">Telemetry payload ({fmt.toUpperCase()})</div>
                     <button onClick={() => copyText(dataPayload).then(() => toast.success('Copied!'))} className="btn btn-ghost btn-sm" style={{ gap: 4, fontSize: 11 }}><Copy size={10} /> Copy</button>
                   </div>
                   <pre className="panel" style={{ padding: '12px 16px', fontSize: 11, fontFamily: 'var(--font-mono)', overflowX: 'auto', lineHeight: 1.7, margin: 0 }}>{dataPayload}</pre>
                 </div>
                 <div>
-                  <div className="eyebrow" style={{ marginBottom: 8 }}>Acknowledge payload</div>
+                  <div className="eyebrow" style={{ marginBottom: 8 }}>ACK payload — publish to <code className="mono acc">{ackTopic}</code></div>
                   <pre className="panel" style={{ padding: '12px 16px', fontSize: 11, fontFamily: 'var(--font-mono)', overflowX: 'auto', lineHeight: 1.7, margin: 0 }}>
-                    {formatPayloadStr({ commandId: '<commandId>', status: 'executed' }, d.payloadFormat ?? 'json')}
+                    {formatPayloadStr({ commandId: '<commandId>', status: 'executed' }, fmt)}
                   </pre>
-                  <p className="dim" style={{ fontSize: 11, marginTop: 6 }}>Publish to <code className="mono acc">{ackTopic}</code> after executing a command.</p>
                 </div>
               </>
             );
@@ -750,31 +782,34 @@ export function DeviceDetailPage() {
 
           {/* ── WebSocket ── */}
           {d.protocol === 'websocket' && (() => {
-            const wsUrl = `${API_BASE.replace(/^http/, 'ws').replace(/\/api\/v1$/, '')}/ws?apiKey=${apiKeyVisible ? currentKey : currentKey?.slice(0, 8) + '••••'}`;
-            const dataPayload = (() => {
-              const obj: Record<string, unknown> = { deviceId: d.serialNumber ?? d._id };
-              (schemaFields.length > 0 ? schemaFields : [{ key: 'temperature', type: 'number' }])
-                .forEach((f: any) => { obj[f.key] = f.type === 'number' ? 24.3 : false; });
-              return formatPayloadStr(obj, d.payloadFormat ?? 'json');
-            })();
+            const wsBase = API_BASE.replace(/^http/, 'ws').replace(/\/api\/v1$/, '');
+            const wsUrl  = `${wsBase}/ws?apiKey=${apiKeyVisible ? currentKey : (currentKey?.slice(0, 8) ?? '') + '••••'}`;
+            const fmt    = d.payloadFormat ?? 'json';
+            const dataObj: Record<string, unknown> = {};
+            (schemaFields.length > 0 ? schemaFields : [{ key: 'temperature', type: 'number' }])
+              .forEach((f: any) => { dataObj[f.key] = f.type === 'number' ? 24.3 : false; });
+            const dataPayload = formatPayloadStr({ type: 'telemetry', ...dataObj }, fmt);
+            const cmdPayload  = JSON.stringify({ type: 'command', commandId: '<id>', name: '<cmd>', payload: {} }, null, 2);
+            const ackPayload  = JSON.stringify({ type: 'ack', commandId: '<id>', status: 'executed' }, null, 2);
             return (
               <>
                 <div>
                   <div className="eyebrow" style={{ marginBottom: 8 }}>Connection URL</div>
                   <div className="panel" style={{ padding: '10px 14px', fontFamily: 'var(--font-mono)', fontSize: 11, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ color: 'hsl(var(--muted-fg))' }}>{wsUrl}</span>
-                    <button onClick={() => copyText(wsUrl).then(() => toast.success('Copied!'))} className="btn btn-ghost btn-sm btn-icon"><Copy size={10} /></button>
+                    <span style={{ color: 'hsl(var(--muted-fg))', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{wsUrl}</span>
+                    <button onClick={() => copyText(wsUrl).then(() => toast.success('Copied!'))} className="btn btn-ghost btn-sm btn-icon" style={{ flexShrink: 0 }}><Copy size={10} /></button>
                   </div>
+                  <p className="dim" style={{ fontSize: 11, marginTop: 6 }}>Connect once — apiKey authenticates the session. All messages are newline-terminated JSON.</p>
                 </div>
                 {[
-                  { label: 'EMIT · telemetry data', event: 'telemetry', payload: dataPayload, color: 'hsl(var(--good))' },
-                  { label: 'LISTEN · receive command', event: 'command', payload: formatPayloadStr({ commandId: '<id>', name: '<cmd>', payload: {} }, 'json'), color: 'hsl(var(--info))' },
-                  { label: 'EMIT · acknowledge', event: 'command_ack', payload: formatPayloadStr({ commandId: '<id>', status: 'executed' }, 'json'), color: 'hsl(var(--primary))' },
+                  { label: 'SEND · telemetry', dir: '→ server', payload: dataPayload, color: 'hsl(var(--good))' },
+                  { label: 'RECEIVE · command', dir: '← server', payload: cmdPayload, color: 'hsl(var(--info))' },
+                  { label: 'SEND · acknowledge', dir: '→ server', payload: ackPayload, color: 'hsl(var(--primary))' },
                 ].map(row => (
-                  <div key={row.event}>
+                  <div key={row.label}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
                       <span className="eyebrow" style={{ fontSize: 9, color: row.color }}>{row.label}</span>
-                      <code className="mono acc" style={{ fontSize: 11 }}>'{row.event}'</code>
+                      <span className="mono faint" style={{ fontSize: 9 }}>{row.dir}</span>
                     </div>
                     <pre className="panel" style={{ padding: '10px 14px', fontSize: 11, fontFamily: 'var(--font-mono)', overflowX: 'auto', lineHeight: 1.6, margin: 0 }}>{row.payload}</pre>
                   </div>
@@ -784,18 +819,26 @@ export function DeviceDetailPage() {
           })()}
 
           {/* ── HTTP ── */}
-          {(!d.protocol || d.protocol === 'http' || d.protocol === 'https') && (() => {
-            const dataObj: Record<string, unknown> = { api_key: apiKeyVisible ? currentKey : `${currentKey?.slice(0, 8) ?? ''}••••••••` };
+          {(!d.protocol || d.protocol === 'http') && (() => {
+            const fmt     = d.payloadFormat ?? 'json';
+            const cmdMode = (d as any).meta?.channelConfig?.cmdMode ?? 'poll';
+            const maskedKey = apiKeyVisible ? currentKey : `${currentKey?.slice(0, 8) ?? ''}••••••••`;
+            const dataObj: Record<string, unknown> = { api_key: maskedKey };
             (schemaFields.length > 0 ? schemaFields : [{ key: 'temperature', type: 'number' }, { key: 'humidity', type: 'number' }])
               .forEach((f: any) => { dataObj[f.key] = f.type === 'number' ? 0 : f.type === 'boolean' ? false : f.type === 'timestamp' ? new Date().toISOString() : ''; });
-            const dataPayload = formatPayloadStr(dataObj, d.payloadFormat ?? 'json');
-            const endpointLabel = d.payloadFormat === 'json' ? 'JSON payload' : `${(d.payloadFormat ?? 'json').toUpperCase()} payload`;
+            const dataPayload = formatPayloadStr(dataObj, fmt);
+            const ingestUrl  = `${API_BASE}/telemetry/ingest`;
+            const pendingUrl = `${API_BASE}/commands/pending?apiKey=${maskedKey}`;
+            const ackUrl     = `${API_BASE}/commands/ack`;
             return (
               <>
+                <div className="panel" style={{ padding: '10px 14px', fontSize: 11, fontFamily: 'var(--font-mono)', color: 'hsl(var(--muted-fg))', marginBottom: 4 }}>
+                  Command delivery: <span style={{ color: 'hsl(var(--primary))' }}>{cmdMode === 'response' ? 'included in POST response' : 'device polls GET /commands/pending'}</span>
+                </div>
                 {[
-                  { method: 'POST', path: `${API_BASE}/telemetry/ingest`, note: 'Send telemetry data (include api_key in body)', color: 'hsl(var(--good))' },
-                  { method: 'GET',  path: `${API_BASE}/commands/pending?apiKey=${apiKeyVisible ? currentKey : currentKey?.slice(0,8)+'••••'}`, note: 'Poll for pending commands — call periodically', color: 'hsl(var(--info))' },
-                  { method: 'POST', path: `${API_BASE}/commands/{id}/ack`, note: 'Acknowledge command execution', color: 'hsl(var(--primary))' },
+                  { method: 'POST', path: ingestUrl,  note: 'Send telemetry — include api_key in body', color: 'hsl(var(--good))' },
+                  ...(cmdMode === 'poll' ? [{ method: 'GET', path: pendingUrl, note: 'Poll for pending commands', color: 'hsl(var(--info))' }] : []),
+                  { method: 'POST', path: ackUrl, note: 'Acknowledge: body { commandId, deviceId, status }', color: 'hsl(var(--primary))' },
                 ].map(ep => (
                   <div key={ep.path}>
                     <div className="eyebrow" style={{ fontSize: 9, marginBottom: 6, color: ep.color }}>{ep.note}</div>
@@ -810,17 +853,112 @@ export function DeviceDetailPage() {
                 ))}
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                    <div className="eyebrow">{endpointLabel}</div>
+                    <div className="eyebrow">{fmt.toUpperCase()} body</div>
                     <button onClick={() => copyText(dataPayload).then(() => toast.success('Copied!'))} className="btn btn-ghost btn-sm" style={{ gap: 4, fontSize: 11 }}><Copy size={10} /> Copy</button>
                   </div>
                   <pre className="panel" style={{ padding: '14px 16px', fontSize: 11, fontFamily: 'var(--font-mono)', overflowX: 'auto', lineHeight: 1.7, margin: 0 }}>{dataPayload}</pre>
-                  <p className="dim" style={{ fontSize: 11, marginTop: 8 }}>
-                    <span className="mono acc">api_key</span> is stripped before storage — only your data fields are saved.
-                  </p>
-                  <div className="eyebrow" style={{ fontSize: 9, marginTop: 16, marginBottom: 6 }}>ACK body</div>
-                  <pre className="panel" style={{ padding: '10px 14px', fontSize: 11, fontFamily: 'var(--font-mono)', lineHeight: 1.6, margin: 0 }}>
-                    {formatPayloadStr({ status: 'executed', message: 'optional note' }, d.payloadFormat ?? 'json')}
-                  </pre>
+                  {cmdMode === 'response' && (
+                    <p className="dim" style={{ fontSize: 11, marginTop: 8 }}>
+                      When a command is pending, the server appends <code className="mono acc">command</code> to the ingest response body.
+                    </p>
+                  )}
+                </div>
+              </>
+            );
+          })()}
+
+          {/* ── CoAP ── */}
+          {d.protocol === 'coap' && (() => {
+            const fmt    = d.payloadFormat ?? 'json';
+            const maskedKey = apiKeyVisible ? currentKey : `${currentKey?.slice(0, 8) ?? ''}••••`;
+            const dataObj: Record<string, unknown> = {};
+            (schemaFields.length > 0 ? schemaFields : [{ key: 'temperature', type: 'number' }])
+              .forEach((f: any) => { dataObj[f.key] = f.type === 'number' ? 24.3 : false; });
+            const dataPayload = formatPayloadStr(dataObj, fmt);
+            const base = `coap://${API_HOST}:${COAP_PORT}`;
+            const rows = [
+              { method: 'POST', path: `${base}/telemetry?apiKey=${maskedKey}`, note: 'Send telemetry — CoAP Confirmable', color: 'hsl(var(--good))' },
+              { method: 'GET',  path: `${base}/commands/pending?apiKey=${maskedKey}`, note: 'Poll for pending commands', color: 'hsl(var(--info))' },
+              { method: 'POST', path: `${base}/commands/ack?apiKey=${maskedKey}`, note: 'Acknowledge: body { commandId, status }', color: 'hsl(var(--primary))' },
+            ];
+            return (
+              <>
+                {rows.map(ep => (
+                  <div key={ep.path}>
+                    <div className="eyebrow" style={{ fontSize: 9, marginBottom: 6, color: ep.color }}>{ep.note}</div>
+                    <div className="panel" style={{ padding: '10px 14px', fontFamily: 'var(--font-mono)', fontSize: 11, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                      <div style={{ display: 'flex', gap: 10, alignItems: 'center', overflow: 'hidden' }}>
+                        <span className="acc" style={{ flexShrink: 0 }}>{ep.method}</span>
+                        <span style={{ color: 'hsl(var(--muted-fg))', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ep.path}</span>
+                      </div>
+                      <button onClick={() => copyText(ep.path).then(() => toast.success('Copied!'))} className="btn btn-ghost btn-sm btn-icon" style={{ flexShrink: 0 }}><Copy size={10} /></button>
+                    </div>
+                  </div>
+                ))}
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <div className="eyebrow">{fmt.toUpperCase()} payload</div>
+                    <button onClick={() => copyText(dataPayload).then(() => toast.success('Copied!'))} className="btn btn-ghost btn-sm" style={{ gap: 4, fontSize: 11 }}><Copy size={10} /> Copy</button>
+                  </div>
+                  <pre className="panel" style={{ padding: '12px 16px', fontSize: 11, fontFamily: 'var(--font-mono)', overflowX: 'auto', lineHeight: 1.7, margin: 0 }}>{dataPayload}</pre>
+                </div>
+              </>
+            );
+          })()}
+
+          {/* ── TCP ── */}
+          {d.protocol === 'tcp' && (() => {
+            const fmt = d.payloadFormat ?? 'json';
+            const dataObj: Record<string, unknown> = {};
+            (schemaFields.length > 0 ? schemaFields : [{ key: 'temperature', type: 'number' }])
+              .forEach((f: any) => { dataObj[f.key] = f.type === 'number' ? 24.3 : false; });
+            const dataPayload = formatPayloadStr(dataObj, fmt);
+            const host = `${API_HOST}:${TCP_PORT}`;
+            const session = `# 1. Connect\nnc ${API_HOST} ${TCP_PORT}\n\n# 2. Authenticate (send apiKey then newline)\n${apiKeyVisible ? currentKey : (currentKey?.slice(0,8) ?? '') + '••••'}\n# Server replies: OK\n\n# 3. Send telemetry (one payload per line)\n${dataPayload.replace(/\n/g, ' ')}\n\n# 4. Server pushes commands:\n# CMD:{commandId}:{name and payload JSON}\n\n# 5. Acknowledge\nACK:{commandId}:executed`;
+            return (
+              <>
+                <div>
+                  <div className="eyebrow" style={{ marginBottom: 8 }}>Server</div>
+                  <div className="panel" style={{ padding: '10px 14px', fontFamily: 'var(--font-mono)', fontSize: 11, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>{host}</span>
+                    <button onClick={() => copyText(host).then(() => toast.success('Copied!'))} className="btn btn-ghost btn-sm btn-icon"><Copy size={10} /></button>
+                  </div>
+                </div>
+                <div>
+                  <div className="eyebrow" style={{ marginBottom: 8 }}>Session protocol</div>
+                  <pre className="panel" style={{ padding: '12px 16px', fontSize: 11, fontFamily: 'var(--font-mono)', overflowX: 'auto', lineHeight: 1.8, margin: 0 }}>{session}</pre>
+                  <p className="dim" style={{ fontSize: 11, marginTop: 6 }}>Persistent TCP connection. Each line is a message. Telemetry in the device's selected format.</p>
+                </div>
+              </>
+            );
+          })()}
+
+          {/* ── UDP ── */}
+          {d.protocol === 'udp' && (() => {
+            const fmt = d.payloadFormat ?? 'json';
+            const dataObj: Record<string, unknown> = {};
+            (schemaFields.length > 0 ? schemaFields : [{ key: 'temperature', type: 'number' }])
+              .forEach((f: any) => { dataObj[f.key] = f.type === 'number' ? 24.3 : false; });
+            const bodyStr = formatPayloadStr(dataObj, fmt).replace(/\n/g, ' ');
+            const maskedKey = apiKeyVisible ? currentKey : `${currentKey?.slice(0, 8) ?? ''}••••`;
+            const example = `${maskedKey}|${bodyStr}`;
+            const host = `${API_HOST}:${UDP_PORT}`;
+            return (
+              <>
+                <div>
+                  <div className="eyebrow" style={{ marginBottom: 8 }}>Destination</div>
+                  <div className="panel" style={{ padding: '10px 14px', fontFamily: 'var(--font-mono)', fontSize: 11, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>{host} (UDP)</span>
+                    <button onClick={() => copyText(host).then(() => toast.success('Copied!'))} className="btn btn-ghost btn-sm btn-icon"><Copy size={10} /></button>
+                  </div>
+                </div>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <div className="eyebrow">Datagram format</div>
+                    <button onClick={() => copyText(example).then(() => toast.success('Copied!'))} className="btn btn-ghost btn-sm" style={{ gap: 4, fontSize: 11 }}><Copy size={10} /> Copy</button>
+                  </div>
+                  <pre className="panel" style={{ padding: '12px 16px', fontSize: 11, fontFamily: 'var(--font-mono)', overflowX: 'auto', lineHeight: 1.7, margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{example}</pre>
+                  <p className="dim" style={{ fontSize: 11, marginTop: 6 }}>Format: <code className="mono acc">apiKey|payload</code> — send as a single UDP datagram. Commands cannot be delivered over UDP (stateless).</p>
                 </div>
               </>
             );

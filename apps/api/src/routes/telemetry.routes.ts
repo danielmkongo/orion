@@ -36,6 +36,16 @@ export async function telemetryRoutes(app: FastifyInstance) {
     const loc = (telemetryService as any).extractLocation?.(fields);
     realtimeService.emitTelemetry(String(device.orgId), String(device._id), fields, loc, timestamp);
 
+    // If device uses HTTP response-mode command delivery, include oldest pending command
+    const cmdMode = (device as any).meta?.channelConfig?.cmdMode;
+    if (cmdMode === 'response') {
+      const { commandService } = await import('../services/command.service.js');
+      const pending = await commandService.getPending(String(device._id));
+      if (pending.length) {
+        return reply.send({ ok: true, ts: timestamp, command: pending[0] });
+      }
+    }
+
     return reply.send({ ok: true, ts: timestamp });
   });
 

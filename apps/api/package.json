@@ -33,7 +33,8 @@
     "csv-parse": "^5.5.6",
     "xml2js": "^0.6.2",
     "node-cron": "^3.0.3",
-    "mqtt": "^5.5.0"
+    "mqtt": "^5.5.0",
+    "coap": "^1.5.0"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
