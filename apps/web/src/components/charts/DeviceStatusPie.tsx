@@ -1,5 +1,6 @@
 import ReactECharts from 'echarts-for-react';
-import { generateChartColor, categoryIcon } from '@/lib/utils';
+import { generateChartColor, getCategoryIconInfo } from '@/lib/utils';
+import { useUIStore } from '@/store/ui.store';
 
 interface Props {
   data: Array<{ name: string; value: number }>;
@@ -9,31 +10,49 @@ interface Props {
 }
 
 export function DeviceStatusPie({ data, online, offline, total }: Props) {
+  const { theme } = useUIStore();
+  const isDark = theme === 'dark';
+
+  const tooltipBg     = isDark ? '#1a1a1a' : '#ffffff';
+  const tooltipBorder = isDark ? '#333' : '#e5e7eb';
+  const tooltipText   = isDark ? '#f5f5f5' : '#111827';
+  const centerFg      = isDark ? '#f1f5f9' : '#111827';
+  const centerSub     = isDark ? '#64748b' : '#9ca3af';
+
   const option = {
     backgroundColor: 'transparent',
     tooltip: {
       trigger: 'item',
-      backgroundColor: '#1a1b31',
-      borderColor: '#2a2b45',
+      backgroundColor: tooltipBg,
+      borderColor: tooltipBorder,
       borderWidth: 1,
-      textStyle: { color: '#e2e8f0', fontSize: 12 },
-      formatter: (params: any) => `${categoryIcon(params.name)} ${params.name}<br/><b>${params.value} devices</b> (${params.percent}%)`,
+      textStyle: { color: tooltipText, fontSize: 12 },
+      formatter: (params: any) => {
+        const info = getCategoryIconInfo(params.name);
+        return `${info.label}<br/><b>${params.value} devices</b> (${params.percent}%)`;
+      },
     },
     legend: { show: false },
     series: [
       {
         type: 'pie',
-        radius: ['55%', '80%'],
-        center: ['50%', '55%'],
+        radius: ['52%', '78%'],
+        center: ['50%', '54%'],
         data: data.map((d, i) => ({
           ...d,
           name: d.name || 'unknown',
-          itemStyle: { color: generateChartColor(i) },
+          itemStyle: {
+            color: generateChartColor(i),
+            borderWidth: 2,
+            borderColor: isDark ? '#151210' : '#ffffff',
+          },
         })),
         label: { show: false },
         labelLine: { show: false },
         emphasis: {
-          itemStyle: { shadowBlur: 8, shadowOffsetX: 0, shadowColor: 'rgba(0,0,0,0.3)' },
+          itemStyle: { shadowBlur: 10, shadowOffsetX: 0, shadowColor: 'rgba(0,0,0,0.25)' },
+          scale: true,
+          scaleSize: 4,
         },
       },
     ],
@@ -41,30 +60,30 @@ export function DeviceStatusPie({ data, online, offline, total }: Props) {
       {
         type: 'text',
         left: 'center',
-        top: '42%',
-        style: { text: String(total), fill: '#f1f5f9', fontSize: 22, fontWeight: 'bold', fontFamily: 'Inter' },
+        top: '38%',
+        style: { text: String(total), fill: centerFg, fontSize: 24, fontWeight: '700', fontFamily: 'Inter' },
       },
       {
         type: 'text',
         left: 'center',
-        top: '56%',
-        style: { text: 'devices', fill: '#64748b', fontSize: 11, fontFamily: 'Inter' },
+        top: '52%',
+        style: { text: 'devices', fill: centerSub, fontSize: 11, fontFamily: 'Inter' },
       },
     ],
   };
 
   return (
     <div className="card p-5">
-      <h3 className="text-sm font-semibold text-slate-200 mb-1">By Category</h3>
-      <ReactECharts option={option} style={{ height: 180 }} notMerge />
+      <h3 className="text-[13px] font-semibold text-foreground mb-1">By Category</h3>
+      <ReactECharts option={option} style={{ height: 186 }} notMerge />
       <div className="grid grid-cols-2 gap-2 mt-1">
         <div className="flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-emerald-400" />
-          <span className="text-xs text-slate-400">{online} online</span>
+          <span className="w-2 h-2 rounded-full bg-green-500" />
+          <span className="text-[12px] text-muted-foreground">{online} online</span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-slate-500" />
-          <span className="text-xs text-slate-400">{offline} offline</span>
+          <span className="w-2 h-2 rounded-full bg-border" />
+          <span className="text-[12px] text-muted-foreground">{offline} offline</span>
         </div>
       </div>
     </div>

@@ -1,19 +1,32 @@
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { format, formatDistanceToNow, parseISO } from 'date-fns';
+import {
+  Navigation2, Thermometer, Zap, Droplets, Settings2, Radio, Smartphone,
+  Building2, FlaskConical, Cog, Activity, Cpu, Waves,
+} from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
 export function formatDate(date: string | Date, fmt = 'MMM d, yyyy HH:mm') {
-  const d = typeof date === 'string' ? parseISO(date) : date;
-  return format(d, fmt);
+  try {
+    const d = typeof date === 'string' ? parseISO(date) : date;
+    return format(d, fmt);
+  } catch {
+    return '—';
+  }
 }
 
 export function timeAgo(date: string | Date) {
-  const d = typeof date === 'string' ? parseISO(date) : date;
-  return formatDistanceToNow(d, { addSuffix: true });
+  try {
+    const d = typeof date === 'string' ? parseISO(date) : date;
+    return formatDistanceToNow(d, { addSuffix: true });
+  } catch {
+    return '—';
+  }
 }
 
 export function formatBytes(bytes: number): string {
@@ -30,50 +43,64 @@ export function formatNumber(n: number, decimals = 2): string {
   return n.toFixed(decimals);
 }
 
+export interface CategoryIconInfo {
+  Icon: LucideIcon;
+  color: string;
+  bg: string;
+  label: string;
+}
+
+const CATEGORY_MAP: Record<string, CategoryIconInfo> = {
+  tracker:       { Icon: Navigation2,  color: '#6366f1', bg: 'bg-indigo-500/10',   label: 'Tracker'       },
+  environmental: { Icon: Thermometer,  color: '#10b981', bg: 'bg-emerald-500/10',  label: 'Environmental' },
+  energy:        { Icon: Zap,          color: '#f59e0b', bg: 'bg-amber-500/10',    label: 'Energy'        },
+  water:         { Icon: Waves,        color: '#0ea5e9', bg: 'bg-sky-500/10',      label: 'Water'         },
+  pump:          { Icon: Settings2,    color: '#8b5cf6', bg: 'bg-violet-500/10',   label: 'Pump'          },
+  gateway:       { Icon: Radio,        color: '#06b6d4', bg: 'bg-cyan-500/10',     label: 'Gateway'       },
+  mobile:        { Icon: Smartphone,   color: '#f97316', bg: 'bg-orange-500/10',   label: 'Mobile'        },
+  fixed:         { Icon: Building2,    color: '#6b7280', bg: 'bg-gray-500/10',     label: 'Fixed'         },
+  research:      { Icon: FlaskConical, color: '#a855f7', bg: 'bg-purple-500/10',   label: 'Research'      },
+  industrial:    { Icon: Cog,          color: '#ef4444', bg: 'bg-red-500/10',      label: 'Industrial'    },
+  telemetry:     { Icon: Activity,     color: '#0284c7', bg: 'bg-blue-500/10',     label: 'Telemetry'     },
+  custom:        { Icon: Cpu,          color: '#ea580c', bg: 'bg-orange-500/10',   label: 'Custom'        },
+  droplets:      { Icon: Droplets,     color: '#0ea5e9', bg: 'bg-sky-500/10',      label: 'Fluid'         },
+};
+
+export function getCategoryIconInfo(category: string): CategoryIconInfo {
+  return CATEGORY_MAP[category] ?? { Icon: Cpu, color: '#ea580c', bg: 'bg-orange-500/10', label: category };
+}
+
+/** @deprecated Use getCategoryIconInfo(category).label instead */
+export function categoryIcon(category: string): string {
+  return getCategoryIconInfo(category).label;
+}
+
 export function statusColor(status: string) {
   switch (status) {
-    case 'online': return 'text-emerald-400';
-    case 'offline': return 'text-slate-500';
-    case 'error': return 'text-rose-400';
-    case 'idle': return 'text-amber-400';
-    case 'provisioning': return 'text-orion-400';
-    default: return 'text-slate-400';
+    case 'online':       return 'text-green-600 dark:text-green-400';
+    case 'offline':      return 'text-muted-foreground';
+    case 'error':        return 'text-red-600 dark:text-red-400';
+    case 'idle':         return 'text-amber-600 dark:text-amber-400';
+    case 'provisioning': return 'text-primary';
+    default:             return 'text-muted-foreground';
   }
 }
 
 export function severityColor(severity: string) {
   switch (severity) {
-    case 'info': return 'text-sky-400';
-    case 'warning': return 'text-amber-400';
-    case 'error': return 'text-rose-400';
-    case 'critical': return 'text-rose-300';
-    default: return 'text-slate-400';
+    case 'info':     return 'text-blue-600 dark:text-blue-400';
+    case 'warning':  return 'text-amber-600 dark:text-amber-400';
+    case 'error':    return 'text-red-600 dark:text-red-400';
+    case 'critical': return 'text-red-600 dark:text-red-400';
+    default:         return 'text-muted-foreground';
   }
-}
-
-export function categoryIcon(category: string): string {
-  const map: Record<string, string> = {
-    tracker: '📍',
-    environmental: '🌡️',
-    energy: '⚡',
-    water: '💧',
-    pump: '🔄',
-    gateway: '📡',
-    mobile: '📱',
-    fixed: '🏭',
-    research: '🔬',
-    industrial: '⚙️',
-    telemetry: '📊',
-    custom: '🔧',
-  };
-  return map[category] ?? '📟';
 }
 
 export function generateChartColor(index: number): string {
   const colors = [
-    '#6272f2', '#8b5cf6', '#06b6d4', '#10b981',
-    '#f59e0b', '#f43f5e', '#3b82f6', '#14b8a6',
-    '#a855f7', '#ec4899', '#84cc16', '#f97316',
+    '#6366f1', '#10b981', '#f59e0b', '#06b6d4',
+    '#f97316', '#a855f7', '#ef4444', '#0ea5e9',
+    '#8b5cf6', '#ec4899', '#84cc16', '#ea580c',
   ];
   return colors[index % colors.length];
 }
@@ -84,4 +111,21 @@ export function debounce<T extends (...args: any[]) => any>(fn: T, delay: number
     clearTimeout(timeout);
     timeout = setTimeout(() => fn(...args), delay);
   }) as T;
+}
+
+export function downloadCSV(filename: string, rows: Record<string, unknown>[]) {
+  if (!rows.length) return;
+  const keys = Object.keys(rows[0]);
+  const csv = [
+    keys.join(','),
+    ...rows.map(r => keys.map(k => {
+      const v = String(r[k] ?? '');
+      return v.includes(',') ? `"${v}"` : v;
+    }).join(',')),
+  ].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
 }

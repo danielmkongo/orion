@@ -9,13 +9,13 @@
   :root {
     /* Warm off-white background, orange primary */
     --bg:              30 20% 98%;      /* #FAFAF8 */
-    --fg:              20 14% 10%;      /* #1C1815 */
+    --fg:              20 16% 9%;       /* #171310 — stronger contrast */
     --surface:         0 0% 100%;       /* #FFFFFF */
     --surface-raised:  30 15% 96%;      /* #F5F3F0 */
-    --border:          30 12% 88%;      /* #E2DDD8 */
-    --border-strong:   30 10% 76%;      /* #C8C1BA */
-    --muted:           30 15% 94%;      /* #EEECEA */
-    --muted-fg:        25  8% 48%;      /* #867E76 */
+    --border:          30 10% 86%;      /* #DDD8D2 — slightly stronger */
+    --border-strong:   30 10% 72%;      /* #BFBAB3 */
+    --muted:           30 14% 93%;      /* #ECEAE7 */
+    --muted-fg:        25 10% 42%;      /* #726860 — improved readability */
     --primary:         21 90% 48%;      /* #EA580C  orange-600 */
     --primary-fg:       0  0% 100%;
     --primary-hover:   21 90% 42%;

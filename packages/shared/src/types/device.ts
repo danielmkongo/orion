@@ -95,6 +95,7 @@ export interface DeviceCreateInput {
   tags?: string[];
   attributes?: DeviceAttribute[];
   projectId?: string;
+  meta?: Record<string, unknown>;
 }
 
 export interface DeviceUpdateInput {

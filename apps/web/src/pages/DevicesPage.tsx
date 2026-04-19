@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Search, RefreshCw, Cpu, Trash2, ExternalLink, MoreHorizontal, Filter } from 'lucide-react';
 import { devicesApi } from '@/api/devices';
-import { timeAgo, categoryIcon } from '@/lib/utils';
+import { timeAgo, getCategoryIconInfo } from '@/lib/utils';
 import { DeviceForm } from '@/components/devices/DeviceForm';
 import toast from 'react-hot-toast';
 import type { Device } from '@orion/shared';
@@ -193,12 +193,15 @@ export function DevicesPage() {
 function DeviceRow({ device, onDelete }: { device: any; onDelete: () => void }) {
   const [open, setOpen] = useState(false);
   const id = device._id ?? device.id;
+  const { Icon: CatIcon, color: catColor } = getCategoryIconInfo(device.category);
 
   return (
     <tr>
       <td>
         <div className="flex items-center gap-2.5">
-          <span className="text-[16px]">{categoryIcon(device.category)}</span>
+          <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: `${catColor}15` }}>
+            <CatIcon size={14} style={{ color: catColor }} />
+          </div>
           <div>
             <p className="text-[13px] font-medium text-foreground leading-tight">{device.name}</p>
             {device.description && (

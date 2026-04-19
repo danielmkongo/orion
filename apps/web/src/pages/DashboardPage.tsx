@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import apiClient from '@/api/client';
 import { devicesApi } from '@/api/devices';
-import { timeAgo, categoryIcon } from '@/lib/utils';
+import { timeAgo, getCategoryIconInfo } from '@/lib/utils';
 import { TelemetryLineChart } from '@/components/charts/TelemetryLineChart';
 import { DeviceStatusPie } from '@/components/charts/DeviceStatusPie';
 import { ActivityFeed } from '@/components/charts/ActivityFeed';
@@ -112,7 +112,7 @@ export function DashboardPage() {
       <div className="flex items-start justify-between">
         <div>
           <h2 className="text-[22px] font-semibold text-foreground tracking-tight">
-            {greeting()}, {user?.name?.split(' ')[0] ?? 'there'} 👋
+            {greeting()}, {user?.name?.split(' ')[0] ?? 'there'}
           </h2>
           <p className="text-[14px] text-muted-foreground mt-0.5">Here's what's happening with your fleet.</p>
         </div>
@@ -180,14 +180,18 @@ export function DashboardPage() {
               </div>
 
               <div className="space-y-2.5">
-                {byCategory.slice(0, 5).map(cat => (
-                  <div key={cat._id} className="flex items-center justify-between">
-                    <span className="text-[12px] text-muted-foreground capitalize flex items-center gap-1.5">
-                      <span>{categoryIcon(cat._id)}</span> {cat._id}
-                    </span>
-                    <span className="text-[12px] font-medium text-foreground">{cat.count}</span>
-                  </div>
-                ))}
+                {byCategory.slice(0, 5).map(cat => {
+                  const { Icon: CatIcon, color: catColor } = getCategoryIconInfo(cat._id);
+                  return (
+                    <div key={cat._id} className="flex items-center justify-between">
+                      <span className="text-[12px] text-muted-foreground capitalize flex items-center gap-1.5">
+                        <CatIcon size={12} style={{ color: catColor }} />
+                        {cat._id}
+                      </span>
+                      <span className="text-[12px] font-medium text-foreground">{cat.count}</span>
+                    </div>
+                  );
+                })}
                 {byCategory.length === 0 && (
                   <p className="text-[12px] text-muted-foreground text-center py-4">No devices yet</p>
                 )}
@@ -236,7 +240,9 @@ export function DashboardPage() {
               </Link>
             </div>
             <div>
-              {devices.slice(0, 6).map((d: any) => (
+              {devices.slice(0, 6).map((d: any) => {
+                const { Icon: DIcon, color: dc } = getCategoryIconInfo(d.category);
+                return (
                 <Link
                   key={d._id ?? d.id}
                   to={`/devices/${d._id ?? d.id}`}
@@ -246,7 +252,9 @@ export function DashboardPage() {
                     d.status === 'online' ? 'status-dot-online' :
                     d.status === 'error'  ? 'status-dot-error'  : 'status-dot-offline'
                   }`} />
-                  <span className="text-[14px] leading-none flex-shrink-0">{categoryIcon(d.category)}</span>
+                  <div className="w-6 h-6 rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: `${dc}15` }}>
+                    <DIcon size={12} style={{ color: dc }} />
+                  </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-[13px] font-medium text-foreground truncate">{d.name}</p>
                     <p className="text-[11px] text-muted-foreground">{d.lastSeenAt ? timeAgo(d.lastSeenAt) : 'Never'}</p>
@@ -257,7 +265,8 @@ export function DashboardPage() {
                     </motion.div>
                   )}
                 </Link>
-              ))}
+                );
+              })}
               {devices.length === 0 && (
                 <p className="text-[13px] text-muted-foreground text-center py-6">No devices yet</p>
               )}

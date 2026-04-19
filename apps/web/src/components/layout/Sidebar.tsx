@@ -1,7 +1,7 @@
 import { NavLink, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  LayoutDashboard, Activity, Bell, Map, Cpu, Terminal,
+  LayoutDashboard, Activity, Bell, Map, Cpu, Sliders,
   Download, Zap, BarChart3, Users, Settings, ChevronLeft,
   LogOut,
 } from 'lucide-react';
@@ -27,8 +27,8 @@ const NAV = [
     label: 'Fleet',
     items: [
       { href: '/devices',   icon: Cpu,       label: 'Devices' },
-      { href: '/commands',  icon: Terminal,  label: 'Commands' },
-      { href: '/ota',       icon: Download,  label: 'OTA Updates' },
+      { href: '/control',   icon: Sliders,   label: 'Control' },
+      { href: '/ota',       icon: Download,  label: 'Firmware' },
     ],
   },
   {
