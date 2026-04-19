@@ -6,20 +6,26 @@ import { requirePermission } from '../middleware/auth.js';
 
 export async function telemetryRoutes(app: FastifyInstance) {
   // Authenticated data ingest via HTTP (for testing / HTTP devices)
+  // Auth accepted as: X-API-Key header, ?apiKey query param, or api_key in JSON body
   app.post('/telemetry/ingest', async (req, reply) => {
-    const apiKey = (req.headers['x-api-key'] as string) ?? (req.query as any).apiKey;
+    const body = req.body as Record<string, unknown>;
+    const apiKey =
+      (req.headers['x-api-key'] as string) ??
+      (req.query as any).apiKey ??
+      (typeof body?.api_key === 'string' ? body.api_key : undefined);
+
     if (!apiKey) return reply.code(401).send({ error: 'API key required' });
 
     const device = await deviceService.getByApiKey(apiKey);
     if (!device) return reply.code(401).send({ error: 'Invalid API key' });
 
-    const body = req.body as any;
-    const timestamp = body.timestamp ?? new Date().toISOString();
+    const timestamp = (body.timestamp as string) ?? new Date().toISOString();
     const fields: Record<string, number | string | boolean | null> = {};
 
-    // Flatten top-level scalar values into fields
+    // Flatten top-level scalar values; strip auth/meta fields
+    const RESERVED = new Set(['api_key', 'timestamp', 'device_id']);
     for (const [k, v] of Object.entries(body)) {
-      if (k !== 'timestamp' && (typeof v === 'number' || typeof v === 'string' || typeof v === 'boolean')) {
+      if (!RESERVED.has(k) && (typeof v === 'number' || typeof v === 'string' || typeof v === 'boolean')) {
         fields[k] = v as number | string | boolean;
       }
     }

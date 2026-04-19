@@ -564,41 +564,50 @@ export function DeviceDetailPage() {
             </div>
           </div>
 
-          {/* Auth */}
+          {/* Payload */}
           <div>
-            <div className="eyebrow" style={{ marginBottom: 8 }}>Authentication header</div>
-            <div className="panel" style={{ padding: '10px 14px', fontFamily: 'var(--font-mono)', fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-              <div>
-                <span style={{ color: 'hsl(var(--muted-fg))' }}>X-API-Key: </span>
-                <span>{apiKeyVisible ? currentKey : `${currentKey?.slice(0, 8) ?? ''}••••••••`}</span>
-              </div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+              <div className="eyebrow">JSON payload</div>
               <button
-                onClick={() => { navigator.clipboard.writeText(currentKey); toast.success('Copied!'); }}
-                className="btn btn-ghost btn-sm btn-icon"
-                title="Copy key"
-              >
-                <Copy size={11} />
-              </button>
-            </div>
-          </div>
-
-          {/* Payload format */}
-          <div>
-            <div className="eyebrow" style={{ marginBottom: 8 }}>Payload format (JSON)</div>
-            <pre className="panel" style={{ padding: '14px 16px', fontSize: 11, fontFamily: 'var(--font-mono)', color: 'hsl(var(--muted-fg))', overflowX: 'auto', lineHeight: 1.7, margin: 0 }}>
-              {JSON.stringify(
-                (() => {
+                onClick={() => {
                   const schemaFields: any[] = d.meta?.dataSchema?.fields ?? [];
-                  if (schemaFields.length === 0) return { temperature: 24.3, humidity: 65 };
-                  const obj: Record<string, unknown> = {};
+                  const obj: Record<string, unknown> = { api_key: currentKey };
                   schemaFields.forEach((f: any) => {
                     obj[f.key] = f.type === 'number' ? 0 : f.type === 'boolean' ? false : f.type === 'timestamp' ? new Date().toISOString() : '';
                   });
+                  if (schemaFields.length === 0) { obj['temperature'] = 24.3; obj['humidity'] = 65; }
+                  navigator.clipboard.writeText(JSON.stringify(obj, null, 2));
+                  toast.success('Copied!');
+                }}
+                className="btn btn-ghost btn-sm"
+                style={{ gap: 4, fontSize: 11 }}
+              >
+                <Copy size={10} /> Copy
+              </button>
+            </div>
+            <pre className="panel" style={{ padding: '14px 16px', fontSize: 11, fontFamily: 'var(--font-mono)', overflowX: 'auto', lineHeight: 1.7, margin: 0 }}>
+              {JSON.stringify(
+                (() => {
+                  const schemaFields: any[] = d.meta?.dataSchema?.fields ?? [];
+                  const obj: Record<string, unknown> = {
+                    api_key: apiKeyVisible ? currentKey : `${currentKey?.slice(0, 8) ?? ''}••••••••`,
+                  };
+                  if (schemaFields.length === 0) {
+                    obj['temperature'] = 24.3;
+                    obj['humidity'] = 65;
+                  } else {
+                    schemaFields.forEach((f: any) => {
+                      obj[f.key] = f.type === 'number' ? 0 : f.type === 'boolean' ? false : f.type === 'timestamp' ? new Date().toISOString() : '';
+                    });
+                  }
                   return obj;
                 })(),
                 null, 2
               )}
             </pre>
+            <p className="dim" style={{ fontSize: 11, marginTop: 8 }}>
+              <span className="mono acc">api_key</span> is stripped before storage — only your data fields are saved.
+            </p>
           </div>
         </div>
       </div>
