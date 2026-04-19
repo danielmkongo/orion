@@ -1,39 +1,81 @@
 import { useParams, Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { devicesApi } from '@/api/devices';
 import { telemetryApi } from '@/api/telemetry';
 import apiClient from '@/api/client';
-import { timeAgo, formatDate as fmtDate, getCategoryIconInfo } from '@/lib/utils';
+import { timeAgo, formatDate as fmtDate, getCategoryIconInfo, copyText } from '@/lib/utils';
 import { useSocket } from '@/hooks/useSocket';
 import { LineChart } from '@/components/charts/Charts';
-import { ArrowLeft, Eye, EyeOff, Copy, RefreshCw, Terminal, Plus, Trash2, Check } from 'lucide-react';
+import { ArrowLeft, Eye, EyeOff, Copy, RefreshCw, Terminal, Plus, Trash2, Check, ChevronDown, ChevronRight } from 'lucide-react';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import toast from 'react-hot-toast';
-import L from 'leaflet';
+import { CommandWidget } from '@/components/devices/CommandWidget';
+import type { DeviceCommand } from '@/components/devices/CommandWidget';
 
 const COLORS = ['hsl(var(--primary))', 'hsl(var(--info))', 'hsl(var(--good))', 'hsl(var(--warn))', '#A06CD5', '#06B6D4'];
 
+const API_BASE = (import.meta as any).env?.VITE_API_URL ?? 'https://orion.vortan.io/api/v1';
+
+/* ── Google Maps satellite view ─────────────────────────────────────── */
+const GMAPS_KEY = (import.meta as any).env?.VITE_GOOGLE_MAPS_API_KEY ?? '';
+const GMAPS_ID  = (import.meta as any).env?.VITE_GOOGLE_MAP_ID ?? 'DEMO_MAP_ID';
+
 function SatelliteMap({ lat, lng }: { lat: number; lng: number }) {
   const mapRef = useRef<HTMLDivElement | null>(null);
-  const leafletRef = useRef<L.Map | null>(null);
+
   useEffect(() => {
-    if (!mapRef.current || leafletRef.current) return;
-    const map = L.map(mapRef.current, { zoomControl: true, scrollWheelZoom: false });
-    L.tileLayer(
-      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-      { attribution: 'Tiles © Esri', maxZoom: 18 }
-    ).addTo(map);
-    const icon = L.divIcon({
-      className: '',
-      html: `<div style="width:22px;height:22px;border-radius:99px;background:hsl(var(--primary));box-shadow:0 0 0 4px rgba(255,91,31,.25),0 0 0 1px #fff;position:relative"><div style="position:absolute;inset:6px;background:#fff;border-radius:99px"></div></div>`,
-      iconSize: [22, 22], iconAnchor: [11, 11],
-    });
-    L.marker([lat, lng], { icon }).addTo(map);
-    map.setView([lat, lng], 13);
-    leafletRef.current = map;
-    return () => { map.remove(); leafletRef.current = null; };
+    if (!mapRef.current || !GMAPS_KEY) return;
+    // Dynamically load Google Maps if not already present
+    const win = window as any;
+    const initMap = () => {
+      if (!mapRef.current) return;
+      const map = new win.google.maps.Map(mapRef.current, {
+        center: { lat, lng },
+        zoom: 13,
+        mapTypeId: 'satellite',
+        mapId: GMAPS_ID,
+        streetViewControl: false,
+        mapTypeControl: false,
+        gestureHandling: 'cooperative',
+      });
+      new win.google.maps.marker.AdvancedMarkerElement({
+        map,
+        position: { lat, lng },
+        content: (() => {
+          const el = document.createElement('div');
+          el.style.cssText = 'width:18px;height:18px;border-radius:50%;background:hsl(var(--primary));border:2px solid white;box-shadow:0 0 0 3px rgba(255,91,31,0.35)';
+          return el;
+        })(),
+      });
+    };
+
+    if (win.google?.maps) {
+      initMap();
+    } else {
+      const existing = document.querySelector('script[data-gmaps]');
+      if (!existing) {
+        const script = document.createElement('script');
+        script.dataset.gmaps = '1';
+        script.src = `https://maps.googleapis.com/maps/api/js?key=${GMAPS_KEY}&libraries=marker&callback=__gmapsReady`;
+        win.__gmapsReady = initMap;
+        document.head.appendChild(script);
+      } else {
+        existing.addEventListener('load', initMap);
+      }
+    }
   }, [lat, lng]);
+
+  if (!GMAPS_KEY) {
+    return (
+      <div className="panel" style={{ padding: 32, textAlign: 'center' }}>
+        <p className="dim" style={{ fontSize: 13 }}>
+          Add <code className="mono acc">VITE_GOOGLE_MAPS_API_KEY</code> to your <code className="mono">.env</code> to enable maps.
+        </p>
+      </div>
+    );
+  }
+
   return <div ref={mapRef} style={{ width: '100%', height: 320, border: '1px solid hsl(var(--border))' }} />;
 }
 
@@ -49,9 +91,10 @@ export function DeviceDetailPage() {
   const [sending, setSending] = useState(false);
   const [showRegenConfirm, setShowRegenConfirm] = useState(false);
   const [showAddCmd, setShowAddCmd] = useState(false);
+  const [showRawCmd, setShowRawCmd] = useState(false);
   const [newCmdName, setNewCmdName] = useState('');
   const [newCmdLabel, setNewCmdLabel] = useState('');
-  const [newCmdType, setNewCmdType] = useState<'boolean' | 'number' | 'enum' | 'action'>('action');
+  const [newCmdType, setNewCmdType] = useState<'boolean' | 'number' | 'enum' | 'action' | 'string'>('action');
   const [newCmdMin, setNewCmdMin] = useState(0);
   const [newCmdMax, setNewCmdMax] = useState(100);
   const [newCmdStep, setNewCmdStep] = useState(1);
@@ -107,7 +150,6 @@ export function DeviceDetailPage() {
   const d = device as any;
   const fields = liveFields && Object.keys(liveFields).length > 0 ? liveFields : latestTelemetry?.fields ?? {};
   const numericFields = Object.entries(fields).filter(([, v]) => typeof v === 'number') as [string, number][];
-  const allFields     = Object.entries(fields) as [string, any][];
 
   useEffect(() => {
     if (!chartField && numericFields.length > 0) setChartField(numericFields[0][0]);
@@ -120,21 +162,50 @@ export function DeviceDetailPage() {
     value: typeof p.value === 'number' ? p.value : 0,
   }));
 
+  // Get field metadata from schema for chart color/type
+  const schemaFields: any[] = d?.meta?.dataSchema?.fields ?? [];
+  const chartFieldMeta = schemaFields.find((f: any) => f.key === chartField);
+  const chartColor = chartFieldMeta?.chartColor ?? 'hsl(var(--primary))';
+
   const { Icon: CatIcon } = d ? getCategoryIconInfo(d.category) : { Icon: () => null };
+
+  const schemaCommands: DeviceCommand[] = d?.meta?.commands ?? [];
+
+  const sendControl = async (name: string, formattedPayload: string) => {
+    if (!id) return;
+    try {
+      let parsed = {};
+      try { parsed = JSON.parse(formattedPayload); } catch {}
+      await apiClient.post('/commands', { deviceId: id, name, payload: parsed });
+      toast.success(`Sent: ${name}`);
+      queryClient.invalidateQueries({ queryKey: ['commands', id] });
+    } catch { toast.error('Failed to send command'); }
+  };
 
   const sendCommand = async () => {
     if (!cmdName.trim()) return;
     setSending(true);
     try {
-      let payload = {};
-      try { payload = JSON.parse(cmdPayload); } catch {}
-      await apiClient.post('/commands', { deviceId: id, name: cmdName, payload });
+      let p = {};
+      try { p = JSON.parse(cmdPayload); } catch {}
+      await apiClient.post('/commands', { deviceId: id, name: cmdName, payload: p });
       toast.success('Command sent');
       setCmdName(''); setCmdPayload('{}');
       queryClient.invalidateQueries({ queryKey: ['commands', id] });
     } catch { toast.error('Failed to send command'); }
     finally { setSending(false); }
   };
+
+  // Real-time payload preview
+  const payloadPreview = useMemo(() => {
+    if (!cmdName.trim()) return null;
+    try {
+      const parsed = JSON.parse(cmdPayload);
+      return JSON.stringify({ [cmdName]: parsed }, null, 2);
+    } catch {
+      return JSON.stringify({ [cmdName]: cmdPayload }, null, 2);
+    }
+  }, [cmdName, cmdPayload]);
 
   const regenerateKey = async () => {
     try {
@@ -221,7 +292,7 @@ export function DeviceDetailPage() {
           </p>
         </div>
         <div style={{ gridColumn: 3, display: 'flex', alignItems: 'flex-end', gap: 8, paddingBottom: 20 }}>
-          <button className="btn btn-sm" style={{ gap: 6 }} onClick={() => { setCmdName('get_status'); }}>
+          <button className="btn btn-sm" style={{ gap: 6 }} onClick={() => { setShowRawCmd(true); }}>
             <Terminal size={13} /> Send command
           </button>
           <button className="btn btn-sm btn-outline" onClick={() => queryClient.invalidateQueries({ queryKey: ['device', id] })}>
@@ -238,33 +309,37 @@ export function DeviceDetailPage() {
           borderTop: '1px solid hsl(var(--fg))',
           marginBottom: 32,
         }}>
-          {numericFields.map(([k, v], i) => (
-            <button
-              key={k}
-              onClick={() => setChartField(k)}
-              style={{
-                padding: `18px 20px 18px ${i % 4 === 0 ? 0 : 20}px`,
-                borderBottom: '1px solid hsl(var(--border))',
-                borderRight: (i + 1) % 4 !== 0 ? '1px solid hsl(var(--border))' : 'none',
-                textAlign: 'left',
-                background: chartField === k ? 'hsl(var(--surface-raised))' : 'transparent',
-                cursor: 'pointer',
-                outline: chartField === k ? `1px solid ${COLORS[i % COLORS.length]}` : 'none',
-                outlineOffset: -1,
-                transition: 'background 0.1s',
-              }}
-            >
-              <div className="eyebrow" style={{ fontSize: 9.5 }}>{k.replace(/_/g, ' ')}</div>
-              <div style={{ fontFamily: 'var(--font-display)', fontSize: 32, lineHeight: 1, letterSpacing: '-0.02em', marginTop: 4, color: COLORS[i % COLORS.length] }} className="num">
-                {v.toFixed(2)}
-              </div>
-            </button>
-          ))}
+          {numericFields.map(([k, v], i) => {
+            const fMeta = schemaFields.find((f: any) => f.key === k);
+            const fColor = fMeta?.chartColor ?? COLORS[i % COLORS.length];
+            return (
+              <button
+                key={k}
+                onClick={() => setChartField(k)}
+                style={{
+                  padding: `18px 20px 18px ${i % 4 === 0 ? 0 : 20}px`,
+                  borderBottom: '1px solid hsl(var(--border))',
+                  borderRight: (i + 1) % 4 !== 0 ? '1px solid hsl(var(--border))' : 'none',
+                  textAlign: 'left',
+                  background: chartField === k ? 'hsl(var(--surface-raised))' : 'transparent',
+                  cursor: 'pointer',
+                  outline: chartField === k ? `1px solid ${fColor}` : 'none',
+                  outlineOffset: -1,
+                  transition: 'background 0.1s',
+                }}
+              >
+                <div className="eyebrow" style={{ fontSize: 9.5 }}>{k.replace(/_/g, ' ')}</div>
+                <div style={{ fontFamily: 'var(--font-display)', fontSize: 32, lineHeight: 1, letterSpacing: '-0.02em', marginTop: 4, color: fColor }} className="num">
+                  {v.toFixed(2)}
+                </div>
+              </button>
+            );
+          })}
         </div>
       )}
 
       {/* ── Section I: Telemetry chart + device info ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 32, marginBottom: 0 }}>
+      <div className="detail-grid" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 32, marginBottom: 0 }}>
         {/* Chart */}
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12, gap: 12, flexWrap: 'wrap' }}>
@@ -286,7 +361,7 @@ export function DeviceDetailPage() {
                 No data for <strong style={{ marginLeft: 4, fontFamily: 'var(--font-mono)' }}>{chartField}</strong>
               </div>
             ) : (
-              <LineChart series={[{ name: chartField, data: seriesPoints, color: 'hsl(var(--primary))' }]} height={280} showArea />
+              <LineChart series={[{ name: chartField, data: seriesPoints, color: chartColor }]} height={280} showArea />
             )}
           </div>
         </div>
@@ -326,7 +401,7 @@ export function DeviceDetailPage() {
                 {apiKeyVisible ? <EyeOff size={12} /> : <Eye size={12} />}
               </button>
               <button
-                onClick={() => { navigator.clipboard.writeText(currentKey); toast.success('Copied!'); }}
+                onClick={() => copyText(currentKey).then(() => toast.success('Copied!'))}
                 className="btn btn-sm btn-icon"
               >
                 <Copy size={12} />
@@ -373,56 +448,51 @@ export function DeviceDetailPage() {
         </div>
       </div>
 
-      {/* ── Section V: Commands ── */}
+      {/* ── Section V: Controls ── */}
       <div className="section">
         <div>
           <div className="ssh">Controls</div>
           <p className="dim" style={{ fontSize: 13, marginTop: 8, maxWidth: '28ch' }}>
-            Send commands and manage device control schema.
+            Device commands defined in the schema.
           </p>
+          <button className="btn btn-ghost btn-sm" style={{ marginTop: 12, gap: 4, fontSize: 12 }} onClick={() => setShowAddCmd(v => !v)}>
+            <Plus size={11} /> {showAddCmd ? 'Cancel' : 'Add command'}
+          </button>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
 
-          {/* Schema commands quick-send */}
-          {(d.meta?.commands ?? []).length > 0 && (
-            <div className="panel" style={{ padding: 20 }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-                <div className="eyebrow">Device commands</div>
-                <button className="btn btn-ghost btn-sm" style={{ gap: 4 }} onClick={() => setShowAddCmd(v => !v)}>
-                  <Plus size={11} /> Add
-                </button>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {(d.meta.commands as any[]).map((sc: any, idx: number) => (
-                  <div key={idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', border: '1px solid hsl(var(--border))', gap: 10 }}>
-                    <div>
-                      <div style={{ fontSize: 13, fontWeight: 500 }}>{sc.label || sc.name}</div>
-                      <div className="mono faint" style={{ fontSize: 10.5 }}>{sc.name} · {sc.type}</div>
-                    </div>
-                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                      <button
-                        onClick={() => { setCmdName(sc.name); setCmdPayload(sc.type === 'number' ? JSON.stringify({ value: sc.default ?? sc.min ?? 0 }) : '{}'); }}
-                        className="btn btn-sm btn-primary"
-                        style={{ gap: 4, fontSize: 11 }}
-                      >
-                        <Terminal size={10} /> Send
-                      </button>
-                      <button onClick={() => removeSchemaCommand(idx)} className="btn btn-ghost btn-sm btn-icon" style={{ color: 'hsl(var(--bad))' }}>
-                        <Trash2 size={11} />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
+          {/* CommandWidget per schema command */}
+          {schemaCommands.length > 0 ? (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 10 }}>
+              {schemaCommands.map((cmd, idx) => (
+                <div key={idx} style={{ position: 'relative' }}>
+                  <CommandWidget
+                    cmd={cmd}
+                    payloadFormat={d.payloadFormat}
+                    onSend={sendControl}
+                    compact
+                  />
+                  <button
+                    onClick={() => removeSchemaCommand(idx)}
+                    className="btn btn-ghost btn-sm btn-icon"
+                    style={{ position: 'absolute', top: 8, right: 8, color: 'hsl(var(--bad))', opacity: 0.5 }}
+                    title="Remove command"
+                  >
+                    <Trash2 size={10} />
+                  </button>
+                </div>
+              ))}
             </div>
-          )}
+          ) : !showAddCmd ? (
+            <div className="panel" style={{ padding: '32px 24px', textAlign: 'center' }}>
+              <p className="dim" style={{ fontSize: 13 }}>No commands defined yet. Click <strong>Add command</strong> to create one.</p>
+            </div>
+          ) : null}
 
           {/* Add command form */}
-          {((d.meta?.commands ?? []).length === 0 || showAddCmd) && (
+          {showAddCmd && (
             <div className="panel" style={{ padding: 20, borderTop: '2px solid hsl(var(--primary))' }}>
-              <div className="eyebrow" style={{ marginBottom: 14 }}>
-                {(d.meta?.commands ?? []).length === 0 ? 'Define device commands' : 'Add command'}
-              </div>
+              <div className="eyebrow" style={{ marginBottom: 14 }}>Add command</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                   <div>
@@ -441,6 +511,7 @@ export function DeviceDetailPage() {
                     <option value="boolean">Toggle (on/off)</option>
                     <option value="number">Slider (value range)</option>
                     <option value="enum">Dropdown (options)</option>
+                    <option value="string">Text input</option>
                   </select>
                 </div>
                 {newCmdType === 'number' && (
@@ -472,40 +543,61 @@ export function DeviceDetailPage() {
                     {savingCmd ? <RefreshCw size={11} className="animate-spin" /> : <Check size={11} />}
                     Save command
                   </button>
-                  {showAddCmd && <button onClick={() => setShowAddCmd(false)} className="btn btn-ghost btn-sm">Cancel</button>}
+                  <button onClick={() => setShowAddCmd(false)} className="btn btn-ghost btn-sm">Cancel</button>
                 </div>
               </div>
             </div>
           )}
 
-          {/* Send form */}
-          <div className="panel" style={{ padding: 20 }}>
-            <div className="eyebrow" style={{ marginBottom: 12 }}>Send raw command</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
-              <div>
-                <label className="eyebrow" style={{ fontSize: 9, display: 'block', marginBottom: 6 }}>Command name</label>
-                <input
-                  value={cmdName}
-                  onChange={e => setCmdName(e.target.value)}
-                  className="input mono"
-                  placeholder="reboot, get_status…"
-                />
-              </div>
-              <div>
-                <label className="eyebrow" style={{ fontSize: 9, display: 'block', marginBottom: 6 }}>Payload (JSON)</label>
-                <input
-                  value={cmdPayload}
-                  onChange={e => setCmdPayload(e.target.value)}
-                  className="input mono"
-                  placeholder="{}"
-                  style={{ fontSize: 12 }}
-                />
-              </div>
-            </div>
-            <button onClick={sendCommand} disabled={sending || !cmdName.trim()} className="btn btn-primary" style={{ gap: 6 }}>
-              <Terminal size={13} />
-              {sending ? 'Sending…' : 'Send'}
+          {/* Raw command accordion */}
+          <div>
+            <button
+              onClick={() => setShowRawCmd(v => !v)}
+              className="btn btn-ghost btn-sm"
+              style={{ gap: 6, fontSize: 12, marginBottom: 8 }}
+            >
+              {showRawCmd ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+              Advanced · Raw command
             </button>
+            {showRawCmd && (
+              <div className="panel" style={{ padding: 20 }}>
+                <div className="eyebrow" style={{ marginBottom: 12 }}>Send raw command</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
+                  <div>
+                    <label className="eyebrow" style={{ fontSize: 9, display: 'block', marginBottom: 6 }}>Command name</label>
+                    <input
+                      value={cmdName}
+                      onChange={e => setCmdName(e.target.value)}
+                      className="input mono"
+                      placeholder="reboot, get_status…"
+                    />
+                  </div>
+                  <div>
+                    <label className="eyebrow" style={{ fontSize: 9, display: 'block', marginBottom: 6 }}>Payload (JSON)</label>
+                    <input
+                      value={cmdPayload}
+                      onChange={e => setCmdPayload(e.target.value)}
+                      className="input mono"
+                      placeholder="{}"
+                      style={{ fontSize: 12 }}
+                    />
+                  </div>
+                </div>
+                {/* Real-time payload preview */}
+                {payloadPreview && (
+                  <div style={{ marginBottom: 12 }}>
+                    <div className="eyebrow" style={{ fontSize: 9, marginBottom: 6 }}>Payload preview</div>
+                    <pre className="panel" style={{ padding: '10px 14px', fontSize: 11, fontFamily: 'var(--font-mono)', lineHeight: 1.6, margin: 0, color: 'hsl(var(--muted-fg))' }}>
+                      {payloadPreview}
+                    </pre>
+                  </div>
+                )}
+                <button onClick={sendCommand} disabled={sending || !cmdName.trim()} className="btn btn-primary" style={{ gap: 6 }}>
+                  <Terminal size={13} />
+                  {sending ? 'Sending…' : 'Send'}
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Command history */}
@@ -559,8 +651,8 @@ export function DeviceDetailPage() {
             <div className="eyebrow" style={{ marginBottom: 8 }}>Endpoint</div>
             <div className="panel" style={{ padding: '10px 14px', fontFamily: 'var(--font-mono)', fontSize: 12 }}>
               <span className="acc">POST</span>{' '}
-              <span style={{ color: 'hsl(var(--muted-fg))' }}>https://orion.vortan.io/api/v1/telemetry/</span>
-              <span style={{ color: 'hsl(var(--fg))' }}>ingest</span>
+              <span style={{ color: 'hsl(var(--muted-fg))' }}>{API_BASE}/</span>
+              <span style={{ color: 'hsl(var(--fg))' }}>telemetry/ingest</span>
             </div>
           </div>
 
@@ -570,14 +662,12 @@ export function DeviceDetailPage() {
               <div className="eyebrow">JSON payload</div>
               <button
                 onClick={() => {
-                  const schemaFields: any[] = d.meta?.dataSchema?.fields ?? [];
                   const obj: Record<string, unknown> = { api_key: currentKey };
                   schemaFields.forEach((f: any) => {
                     obj[f.key] = f.type === 'number' ? 0 : f.type === 'boolean' ? false : f.type === 'timestamp' ? new Date().toISOString() : '';
                   });
                   if (schemaFields.length === 0) { obj['temperature'] = 24.3; obj['humidity'] = 65; }
-                  navigator.clipboard.writeText(JSON.stringify(obj, null, 2));
-                  toast.success('Copied!');
+                  copyText(JSON.stringify(obj, null, 2)).then(() => toast.success('Copied!'));
                 }}
                 className="btn btn-ghost btn-sm"
                 style={{ gap: 4, fontSize: 11 }}
@@ -588,7 +678,6 @@ export function DeviceDetailPage() {
             <pre className="panel" style={{ padding: '14px 16px', fontSize: 11, fontFamily: 'var(--font-mono)', overflowX: 'auto', lineHeight: 1.7, margin: 0 }}>
               {JSON.stringify(
                 (() => {
-                  const schemaFields: any[] = d.meta?.dataSchema?.fields ?? [];
                   const obj: Record<string, unknown> = {
                     api_key: apiKeyVisible ? currentKey : `${currentKey?.slice(0, 8) ?? ''}••••••••`,
                   };

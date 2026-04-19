@@ -114,7 +114,7 @@ export function DashboardPage() {
       <div className="ph">
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '6px' }}>
-            <span className="eyebrow">Orion · Device Intelligence Platform</span>
+            <span className="eyebrow">{(() => { const d = user?.email?.split('@')[1]; return d ? d.split('.')[0].charAt(0).toUpperCase() + d.split('.')[0].slice(1) : 'Orion'; })()} · IoT Platform</span>
             <span className="dot dot-online pulse" style={{ color: 'hsl(var(--good))' }} />
             <span className="mono faint" style={{ fontSize: '11px' }}>Live · real-time</span>
           </div>
@@ -126,8 +126,8 @@ export function DashboardPage() {
         </div>
         <div className="meta hide-sm">
           <div>{new Date().toLocaleDateString('en-GB', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}</div>
-          <div>Edition · Engineering</div>
-          <div><strong>orion.vortan.io</strong></div>
+          <div>{user?.role ?? 'Member'}</div>
+          <div><strong>{user?.email?.split('@')[1] ?? 'orion.vortan.io'}</strong></div>
         </div>
       </div>
 

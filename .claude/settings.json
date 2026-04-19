@@ -19,7 +19,8 @@
       "Bash(npx --prefix apps/web tsc --noEmit)",
       "Bash(python3 -c ' *)",
       "Bash(pnpm --filter @orion/web typecheck)",
-      "Bash(pnpm --filter @orion/api typecheck)"
+      "Bash(pnpm --filter @orion/api typecheck)",
+      "Bash(./node_modules/.bin/tsc --noEmit)"
     ]
   }
 }

@@ -8,7 +8,6 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { devicesApi } from '@/api/devices';
 import type { DeviceCategory, DeviceProtocol, DevicePayloadFormat } from '@orion/shared';
 import toast from 'react-hot-toast';
-import L from 'leaflet';
 import { LineChart as CustomLineChart, Sparkline } from '@/components/charts/Charts';
 
 /* ─── Types ─────────────────────────────────────────────────────── */
@@ -88,6 +87,60 @@ const UNIT_SUGGESTIONS = [
   'rpm','Hz','kHz','MHz','lux','dB','°','rad',
   'bpm','mmHg','mg/dL',
 ];
+
+/* ─── ComboInput: styled suggestion dropdown (replaces datalist) ─── */
+function ComboInput({
+  value, onChange, suggestions, placeholder, className, style,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  suggestions: string[];
+  placeholder?: string;
+  className?: string;
+  style?: React.CSSProperties;
+}) {
+  const [open, setOpen] = useState(false);
+  const filtered = value
+    ? suggestions.filter(s => s.toLowerCase().includes(value.toLowerCase()))
+    : suggestions;
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <input
+        value={value}
+        onChange={e => { onChange(e.target.value); setOpen(true); }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setTimeout(() => setOpen(false), 120)}
+        onKeyDown={e => { if (e.key === 'Escape') setOpen(false); }}
+        placeholder={placeholder}
+        className={className}
+        style={style}
+      />
+      {open && filtered.length > 0 && (
+        <div style={{
+          position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 999,
+          background: 'hsl(var(--surface))', border: '1px solid hsl(var(--border))',
+          maxHeight: 192, overflowY: 'auto',
+        }}>
+          {filtered.slice(0, 12).map(s => (
+            <div
+              key={s}
+              onMouseDown={e => { e.preventDefault(); onChange(s); setOpen(false); }}
+              style={{
+                padding: '6px 10px', fontSize: 11, fontFamily: 'var(--font-mono)',
+                cursor: 'pointer', height: 32, display: 'flex', alignItems: 'center',
+              }}
+              onMouseEnter={e => (e.currentTarget.style.background = 'hsl(var(--surface-raised))')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+            >
+              {s}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 /* ─── Helpers ────────────────────────────────────────────────────── */
 function inferType(value: unknown): DataField['type'] {
@@ -385,60 +438,128 @@ function CommandPreview({ cmd }: { cmd: Command }) {
   );
 }
 
-/* ─── Leaflet location picker ────────────────────────────────────────── */
+/* ─── Google Maps location picker ───────────────────────────────────── */
+const GMAPS_KEY_FORM = (import.meta as any).env?.VITE_GOOGLE_MAPS_API_KEY ?? '';
+const GMAPS_ID_FORM  = (import.meta as any).env?.VITE_GOOGLE_MAP_ID ?? 'DEMO_MAP_ID';
+
 function LocationPicker({ lat, lng, onChange }: {
   lat: number; lng: number;
   onChange: (lat: number, lng: number) => void;
 }) {
-  const mapRef = useRef<HTMLDivElement | null>(null);
-  const leafRef = useRef<L.Map | null>(null);
-  const markerRef = useRef<L.Marker | null>(null);
+  const mapRef    = useRef<HTMLDivElement | null>(null);
+  const gMapRef   = useRef<any>(null);
+  const markerRef = useRef<any>(null);
+  const [search, setSearch] = useState('');
+  const [searching, setSearching] = useState(false);
+
+  const initMap = useCallback((la: number, ln: number) => {
+    if (!mapRef.current) return;
+    const win = window as any;
+    if (!win.google?.maps) return;
+    const center = { lat: la || 20, lng: ln || 0 };
+    const map = new win.google.maps.Map(mapRef.current, {
+      center,
+      zoom: la ? 13 : 2,
+      mapTypeId: 'satellite',
+      mapId: GMAPS_ID_FORM,
+      streetViewControl: false,
+      mapTypeControl: false,
+      gestureHandling: 'cooperative',
+    });
+    gMapRef.current = map;
+
+    const makeMarker = (pos: { lat: number; lng: number }) => {
+      if (markerRef.current) markerRef.current.map = null;
+      const el = document.createElement('div');
+      el.style.cssText = 'width:14px;height:14px;background:hsl(var(--primary));border:2px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.5);cursor:pointer';
+      const m = new win.google.maps.marker.AdvancedMarkerElement({ map, position: pos, content: el, gmpDraggable: true });
+      m.addListener('dragend', (e: any) => onChange(e.latLng.lat(), e.latLng.lng()));
+      markerRef.current = m;
+    };
+
+    if (la && ln) makeMarker(center);
+    map.addListener('click', (e: any) => {
+      const la2 = e.latLng.lat(), ln2 = e.latLng.lng();
+      onChange(la2, ln2);
+      makeMarker({ lat: la2, lng: ln2 });
+    });
+  }, [onChange]);
 
   useEffect(() => {
-    if (!mapRef.current || leafRef.current) return;
-    const map = L.map(mapRef.current, { zoomControl: true, scrollWheelZoom: true });
-    L.tileLayer(
-      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-      { attribution: 'Tiles © Esri', maxZoom: 18 }
-    ).addTo(map);
-    map.setView([lat || 20, lng || 0], lat ? 13 : 2);
-
-    const icon = L.divIcon({
-      className: '',
-      html: `<div style="width:14px;height:14px;background:hsl(var(--primary));border:2px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.5)"></div>`,
-      iconSize: [14, 14],
-      iconAnchor: [7, 7],
-    });
-
-    if (lat && lng) {
-      const m = L.marker([lat, lng], { icon, draggable: true }).addTo(map);
-      m.on('dragend', () => { const p = m.getLatLng(); onChange(p.lat, p.lng); });
-      markerRef.current = m;
-    }
-
-    map.on('click', (e) => {
-      const { lat: la, lng: ln } = e.latlng;
-      onChange(la, ln);
-      if (markerRef.current) {
-        markerRef.current.setLatLng([la, ln]);
+    if (!GMAPS_KEY_FORM) return;
+    const win = window as any;
+    if (win.google?.maps) {
+      initMap(lat, lng);
+    } else {
+      const existing = document.querySelector('script[data-gmaps]');
+      if (!existing) {
+        const script = document.createElement('script');
+        script.dataset.gmaps = '1';
+        script.src = `https://maps.googleapis.com/maps/api/js?key=${GMAPS_KEY_FORM}&libraries=marker&callback=__gmapsReadyForm`;
+        win.__gmapsReadyForm = () => initMap(lat, lng);
+        document.head.appendChild(script);
       } else {
-        const m = L.marker([la, ln], { icon, draggable: true }).addTo(map);
-        m.on('dragend', () => { const p = m.getLatLng(); onChange(p.lat, p.lng); });
-        markerRef.current = m;
+        existing.addEventListener('load', () => initMap(lat, lng));
       }
-    });
+    }
+  }, []); // eslint-disable-line
 
-    leafRef.current = map;
-    return () => { map.remove(); leafRef.current = null; markerRef.current = null; };
-  }, []);
+  const geocodeSearch = useCallback(async () => {
+    if (!search.trim() || !GMAPS_KEY_FORM) return;
+    setSearching(true);
+    try {
+      const res = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(search)}&key=${GMAPS_KEY_FORM}`);
+      const json = await res.json();
+      if (json.results?.[0]) {
+        const { lat: la, lng: ln } = json.results[0].geometry.location;
+        onChange(la, ln);
+        if (gMapRef.current) gMapRef.current.setCenter({ lat: la, lng: ln });
+        if (gMapRef.current) gMapRef.current.setZoom(13);
+        const win = window as any;
+        if (markerRef.current) markerRef.current.map = null;
+        const el = document.createElement('div');
+        el.style.cssText = 'width:14px;height:14px;background:hsl(var(--primary));border:2px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.5)';
+        markerRef.current = new win.google.maps.marker.AdvancedMarkerElement({ map: gMapRef.current, position: { lat: la, lng: ln }, content: el, gmpDraggable: true });
+        markerRef.current.addListener('dragend', (e: any) => onChange(e.latLng.lat(), e.latLng.lng()));
+      }
+    } catch { /* silent */ }
+    finally { setSearching(false); }
+  }, [search, onChange]);
 
   return (
     <div className="space-y-3">
-      <div ref={mapRef} style={{ height: 260 }} className="border border-[hsl(var(--rule))]" />
-      <p className="text-[11px] text-muted-foreground flex items-center gap-1">
-        <MapPin size={11} className="text-primary" />
-        Click the map to place your device, or drag the pin to adjust
-      </p>
+      {GMAPS_KEY_FORM ? (
+        <>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') geocodeSearch(); }}
+              placeholder="Search location…"
+              className="input text-[12px]"
+              style={{ flex: 1 }}
+            />
+            <button
+              type="button"
+              onClick={geocodeSearch}
+              disabled={searching}
+              className="btn btn-sm btn-ghost"
+              style={{ gap: 4 }}
+            >
+              <MapPin size={12} /> {searching ? '…' : 'Go'}
+            </button>
+          </div>
+          <div ref={mapRef} style={{ height: 260 }} className="border border-[hsl(var(--rule))]" />
+          <p className="text-[11px] text-muted-foreground flex items-center gap-1">
+            <MapPin size={11} className="text-primary" />
+            Search or click the map to place your device
+          </p>
+        </>
+      ) : (
+        <p className="text-[12px] text-muted-foreground">
+          Add <code className="font-mono text-primary">VITE_GOOGLE_MAPS_API_KEY</code> to enable map picker.
+        </p>
+      )}
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="eyebrow text-[9px] block mb-1.5">Latitude</label>
@@ -737,19 +858,14 @@ export function DeviceForm({ onClose }: { onClose: () => void }) {
                                   <option value="string">Text</option>
                                   <option value="boolean">Bool</option>
                                 </select>
-                                <div className="col-span-2 relative">
-                                  <input
+                                <div className="col-span-2">
+                                  <ComboInput
                                     className="input text-[10px] !h-7 w-full"
                                     placeholder="Unit (°C, %, …)"
                                     value={field.unit ?? ''}
-                                    onChange={e => updateField(i, { unit: e.target.value })}
-                                    list={`units-${i}`}
+                                    onChange={v => updateField(i, { unit: v })}
+                                    suggestions={UNIT_SUGGESTIONS}
                                   />
-                                  <datalist id={`units-${i}`}>
-                                    {UNIT_SUGGESTIONS.filter(u =>
-                                      !field.unit || u.toLowerCase().includes(field.unit.toLowerCase())
-                                    ).map(u => <option key={u} value={u} />)}
-                                  </datalist>
                                 </div>
                               </div>
                             </motion.div>

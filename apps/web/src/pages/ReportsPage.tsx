@@ -10,7 +10,6 @@ interface Device {
   name: string;
   status: 'online' | 'offline' | 'idle' | 'error';
   category: string;
-  battery?: number;
   lastSeenAt?: string;
 }
 
@@ -23,7 +22,7 @@ interface SavedReport {
   createdAt: string;
 }
 
-const METRICS = ['uptime', 'battery', 'events', 'alerts', 'telemetry'];
+const METRICS = ['uptime', 'error_rate', 'events', 'alerts', 'telemetry'];
 const RANGE_ITEMS = [
   { v: '24h', l: '24H' }, { v: '7d', l: '7D' }, { v: '30d', l: '30D' }, { v: '90d', l: '90D' },
 ];
@@ -36,7 +35,7 @@ export function ReportsPage() {
   const [newTitle, setNewTitle]       = useState('');
   const [newRange, setNewRange]       = useState('7d');
   const [newDevices, setNewDevices]   = useState<string[]>([]);
-  const [newMetrics, setNewMetrics]   = useState<string[]>(['uptime', 'battery']);
+  const [newMetrics, setNewMetrics]   = useState<string[]>(['uptime', 'error_rate']);
   const [allDevicesSel, setAllDevicesSel] = useState(true);
 
   const printRef = useRef<HTMLDivElement>(null);
@@ -51,8 +50,8 @@ export function ReportsPage() {
   const total    = devices.length;
   const online   = devices.filter(d => d.status === 'online').length;
   const uptime   = total > 0 ? Math.round((online / total) * 100) : 0;
-  const avgBattery = total > 0 ? Math.round(devices.reduce((s, d) => s + (d.battery ?? 50), 0) / total) : 0;
   const incidents  = devices.filter(d => d.status === 'error').length;
+  const errorRate  = total > 0 ? Math.round((incidents / total) * 100) : 0;
 
   const hasDevices = total > 0;
 
@@ -82,7 +81,7 @@ export function ReportsPage() {
       createdAt: new Date().toISOString(),
     }]);
     setShowNewReport(false);
-    setNewTitle(''); setNewRange('7d'); setNewDevices([]); setNewMetrics(['uptime', 'battery']); setAllDevicesSel(true);
+    setNewTitle(''); setNewRange('7d'); setNewDevices([]); setNewMetrics(['uptime', 'error_rate']); setAllDevicesSel(true);
   }
 
   function exportDeviceCSV(report?: SavedReport) {
@@ -92,11 +91,11 @@ export function ReportsPage() {
         ? devices.filter(d => report.devices.includes(d._id))
         : devices;
     const rows = targetDevices.map(d => ({
-      name:      d.name,
-      status:    d.status,
-      category:  d.category,
-      battery:   d.battery ?? '—',
-      lastSeen:  d.lastSeenAt ?? '—',
+      name:       d.name,
+      status:     d.status,
+      category:   d.category,
+      error:      d.status === 'error' ? 'yes' : 'no',
+      lastSeen:   d.lastSeenAt ?? '—',
       uptime_pct: d.status === 'online' ? 100 : d.status === 'idle' ? 60 : 0,
     }));
     const fname = `orion-report-${report?.range ?? range}-${new Date().toISOString().slice(0, 10)}.csv`;
@@ -116,14 +115,14 @@ export function ReportsPage() {
           <th style="text-align:left;padding:6px 8px">Device</th>
           <th style="text-align:left;padding:6px 8px">Status</th>
           <th style="text-align:left;padding:6px 8px">Category</th>
-          <th style="text-align:left;padding:6px 8px">Battery</th>
+          <th style="text-align:left;padding:6px 8px">Error</th>
         </tr></thead>
         <tbody>${targetDevices.map(d => `
           <tr style="border-bottom:1px solid #eee">
             <td style="padding:6px 8px">${d.name}</td>
             <td style="padding:6px 8px">${d.status}</td>
             <td style="padding:6px 8px">${d.category}</td>
-            <td style="padding:6px 8px">${d.battery != null ? d.battery + '%' : '—'}</td>
+            <td style="padding:6px 8px">${d.status === 'error' ? 'yes' : 'no'}</td>
           </tr>`).join('')}
         </tbody>
       </table>`;
@@ -163,7 +162,7 @@ export function ReportsPage() {
       <div className="ticker">
         {([
           { label: 'Platform uptime',  value: hasDevices ? `${uptime}%`      : '—', color: '#0F7A3D' },
-          { label: 'Avg. battery',     value: hasDevices ? `${avgBattery}%`  : '—', color: '#FACC15' },
+          { label: 'Error rate',        value: hasDevices ? `${errorRate}%`   : '—', color: '#EF4444' },
           { label: 'Devices online',   value: hasDevices ? String(online)    : '—', color: '#FF5B1F' },
           { label: 'Incidents · now',  value: hasDevices ? String(incidents) : '—', color: '#0B0B0A' },
         ]).map(({ label, value, color }) => (

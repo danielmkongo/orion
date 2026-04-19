@@ -70,14 +70,18 @@ export function TelemetryPage() {
     refetchInterval: 30_000,
   });
 
-  const chartSeries = selectedFields.map((field, i) => ({
-    name: field,
-    data: ((seriesData?.[i] as any)?.data ?? []).map((p: any) => ({
-      ts: typeof p.ts === 'string' ? new Date(p.ts).getTime() : p.ts,
-      value: typeof p.value === 'number' ? p.value : 0,
-    })),
-    color: COLORS[i % COLORS.length],
-  }));
+  const schemaFields: any[] = selectedDevice?.meta?.dataSchema?.fields ?? [];
+  const chartSeries = selectedFields.map((field, i) => {
+    const fMeta = schemaFields.find((f: any) => f.key === field);
+    return {
+      name: field,
+      data: ((seriesData?.[i] as any)?.data ?? []).map((p: any) => ({
+        ts: typeof p.ts === 'string' ? new Date(p.ts).getTime() : p.ts,
+        value: typeof p.value === 'number' ? p.value : 0,
+      })),
+      color: fMeta?.chartColor ?? COLORS[i % COLORS.length],
+    };
+  });
 
   const featuredPoints: { ts: number; value: number }[] = ((featuredSeriesData as any)?.data ?? []).map((p: any) => ({
     ts: typeof p.ts === 'string' ? new Date(p.ts).getTime() : p.ts,
@@ -212,7 +216,8 @@ export function TelemetryPage() {
             marginBottom: 24,
           }}>
             {numericFields.slice(0, 6).map(({ key, value }, i) => {
-              const col = COLORS[i % COLORS.length];
+              const fMeta = schemaFields.find((f: any) => f.key === key);
+              const col = fMeta?.chartColor ?? COLORS[i % COLORS.length];
               const on = selectedFields.includes(key);
               return (
                 <button
@@ -246,7 +251,8 @@ export function TelemetryPage() {
           <span className="eyebrow" style={{ marginRight: 8 }}>Parameters</span>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
             {numericFields.map(({ key }, i) => {
-              const col = COLORS[i % COLORS.length];
+              const fMeta2 = schemaFields.find((f: any) => f.key === key);
+              const col = fMeta2?.chartColor ?? COLORS[i % COLORS.length];
               const on = selectedFields.includes(key);
               return (
                 <button

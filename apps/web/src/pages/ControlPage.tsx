@@ -5,145 +5,12 @@ import apiClient from '@/api/client';
 import { devicesApi } from '@/api/devices';
 import { timeAgo } from '@/lib/utils';
 import {
-  Send, X, Check, Clock, AlertCircle, Loader2,
-  Terminal, ToggleLeft, SlidersHorizontal, Type, RefreshCw, Minus, Plus,
+  Send, Loader2,
+  Terminal, RefreshCw, SlidersHorizontal,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import type { DataField } from '@/components/devices/DeviceForm';
-
-/* ── Boolean control ───────────────────────────────────────────────── */
-function BoolControl({
-  field, onSend,
-}: { field: DataField; onSend: (name: string, value: unknown) => void }) {
-  const [on, setOn] = useState(false);
-  return (
-    <div className="panel" style={{ padding: '14px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 13.5, fontWeight: 500 }}>{field.label || field.key}</div>
-        <div className="eyebrow" style={{ fontSize: 9, marginTop: 3 }}>Boolean · {field.key}</div>
-      </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
-        <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: on ? 'hsl(var(--good))' : 'hsl(var(--muted-fg))' }}>
-          {on ? 'ON' : 'OFF'}
-        </span>
-        <label className="switch">
-          <input
-            type="checkbox"
-            checked={on}
-            onChange={e => { setOn(e.target.checked); onSend(field.key, e.target.checked); }}
-            style={{ opacity: 0, width: 0, height: 0 }}
-          />
-          <span />
-        </label>
-      </div>
-    </div>
-  );
-}
-
-/* ── Number / slider control ───────────────────────────────────────── */
-function NumberControl({
-  field, onSend,
-}: { field: DataField; onSend: (name: string, value: unknown) => void }) {
-  const [val, setVal]     = useState(0);
-  const [dirty, setDirty] = useState(false);
-
-  return (
-    <div className="panel" style={{ padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div>
-          <div style={{ fontSize: 13.5, fontWeight: 500 }}>{field.label || field.key}</div>
-          <div className="eyebrow" style={{ fontSize: 9, marginTop: 3 }}>
-            Number{field.unit ? ` · ${field.unit}` : ''} · {field.key}
-          </div>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <button
-            onClick={() => { setVal(v => Math.max(0, v - 1)); setDirty(true); }}
-            className="btn btn-ghost btn-sm btn-icon"><Minus size={11} /></button>
-          <input
-            type="number" value={val}
-            onChange={e => { setVal(Number(e.target.value)); setDirty(true); }}
-            className="input mono" style={{ width: 68, height: 30, textAlign: 'center', fontSize: 13 }}
-          />
-          <button
-            onClick={() => { setVal(v => v + 1); setDirty(true); }}
-            className="btn btn-ghost btn-sm btn-icon"><Plus size={11} /></button>
-          {field.unit && <span className="mono faint" style={{ fontSize: 12 }}>{field.unit}</span>}
-        </div>
-      </div>
-      <input
-        type="range" min={0} max={100} step={1} value={Math.min(val, 100)}
-        onChange={e => { setVal(Number(e.target.value)); setDirty(true); }}
-        style={{ width: '100%', accentColor: 'hsl(var(--primary))', cursor: 'pointer' }}
-      />
-      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-        <span className="mono faint" style={{ fontSize: 10 }}>0</span>
-        <span className="mono faint" style={{ fontSize: 10 }}>50</span>
-        <span className="mono faint" style={{ fontSize: 10 }}>100{field.unit ? ` ${field.unit}` : ''}</span>
-      </div>
-      <button
-        onClick={() => { onSend(field.key, val); setDirty(false); }}
-        disabled={!dirty}
-        className="btn btn-primary btn-sm" style={{ gap: 6 }}
-      >
-        <Send size={11} /> Set {field.label || field.key}
-      </button>
-    </div>
-  );
-}
-
-/* ── String / text control ─────────────────────────────────────────── */
-const STRING_PRESETS: Record<string, string[]> = {
-  mode:  ['auto', 'manual', 'sleep', 'off'],
-  state: ['active', 'idle', 'disabled'],
-  level: ['low', 'medium', 'high'],
-};
-
-function StringControl({
-  field, onSend,
-}: { field: DataField; onSend: (name: string, value: unknown) => void }) {
-  const [val, setVal] = useState('');
-  const presets       = STRING_PRESETS[field.key] ?? [];
-
-  return (
-    <div className="panel" style={{ padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-      <div>
-        <div style={{ fontSize: 13.5, fontWeight: 500 }}>{field.label || field.key}</div>
-        <div className="eyebrow" style={{ fontSize: 9, marginTop: 3 }}>Text · {field.key}</div>
-      </div>
-      {presets.length > 0 && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-          {presets.map(p => (
-            <button
-              key={p}
-              onClick={() => onSend(field.key, p)}
-              className="btn btn-ghost btn-sm"
-              style={{ fontSize: 12 }}
-            >
-              {p}
-            </button>
-          ))}
-        </div>
-      )}
-      <div style={{ display: 'flex', gap: 8 }}>
-        <input
-          value={val}
-          onChange={e => setVal(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter' && val.trim()) { onSend(field.key, val); setVal(''); } }}
-          placeholder={`Enter ${field.label || field.key}…`}
-          className="input" style={{ flex: 1 }}
-        />
-        <button
-          onClick={() => { if (val.trim()) { onSend(field.key, val); setVal(''); } }}
-          disabled={!val.trim()}
-          className="btn btn-primary btn-sm"
-        >
-          <Send size={11} />
-        </button>
-      </div>
-    </div>
-  );
-}
+import { CommandWidget } from '@/components/devices/CommandWidget';
+import type { DeviceCommand } from '@/components/devices/CommandWidget';
 
 const CMD_STATUS_CFG: Record<string, { tag: string }> = {
   pending:      { tag: 'tag-warn'    },
@@ -155,7 +22,6 @@ const CMD_STATUS_CFG: Record<string, { tag: string }> = {
   cancelled:    { tag: 'tag-offline' },
 };
 
-/* ── Main Page ─────────────────────────────────────────────────────── */
 export function ControlPage() {
   const [deviceId, setDeviceId]     = useState('');
   const [cmdName, setCmdName]       = useState('');
@@ -187,18 +53,16 @@ export function ControlPage() {
     if (!deviceId && devices.length > 0) setDeviceId((devices[0] as any)._id);
   }, [devices, deviceId]);
 
-  const selectedDevice     = devices.find((d: any) => d._id === deviceId) as any;
-  const schemaFields: DataField[] = selectedDevice?.meta?.dataSchema?.fields ?? [];
-  const controllableFields = schemaFields.filter(f => ['boolean', 'number', 'string'].includes(f.type));
-  const boolFields   = controllableFields.filter(f => f.type === 'boolean');
-  const numberFields = controllableFields.filter(f => f.type === 'number');
-  const stringFields = controllableFields.filter(f => f.type === 'string');
+  const selectedDevice = devices.find((d: any) => d._id === deviceId) as any;
+  const schemaCommands: DeviceCommand[] = selectedDevice?.meta?.commands ?? [];
 
-  const sendControl = async (name: string, value: unknown) => {
+  const sendControl = async (name: string, formattedPayload: string) => {
     if (!deviceId) return;
     try {
-      await apiClient.post('/commands', { deviceId, name, payload: { value } });
-      toast.success(`Sent: ${name} = ${JSON.stringify(value)}`);
+      let parsed = {};
+      try { parsed = JSON.parse(formattedPayload); } catch {}
+      await apiClient.post('/commands', { deviceId, name, payload: parsed });
+      toast.success(`Sent: ${name}`);
       queryClient.invalidateQueries({ queryKey: ['commands'] });
     } catch { toast.error('Failed to send command'); }
   };
@@ -217,6 +81,12 @@ export function ControlPage() {
     } catch { toast.error('Failed'); }
     finally { setSending(false); }
   };
+
+  const actionCmds = schemaCommands.filter(c => c.type === 'action');
+  const boolCmds   = schemaCommands.filter(c => c.type === 'boolean');
+  const numberCmds = schemaCommands.filter(c => c.type === 'number');
+  const enumCmds   = schemaCommands.filter(c => c.type === 'enum');
+  const stringCmds = schemaCommands.filter(c => c.type === 'string');
 
   return (
     <div className="page">
@@ -270,52 +140,90 @@ export function ControlPage() {
             <div className="ssh">Device<br />Controls</div>
             <p className="dim" style={{ fontSize: 13, marginTop: 8, maxWidth: '22ch' }}>
               {selectedDevice?.name}<br />
-              {controllableFields.length} control{controllableFields.length !== 1 ? 's' : ''} available.
+              {schemaCommands.length} command{schemaCommands.length !== 1 ? 's' : ''} defined.
             </p>
           </div>
           <div>
-            {controllableFields.length === 0 ? (
+            {schemaCommands.length === 0 ? (
               <div className="panel" style={{ padding: '48px 24px', textAlign: 'center' }}>
                 <SlidersHorizontal size={28} style={{ color: 'hsl(var(--muted-fg))', margin: '0 auto 12px' }} />
                 <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, marginBottom: 8 }}>
-                  No <em style={{ color: 'hsl(var(--primary))' }}>controls</em> defined
+                  No <em style={{ color: 'hsl(var(--primary))' }}>commands</em> defined
                 </div>
                 <p className="dim" style={{ fontSize: 13 }}>
-                  Define fields in the device's Data Schema to generate controls automatically.
+                  Add commands in the device settings to generate controls automatically.
                 </p>
               </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-                {boolFields.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
+                {actionCmds.length > 0 && (
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-                      <ToggleLeft size={13} className="faint" />
+                      <Terminal size={13} className="faint" />
+                      <span className="eyebrow" style={{ fontSize: 9 }}>Actions</span>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 10 }}>
+                      {actionCmds.map((cmd, i) => (
+                        <motion.div key={cmd.name} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}>
+                          <CommandWidget cmd={cmd} payloadFormat={selectedDevice?.payloadFormat} onSend={sendControl} />
+                        </motion.div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {boolCmds.length > 0 && (
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                       <span className="eyebrow" style={{ fontSize: 9 }}>Toggles</span>
                     </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 8 }}>
-                      {boolFields.map(f => <BoolControl key={f.key} field={f} onSend={sendControl} />)}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 10 }}>
+                      {boolCmds.map((cmd, i) => (
+                        <motion.div key={cmd.name} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}>
+                          <CommandWidget cmd={cmd} payloadFormat={selectedDevice?.payloadFormat} onSend={sendControl} />
+                        </motion.div>
+                      ))}
                     </div>
                   </div>
                 )}
-                {numberFields.length > 0 && (
+                {numberCmds.length > 0 && (
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-                      <SlidersHorizontal size={13} className="faint" />
                       <span className="eyebrow" style={{ fontSize: 9 }}>Setpoints</span>
                     </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 8 }}>
-                      {numberFields.map(f => <NumberControl key={f.key} field={f} onSend={sendControl} />)}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 10 }}>
+                      {numberCmds.map((cmd, i) => (
+                        <motion.div key={cmd.name} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}>
+                          <CommandWidget cmd={cmd} payloadFormat={selectedDevice?.payloadFormat} onSend={sendControl} />
+                        </motion.div>
+                      ))}
                     </div>
                   </div>
                 )}
-                {stringFields.length > 0 && (
+                {enumCmds.length > 0 && (
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-                      <Type size={13} className="faint" />
+                      <span className="eyebrow" style={{ fontSize: 9 }}>Selectors</span>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 10 }}>
+                      {enumCmds.map((cmd, i) => (
+                        <motion.div key={cmd.name} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}>
+                          <CommandWidget cmd={cmd} payloadFormat={selectedDevice?.payloadFormat} onSend={sendControl} />
+                        </motion.div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {stringCmds.length > 0 && (
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                       <span className="eyebrow" style={{ fontSize: 9 }}>Text Controls</span>
                     </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 8 }}>
-                      {stringFields.map(f => <StringControl key={f.key} field={f} onSend={sendControl} />)}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 10 }}>
+                      {stringCmds.map((cmd, i) => (
+                        <motion.div key={cmd.name} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}>
+                          <CommandWidget cmd={cmd} payloadFormat={selectedDevice?.payloadFormat} onSend={sendControl} />
+                        </motion.div>
+                      ))}
                     </div>
                   </div>
                 )}
@@ -325,7 +233,7 @@ export function ControlPage() {
         </div>
       )}
 
-      {/* ── Section II: Terminal ── */}
+      {/* ── Section II: Raw Terminal ── */}
       <div className="section">
         <div>
           <div className="ssh">Raw<br />Terminal</div>

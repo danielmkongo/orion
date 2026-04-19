@@ -618,6 +618,19 @@
 @media (max-width: 520px) {
   .ph h1                          { font-size: 34px; }
   .ticker                         { grid-template-columns: 1fr; }
+  .page                           { padding: 16px; }
+}
+
+@media (max-width: 768px) {
+  /* Detail page chart+info 2-col → 1-col */
+  .detail-grid                    { grid-template-columns: 1fr !important; }
+  /* Section grid → 1-col */
+  .section                        { grid-template-columns: 1fr !important; }
+}
+
+@media (max-width: 640px) {
+  /* Device selector strip wraps on very small screens */
+  .section                        { gap: 16px !important; }
 }
 
 @layer utilities {

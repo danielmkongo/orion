@@ -113,6 +113,21 @@ export function debounce<T extends (...args: any[]) => any>(fn: T, delay: number
   }) as T;
 }
 
+export async function copyText(text: string): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    const el = document.createElement('textarea');
+    el.value = text;
+    el.style.position = 'fixed';
+    el.style.opacity = '0';
+    document.body.appendChild(el);
+    el.select();
+    document.execCommand('copy');
+    document.body.removeChild(el);
+  }
+}
+
 export function downloadCSV(filename: string, rows: Record<string, unknown>[]) {
   if (!rows.length) return;
   const keys = Object.keys(rows[0]);
