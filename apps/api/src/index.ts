@@ -20,6 +20,7 @@ import { dashboardRoutes } from './routes/dashboard.routes.js';
 import { rulesRoutes } from './routes/rules.routes.js';
 import { usersRoutes } from './routes/users.routes.js';
 import { otaRoutes } from './routes/ota.routes.js';
+import { orgRoutes } from './routes/org.routes.js';
 
 const app = Fastify({
   logger: {
@@ -55,6 +56,7 @@ async function bootstrap() {
     await api.register(rulesRoutes);
     await api.register(usersRoutes);
     await api.register(otaRoutes);
+    await api.register(orgRoutes);
   }, { prefix });
 
   // Health check

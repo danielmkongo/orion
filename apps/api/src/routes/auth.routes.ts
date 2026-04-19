@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import bcrypt from 'bcryptjs';
 import { authService } from '../services/auth.service.js';
 import { authenticate } from '../middleware/auth.js';
 import { User } from '../models/User.js';
@@ -50,5 +51,30 @@ export async function authRoutes(app: FastifyInstance) {
     const user = await User.findById(req.user.sub).select('-passwordHash -refreshTokenHash').lean();
     if (!user) return reply.code(404).send({ error: 'User not found' });
     return reply.send(user);
+  });
+
+  app.patch('/auth/me', { preHandler: authenticate }, async (req, reply) => {
+    const { name } = req.body as any;
+    if (!name || typeof name !== 'string') return reply.code(400).send({ error: 'Missing name' });
+    const user = await User.findByIdAndUpdate(
+      req.user.sub,
+      { $set: { name } },
+      { new: true }
+    ).select('-passwordHash -refreshTokenHash').lean();
+    if (!user) return reply.code(404).send({ error: 'User not found' });
+    return reply.send(user);
+  });
+
+  app.patch('/auth/password', { preHandler: authenticate }, async (req, reply) => {
+    const { currentPassword, newPassword } = req.body as any;
+    if (!currentPassword || !newPassword) return reply.code(400).send({ error: 'Missing fields' });
+    if (newPassword.length < 8) return reply.code(400).send({ error: 'Password must be at least 8 characters' });
+    const user = await User.findById(req.user.sub);
+    if (!user) return reply.code(404).send({ error: 'User not found' });
+    const valid = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!valid) return reply.code(401).send({ error: 'Current password is incorrect' });
+    user.passwordHash = await bcrypt.hash(newPassword, 12);
+    await user.save();
+    return reply.send({ ok: true });
   });
 }
