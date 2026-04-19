@@ -50,11 +50,11 @@ export function ReportsPage() {
     queryFn: () => apiClient.get('/alerts', { params: { limit: 1 } }).then(r => r.data),
   });
 
-  const total   = stats?.total   ?? 0;
-  const online  = stats?.online  ?? 0;
-  const offline = stats?.offline ?? 0;
-  const byCategory = stats?.byCategory ?? [];
-  const alertCount = alertsData?.total ?? 0;
+  const total   = typeof stats?.total === 'number' ? stats.total : 0;
+  const online  = typeof stats?.online === 'number' ? stats.online : 0;
+  const offline = typeof stats?.offline === 'number' ? stats.offline : 0;
+  const byCategory = Array.isArray(stats?.byCategory) ? stats.byCategory : [];
+  const alertCount = typeof alertsData?.total === 'number' ? alertsData.total : 0;
   const onlineRate = total > 0 ? ((online / total) * 100).toFixed(1) : '0';
 
   const kpis = [
@@ -72,11 +72,14 @@ export function ReportsPage() {
     ]);
   }
 
-  const categoryDonut = byCategory.slice(0, 6).map((c: any, i: number) => ({
-    name: c._id,
-    value: c.count,
-    color: ['#FF6A30','#5B8DEF','#22C55E','#F59E0B','#8B5CF6','#06B6D4'][i % 6],
-  }));
+  const categoryDonut = byCategory
+    .slice(0, 6)
+    .filter((c: any) => c && typeof c._id === 'string' && typeof c.count === 'number')
+    .map((c: any, i: number) => ({
+      name: c._id,
+      value: Math.max(0, c.count),
+      color: ['#FF6A30','#5B8DEF','#22C55E','#F59E0B','#8B5CF6','#06B6D4'][i % 6],
+    }));
 
   return (
     <div className="space-y-8">
