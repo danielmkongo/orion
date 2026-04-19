@@ -2,7 +2,7 @@ import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   X, Plus, Trash2, Check, Loader2, MapPin,
-  LineChart, AreaChart, BarChart2, Gauge, ScatterChart,
+  LineChart, AreaChart, BarChart2, Gauge, ScatterChart, Thermometer, Settings2,
 } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { devicesApi } from '@/api/devices';
@@ -18,7 +18,7 @@ export interface DataField {
   type: 'number' | 'string' | 'boolean' | 'location' | 'timestamp';
   unit?: string;
   chartable?: boolean;
-  chartType?: 'line' | 'area' | 'bar' | 'gauge' | 'scatter';
+  chartType?: 'line' | 'area' | 'bar' | 'gauge' | 'scatter' | 'level';
   chartColor?: string;
 }
 
@@ -69,14 +69,25 @@ const PROTOCOLS: { value: DeviceProtocol; label: string }[] = [
 ];
 
 const CHART_TYPES: { value: DataField['chartType']; label: string; Icon: React.FC<any> }[] = [
-  { value: 'line', label: 'Line', Icon: LineChart },
-  { value: 'area', label: 'Area', Icon: AreaChart },
-  { value: 'bar', label: 'Bar', Icon: BarChart2 },
-  { value: 'gauge', label: 'Gauge', Icon: Gauge },
+  { value: 'line',    label: 'Line',    Icon: LineChart    },
+  { value: 'area',    label: 'Area',    Icon: AreaChart    },
+  { value: 'bar',     label: 'Bar',     Icon: BarChart2    },
+  { value: 'gauge',   label: 'Gauge',   Icon: Gauge        },
   { value: 'scatter', label: 'Scatter', Icon: ScatterChart },
+  { value: 'level',   label: 'Level',   Icon: Thermometer  },
 ];
 
 const CHART_COLORS = ['#FF6A30','#5B8DEF','#22C55E','#F59E0B','#8B5CF6','#06B6D4','#F43F5E','#0ea5e9'];
+
+const UNIT_SUGGESTIONS = [
+  '°C','°F','K','%','ppm','ppb','pH',
+  'V','mV','A','mA','W','kW','kWh','MWh',
+  'm/s','km/h','mph','m','cm','mm','km','ft','in',
+  'L','mL','m³','g','kg','lb','t',
+  'kPa','Pa','bar','hPa','atm','psi',
+  'rpm','Hz','kHz','MHz','lux','dB','°','rad',
+  'bpm','mmHg','mg/dL',
+];
 
 /* ─── Helpers ────────────────────────────────────────────────────── */
 function inferType(value: unknown): DataField['type'] {
@@ -230,6 +241,26 @@ function GraphPreview({ field, compact }: { field: DataField; compact?: boolean 
             })}
           </svg>
         );
+      case 'level': {
+        const fillPct = 0.65;
+        const tankH = h - 4, tankY = 2, tankX = 34, tankW = 32;
+        const fillH = tankH * fillPct;
+        const fillY = tankY + tankH - fillH;
+        const marks = [0.25, 0.5, 0.75];
+        return (
+          <svg viewBox={`0 0 100 ${h}`} style={{ width: '100%', height: h, display: 'block' }}>
+            {marks.map(m => (
+              <line key={m} x1={tankX} y1={tankY + tankH * (1 - m)} x2={tankX + tankW} y2={tankY + tankH * (1 - m)}
+                stroke="rgba(255,255,255,0.12)" strokeWidth="0.8" strokeDasharray="2,2" />
+            ))}
+            <rect x={tankX} y={fillY} width={tankW} height={fillH} fill={c} fillOpacity="0.75" rx="1" />
+            <rect x={tankX} y={tankY} width={tankW} height={tankH} fill="none" stroke={c} strokeWidth="1.5" rx="2" strokeOpacity="0.6" />
+            <text x={tankX + tankW / 2} y={tankY + tankH / 2 + 4} textAnchor="middle" fill="white" fontSize="9" fontFamily="monospace">
+              {Math.round(fillPct * 100)}%
+            </text>
+          </svg>
+        );
+      }
       default: // line
         return (
           <svg viewBox={`0 0 100 ${h}`} preserveAspectRatio="none" style={{ width: '100%', height: h, display: 'block' }}>
@@ -655,45 +686,71 @@ export function DeviceForm({ onClose }: { onClose: () => void }) {
                             <Plus size={11} /> Add
                           </button>
                         </div>
-                        <div className="space-y-1.5 max-h-[200px] overflow-y-auto pr-1">
+                        <div className="space-y-1.5 max-h-[240px] overflow-y-auto pr-1">
                           {fields.map((field, i) => (
                             <motion.div
                               key={i}
                               layout
-                              onClick={() => setSelIdx(i)}
-                              className={`border p-2.5 space-y-1.5 cursor-pointer transition-all ${
-                                selectedFieldIdx === i ? 'border-primary/40 bg-primary/[0.025]' : 'border-[hsl(var(--rule))] hover:border-foreground/20'
+                              className={`border p-2.5 space-y-1.5 transition-all ${
+                                selectedFieldIdx === i ? 'border-primary/40 bg-primary/[0.025]' : 'border-[hsl(var(--rule))]'
                               }`}
                             >
-                              <div className="flex items-center gap-2">
+                              {/* Row 1: Label + trash + graph expand */}
+                              <div className="flex items-center gap-1.5">
                                 <input
-                                  className="input text-[11px] !h-7 flex-1 font-mono"
-                                  placeholder="field_key"
-                                  value={field.key}
-                                  onChange={e => updateField(i, { key: e.target.value })}
-                                  onClick={e => e.stopPropagation()}
+                                  className="input text-[10px] !h-7 flex-1"
+                                  placeholder="Display label"
+                                  value={field.label}
+                                  onChange={e => updateField(i, { label: e.target.value })}
                                 />
+                                {field.type === 'number' && (
+                                  <button
+                                    title="Graph settings"
+                                    onClick={e => { e.stopPropagation(); setSelIdx(selectedFieldIdx === i ? null : i); }}
+                                    className={`w-7 h-7 flex items-center justify-center flex-shrink-0 border transition-all ${
+                                      selectedFieldIdx === i
+                                        ? 'border-primary text-primary bg-primary/5'
+                                        : 'border-[hsl(var(--rule))] text-muted-foreground hover:text-foreground hover:border-foreground/30'
+                                    }`}
+                                  >
+                                    <Settings2 size={11} />
+                                  </button>
+                                )}
                                 <button
                                   onClick={e => { e.stopPropagation(); removeField(i); }}
-                                  className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-red-500 flex-shrink-0"
+                                  className="w-7 h-7 flex items-center justify-center text-muted-foreground hover:text-red-500 flex-shrink-0"
                                 >
                                   <Trash2 size={11} />
                                 </button>
                               </div>
-                              <div className="grid grid-cols-3 gap-1">
-                                <input className="input text-[10px] !h-7" placeholder="Label"
-                                  value={field.label} onChange={e => updateField(i, { label: e.target.value })}
-                                  onClick={e => e.stopPropagation()} />
+                              {/* Row 2: Key + Type + Unit */}
+                              <div className="grid grid-cols-5 gap-1">
+                                <input
+                                  className="input text-[10px] !h-7 font-mono col-span-2"
+                                  placeholder="field_key"
+                                  value={field.key}
+                                  onChange={e => updateField(i, { key: e.target.value })}
+                                />
                                 <select className="select text-[10px] !h-7" value={field.type}
-                                  onChange={e => updateField(i, { type: e.target.value as DataField['type'] })}
-                                  onClick={e => e.stopPropagation()}>
+                                  onChange={e => updateField(i, { type: e.target.value as DataField['type'] })}>
                                   <option value="number">Number</option>
                                   <option value="string">Text</option>
                                   <option value="boolean">Bool</option>
                                 </select>
-                                <input className="input text-[10px] !h-7" placeholder="Unit"
-                                  value={field.unit ?? ''} onChange={e => updateField(i, { unit: e.target.value })}
-                                  onClick={e => e.stopPropagation()} />
+                                <div className="col-span-2 relative">
+                                  <input
+                                    className="input text-[10px] !h-7 w-full"
+                                    placeholder="Unit (°C, %, …)"
+                                    value={field.unit ?? ''}
+                                    onChange={e => updateField(i, { unit: e.target.value })}
+                                    list={`units-${i}`}
+                                  />
+                                  <datalist id={`units-${i}`}>
+                                    {UNIT_SUGGESTIONS.filter(u =>
+                                      !field.unit || u.toLowerCase().includes(field.unit.toLowerCase())
+                                    ).map(u => <option key={u} value={u} />)}
+                                  </datalist>
+                                </div>
                               </div>
                             </motion.div>
                           ))}
@@ -730,8 +787,8 @@ export function DeviceForm({ onClose }: { onClose: () => void }) {
                                   {CHART_COLORS.map(c => (
                                     <button key={c} type="button"
                                       onClick={() => updateField(selectedFieldIdx!, { chartColor: c })}
-                                      style={{ backgroundColor: c }}
-                                      className={`w-5 h-5 transition-all ${selectedField.chartColor === c ? 'ring-2 ring-offset-1 ring-foreground/50 scale-110' : 'hover:scale-105'}`}
+                                      style={{ backgroundColor: c, borderRadius: '50%' }}
+                                      className={`w-5 h-5 transition-all flex-shrink-0 ${selectedField.chartColor === c ? 'ring-2 ring-offset-1 ring-foreground/50 scale-110' : 'hover:scale-105'}`}
                                     />
                                   ))}
                                   <input
@@ -739,6 +796,7 @@ export function DeviceForm({ onClose }: { onClose: () => void }) {
                                     value={selectedField.chartColor ?? '#FF6A30'}
                                     onChange={e => updateField(selectedFieldIdx!, { chartColor: e.target.value })}
                                     className="w-5 h-5 cursor-pointer border border-[hsl(var(--rule))]"
+                                    style={{ borderRadius: '50%', padding: 0, overflow: 'hidden' }}
                                   />
                                 </div>
                               </div>
@@ -884,7 +942,7 @@ export function DeviceForm({ onClose }: { onClose: () => void }) {
                           {/* Preview */}
                           <div className="bg-muted/30 border border-dashed border-[hsl(var(--rule))] p-3 mt-3">
                             <p className="eyebrow text-[8px] mb-3">Preview</p>
-                            <CommandPreview cmd={cmd} />
+                            <CommandPreview key={`${i}-${cmd.ctype}`} cmd={cmd} />
                           </div>
                         </motion.div>
                       ))}

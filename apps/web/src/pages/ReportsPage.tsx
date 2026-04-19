@@ -28,33 +28,6 @@ const RANGE_ITEMS = [
   { v: '24h', l: '24H' }, { v: '7d', l: '7D' }, { v: '30d', l: '30D' }, { v: '90d', l: '90D' },
 ];
 
-function LocalLineChart({ data, height, color }: { data: { v: number }[]; height: number; color?: string }) {
-  if (!data.length) return null;
-  const min = Math.min(...data.map(d => d.v));
-  const max = Math.max(...data.map(d => d.v));
-  const range = max - min || 1;
-  const pts = data.map((d, i) => ({
-    x: (i / (data.length - 1)) * 100,
-    y: ((max - d.v) / range) * 94 + 3,
-  }));
-  const T = 0.4;
-  let linePath = `M ${pts[0].x.toFixed(1)} ${pts[0].y.toFixed(1)}`;
-  for (let i = 1; i < pts.length; i++) {
-    const p0 = pts[Math.max(0, i - 2)], p1 = pts[i - 1], p2 = pts[i], p3 = pts[Math.min(pts.length - 1, i + 1)];
-    const cp1x = p1.x + (p2.x - p0.x) * T, cp1y = p1.y + (p2.y - p0.y) * T;
-    const cp2x = p2.x - (p3.x - p1.x) * T, cp2y = p2.y - (p3.y - p1.y) * T;
-    linePath += ` C ${cp1x.toFixed(1)},${cp1y.toFixed(1)} ${cp2x.toFixed(1)},${cp2y.toFixed(1)} ${p2.x.toFixed(1)},${p2.y.toFixed(1)}`;
-  }
-  const areaPath = `${linePath} L 100,100 L 0,100 Z`;
-  const c = color || '#FF5B1F';
-  return (
-    <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ width: '100%', height, display: 'block' }}>
-      <path d={areaPath} fill={c} fillOpacity="0.08" />
-      <path d={linePath} fill="none" stroke={c} strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
-    </svg>
-  );
-}
-
 export function ReportsPage() {
   const [range, setRange] = useState('7d');
   const [showNewReport, setShowNewReport] = useState(false);
@@ -81,10 +54,7 @@ export function ReportsPage() {
   const avgBattery = total > 0 ? Math.round(devices.reduce((s, d) => s + (d.battery ?? 50), 0) / total) : 0;
   const incidents  = devices.filter(d => d.status === 'error').length;
 
-  const ingestSeries = useMemo(() =>
-    Array.from({ length: 120 }, (_, i) => ({
-      v: Math.abs(Math.sin(i / 10) * 2200 + Math.cos(i / 7) * 800) + 7500,
-    })), []);
+  const hasDevices = total > 0;
 
   const catBreakdown = useMemo(() => {
     const map: Record<string, number> = {};
@@ -192,33 +162,53 @@ export function ReportsPage() {
       {/* ── KPI ticker ── */}
       <div className="ticker">
         {([
-          ['Platform uptime', `${uptime}%`, '+2.1%', '#0F7A3D'],
-          ['Avg. battery', `${avgBattery}%`, '−3.4%', '#FACC15'],
-          ['Ingested events', '1.24M', '+18%', '#FF5B1F'],
-          ['Incidents · week', String(incidents), incidents > 0 ? `+${incidents}` : '0', '#0B0B0A'],
-        ] as const).map(([k, v, c, color]) => (
-          <div key={k}>
-            <div className="eyebrow">{k}</div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginTop: '8px' }}>
-              <div style={{ fontFamily: 'var(--font-display)', fontSize: '44px', lineHeight: 1, letterSpacing: '-.03em', fontVariantNumeric: 'tabular-nums' }}>
-                {v}
-              </div>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color }}>{c}</span>
+          { label: 'Platform uptime',  value: hasDevices ? `${uptime}%`      : '—', color: '#0F7A3D' },
+          { label: 'Avg. battery',     value: hasDevices ? `${avgBattery}%`  : '—', color: '#FACC15' },
+          { label: 'Devices online',   value: hasDevices ? String(online)    : '—', color: '#FF5B1F' },
+          { label: 'Incidents · now',  value: hasDevices ? String(incidents) : '—', color: '#0B0B0A' },
+        ]).map(({ label, value, color }) => (
+          <div key={label}>
+            <div className="eyebrow">{label}</div>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: '44px', lineHeight: 1, letterSpacing: '-.03em', fontVariantNumeric: 'tabular-nums', marginTop: '8px', color }}>
+              {value}
             </div>
           </div>
         ))}
       </div>
 
-      {/* ── Section I: Ingestion Volume ── */}
+      {/* ── Section I: Device Activity ── */}
       <div className="section">
         <div className="ssh">
-          Ingestion<br />volume
+          Device<br />activity
         </div>
         <div>
-          <p className="dim" style={{ fontSize: '13px', maxWidth: '48ch', marginBottom: '16px' }}>
-            Events per hour across the entire platform over the selected window.
-          </p>
-          <LocalLineChart data={ingestSeries} height={240} color="#FF5B1F" />
+          {!hasDevices ? (
+            <div className="panel" style={{ padding: '48px 24px', textAlign: 'center' }}>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, marginBottom: 8 }}>
+                No <em style={{ color: 'hsl(var(--primary))' }}>data</em> yet
+              </div>
+              <p className="dim" style={{ fontSize: 13 }}>Add devices to see activity trends.</p>
+            </div>
+          ) : (
+            <>
+              <p className="dim" style={{ fontSize: '13px', maxWidth: '48ch', marginBottom: '16px' }}>
+                Online devices vs total over time. Based on current snapshot — historical series requires telemetry ingestion.
+              </p>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 24 }}>
+                {[
+                  { label: 'Online',  value: online,              color: '#0F7A3D' },
+                  { label: 'Idle',    value: devices.filter(d => d.status === 'idle').length,    color: '#B45309' },
+                  { label: 'Offline', value: devices.filter(d => d.status === 'offline').length, color: '#5E5C56' },
+                ].map(({ label, value, color }) => (
+                  <div key={label} className="panel" style={{ padding: '16px 20px' }}>
+                    <div className="eyebrow" style={{ marginBottom: 8 }}>{label}</div>
+                    <div style={{ fontFamily: 'var(--font-display)', fontSize: 36, lineHeight: 1, color }}>{value}</div>
+                    <div className="dim" style={{ fontSize: 11, marginTop: 4 }}>{total > 0 ? Math.round((value / total) * 100) : 0}% of fleet</div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
         </div>
       </div>
 

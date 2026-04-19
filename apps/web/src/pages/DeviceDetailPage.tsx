@@ -7,7 +7,7 @@ import apiClient from '@/api/client';
 import { timeAgo, formatDate as fmtDate, getCategoryIconInfo } from '@/lib/utils';
 import { useSocket } from '@/hooks/useSocket';
 import { LineChart } from '@/components/charts/Charts';
-import { ArrowLeft, Eye, EyeOff, Copy, RefreshCw, Terminal } from 'lucide-react';
+import { ArrowLeft, Eye, EyeOff, Copy, RefreshCw, Terminal, Plus, Trash2, Check } from 'lucide-react';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import toast from 'react-hot-toast';
 import L from 'leaflet';
@@ -48,6 +48,16 @@ export function DeviceDetailPage() {
   const [cmdPayload, setCmdPayload] = useState('{}');
   const [sending, setSending] = useState(false);
   const [showRegenConfirm, setShowRegenConfirm] = useState(false);
+  const [showAddCmd, setShowAddCmd] = useState(false);
+  const [newCmdName, setNewCmdName] = useState('');
+  const [newCmdLabel, setNewCmdLabel] = useState('');
+  const [newCmdType, setNewCmdType] = useState<'boolean' | 'number' | 'enum' | 'action'>('action');
+  const [newCmdMin, setNewCmdMin] = useState(0);
+  const [newCmdMax, setNewCmdMax] = useState(100);
+  const [newCmdStep, setNewCmdStep] = useState(1);
+  const [newCmdUnit, setNewCmdUnit] = useState('');
+  const [newCmdValues, setNewCmdValues] = useState('');
+  const [savingCmd, setSavingCmd] = useState(false);
   const { on, subscribeDevice } = useSocket();
   const queryClient = useQueryClient();
 
@@ -132,6 +142,36 @@ export function DeviceDetailPage() {
       setCurrentKey(apiKey);
       toast.success('API key regenerated');
     } catch { toast.error('Failed to regenerate key'); }
+  };
+
+  const saveNewCommand = async () => {
+    if (!newCmdName.trim()) { toast.error('Command name required'); return; }
+    setSavingCmd(true);
+    try {
+      const existing: any[] = d.meta?.commands ?? [];
+      const newCmd: any = {
+        name: newCmdName.trim(),
+        label: newCmdLabel.trim() || newCmdName.trim(),
+        type: newCmdType,
+        ...(newCmdType === 'number' ? { min: newCmdMin, max: newCmdMax, step: newCmdStep, unit: newCmdUnit } : {}),
+        ...(newCmdType === 'enum' ? { values: newCmdValues.split(',').map(s => s.trim()).filter(Boolean) } : {}),
+      };
+      await apiClient.patch(`/devices/${d._id}`, { meta: { ...d.meta, commands: [...existing, newCmd] } });
+      toast.success('Command saved');
+      queryClient.invalidateQueries({ queryKey: ['device', id] });
+      setShowAddCmd(false);
+      setNewCmdName(''); setNewCmdLabel(''); setNewCmdType('action'); setNewCmdUnit(''); setNewCmdValues('');
+    } catch { toast.error('Failed to save command'); }
+    finally { setSavingCmd(false); }
+  };
+
+  const removeSchemaCommand = async (idx: number) => {
+    try {
+      const existing: any[] = d.meta?.commands ?? [];
+      await apiClient.patch(`/devices/${d._id}`, { meta: { ...d.meta, commands: existing.filter((_: any, i: number) => i !== idx) } });
+      toast.success('Command removed');
+      queryClient.invalidateQueries({ queryKey: ['device', id] });
+    } catch { toast.error('Failed to remove command'); }
   };
 
   if (isLoading) {
@@ -338,16 +378,112 @@ export function DeviceDetailPage() {
         <div>
           <div className="ssh">Controls</div>
           <p className="dim" style={{ fontSize: 13, marginTop: 8, maxWidth: '28ch' }}>
-            Send a command to this device. Each gesture sends the matching payload.
+            Send commands and manage device control schema.
           </p>
         </div>
-        <div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+          {/* Schema commands quick-send */}
+          {(d.meta?.commands ?? []).length > 0 && (
+            <div className="panel" style={{ padding: 20 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                <div className="eyebrow">Device commands</div>
+                <button className="btn btn-ghost btn-sm" style={{ gap: 4 }} onClick={() => setShowAddCmd(v => !v)}>
+                  <Plus size={11} /> Add
+                </button>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {(d.meta.commands as any[]).map((sc: any, idx: number) => (
+                  <div key={idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', border: '1px solid hsl(var(--border))', gap: 10 }}>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 500 }}>{sc.label || sc.name}</div>
+                      <div className="mono faint" style={{ fontSize: 10.5 }}>{sc.name} · {sc.type}</div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                      <button
+                        onClick={() => { setCmdName(sc.name); setCmdPayload(sc.type === 'number' ? JSON.stringify({ value: sc.default ?? sc.min ?? 0 }) : '{}'); }}
+                        className="btn btn-sm btn-primary"
+                        style={{ gap: 4, fontSize: 11 }}
+                      >
+                        <Terminal size={10} /> Send
+                      </button>
+                      <button onClick={() => removeSchemaCommand(idx)} className="btn btn-ghost btn-sm btn-icon" style={{ color: 'hsl(var(--bad))' }}>
+                        <Trash2 size={11} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Add command form */}
+          {((d.meta?.commands ?? []).length === 0 || showAddCmd) && (
+            <div className="panel" style={{ padding: 20, borderTop: '2px solid hsl(var(--primary))' }}>
+              <div className="eyebrow" style={{ marginBottom: 14 }}>
+                {(d.meta?.commands ?? []).length === 0 ? 'Define device commands' : 'Add command'}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                  <div>
+                    <label className="eyebrow" style={{ fontSize: 9, display: 'block', marginBottom: 6 }}>Command name</label>
+                    <input className="input mono" style={{ fontSize: 12 }} placeholder="set_temperature" value={newCmdName} onChange={e => setNewCmdName(e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="eyebrow" style={{ fontSize: 9, display: 'block', marginBottom: 6 }}>Display label</label>
+                    <input className="input" style={{ fontSize: 12 }} placeholder="Set Temperature" value={newCmdLabel} onChange={e => setNewCmdLabel(e.target.value)} />
+                  </div>
+                </div>
+                <div>
+                  <label className="eyebrow" style={{ fontSize: 9, display: 'block', marginBottom: 6 }}>Control type</label>
+                  <select className="select" value={newCmdType} onChange={e => setNewCmdType(e.target.value as any)}>
+                    <option value="action">Button</option>
+                    <option value="boolean">Toggle (on/off)</option>
+                    <option value="number">Slider (value range)</option>
+                    <option value="enum">Dropdown (options)</option>
+                  </select>
+                </div>
+                {newCmdType === 'number' && (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 8 }}>
+                    {[
+                      { label: 'Min', value: newCmdMin, set: setNewCmdMin },
+                      { label: 'Max', value: newCmdMax, set: setNewCmdMax },
+                      { label: 'Step', value: newCmdStep, set: setNewCmdStep },
+                    ].map(({ label, value, set }) => (
+                      <div key={label}>
+                        <label className="eyebrow" style={{ fontSize: 9, display: 'block', marginBottom: 6 }}>{label}</label>
+                        <input className="input" type="number" value={value} onChange={e => set(+e.target.value)} />
+                      </div>
+                    ))}
+                    <div>
+                      <label className="eyebrow" style={{ fontSize: 9, display: 'block', marginBottom: 6 }}>Unit</label>
+                      <input className="input" placeholder="°C" value={newCmdUnit} onChange={e => setNewCmdUnit(e.target.value)} />
+                    </div>
+                  </div>
+                )}
+                {newCmdType === 'enum' && (
+                  <div>
+                    <label className="eyebrow" style={{ fontSize: 9, display: 'block', marginBottom: 6 }}>Options (comma-separated)</label>
+                    <input className="input" placeholder="low, medium, high" value={newCmdValues} onChange={e => setNewCmdValues(e.target.value)} />
+                  </div>
+                )}
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={saveNewCommand} disabled={savingCmd || !newCmdName.trim()} className="btn btn-primary btn-sm" style={{ gap: 4 }}>
+                    {savingCmd ? <RefreshCw size={11} className="animate-spin" /> : <Check size={11} />}
+                    Save command
+                  </button>
+                  {showAddCmd && <button onClick={() => setShowAddCmd(false)} className="btn btn-ghost btn-sm">Cancel</button>}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Send form */}
-          <div className="panel" style={{ padding: 20, marginBottom: 16 }}>
-            <div className="eyebrow" style={{ marginBottom: 12 }}>Send command</div>
+          <div className="panel" style={{ padding: 20 }}>
+            <div className="eyebrow" style={{ marginBottom: 12 }}>Send raw command</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
               <div>
-                <label className="eyebrow" style={{ fontSize: 9, display: 'block', marginBottom: 6 }}>Command</label>
+                <label className="eyebrow" style={{ fontSize: 9, display: 'block', marginBottom: 6 }}>Command name</label>
                 <input
                   value={cmdName}
                   onChange={e => setCmdName(e.target.value)}
@@ -373,7 +509,7 @@ export function DeviceDetailPage() {
           </div>
 
           {/* Command history */}
-          <div className="eyebrow" style={{ marginBottom: 8 }}>Command history</div>
+          <div className="eyebrow" style={{ marginBottom: 8 }}>History</div>
           <div className="table-responsive">
             <table className="table">
               <thead>
@@ -414,26 +550,56 @@ export function DeviceDetailPage() {
         <div>
           <div className="ssh">Integration</div>
           <p className="dim" style={{ fontSize: 13, marginTop: 8, maxWidth: '28ch' }}>
-            Ingest telemetry via HTTP with your device API key.
+            Send telemetry to Orion via HTTP POST.
           </p>
         </div>
-        <div>
-          <pre className="panel" style={{ padding: '14px 16px', fontSize: 11, fontFamily: 'var(--font-mono)', color: 'hsl(var(--muted-fg))', overflowX: 'auto', lineHeight: 1.6 }}>
-{`curl -X POST https://orion.vortan.io/api/v1/telemetry/ingest \\
-  -H "X-API-Key: ${currentKey?.slice(0, 16) || '<api-key>'}..." \\
-  -H "Content-Type: application/json" \\
-  -d '{"temperature": 24.3, "humidity": 65}'`}
-          </pre>
-          <p className="dim" style={{ fontSize: 11, marginTop: 8 }}>
-            Include as <span className="mono acc">X-API-Key</span> header.
-            <button
-              className="acc"
-              style={{ marginLeft: 8, background: 'none', border: 0, cursor: 'pointer', fontFamily: 'var(--font-mono)', fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 4 }}
-              onClick={() => { navigator.clipboard.writeText(currentKey); toast.success('Copied!'); }}
-            >
-              <Copy size={10} /> Copy key
-            </button>
-          </p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          {/* Endpoint */}
+          <div>
+            <div className="eyebrow" style={{ marginBottom: 8 }}>Endpoint</div>
+            <div className="panel" style={{ padding: '10px 14px', fontFamily: 'var(--font-mono)', fontSize: 12 }}>
+              <span className="acc">POST</span>{' '}
+              <span style={{ color: 'hsl(var(--muted-fg))' }}>https://orion.vortan.io/api/v1/telemetry/</span>
+              <span style={{ color: 'hsl(var(--fg))' }}>ingest</span>
+            </div>
+          </div>
+
+          {/* Auth */}
+          <div>
+            <div className="eyebrow" style={{ marginBottom: 8 }}>Authentication header</div>
+            <div className="panel" style={{ padding: '10px 14px', fontFamily: 'var(--font-mono)', fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+              <div>
+                <span style={{ color: 'hsl(var(--muted-fg))' }}>X-API-Key: </span>
+                <span>{apiKeyVisible ? currentKey : `${currentKey?.slice(0, 8) ?? ''}••••••••`}</span>
+              </div>
+              <button
+                onClick={() => { navigator.clipboard.writeText(currentKey); toast.success('Copied!'); }}
+                className="btn btn-ghost btn-sm btn-icon"
+                title="Copy key"
+              >
+                <Copy size={11} />
+              </button>
+            </div>
+          </div>
+
+          {/* Payload format */}
+          <div>
+            <div className="eyebrow" style={{ marginBottom: 8 }}>Payload format (JSON)</div>
+            <pre className="panel" style={{ padding: '14px 16px', fontSize: 11, fontFamily: 'var(--font-mono)', color: 'hsl(var(--muted-fg))', overflowX: 'auto', lineHeight: 1.7, margin: 0 }}>
+              {JSON.stringify(
+                (() => {
+                  const schemaFields: any[] = d.meta?.dataSchema?.fields ?? [];
+                  if (schemaFields.length === 0) return { temperature: 24.3, humidity: 65 };
+                  const obj: Record<string, unknown> = {};
+                  schemaFields.forEach((f: any) => {
+                    obj[f.key] = f.type === 'number' ? 0 : f.type === 'boolean' ? false : f.type === 'timestamp' ? new Date().toISOString() : '';
+                  });
+                  return obj;
+                })(),
+                null, 2
+              )}
+            </pre>
+          </div>
         </div>
       </div>
 

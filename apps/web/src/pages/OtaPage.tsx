@@ -324,15 +324,14 @@ export function OtaPage() {
       {/* ── KPI ticker ── */}
       <div className="ticker">
         {[
-          { n: '01', v: firmware.length,  l: 'Total versions',   c: undefined },
-          { n: '02', v: activeCount,      l: 'Active firmware',  c: 'hsl(var(--good))' },
-          { n: '03', v: inProgressCount,  l: 'Jobs in progress', c: 'hsl(var(--warn))' },
-          { n: '04', v: completedCount,   l: 'Jobs completed',   c: 'hsl(var(--primary))' },
-        ].map(({ n, v, l, c }) => (
-          <div key={n} className="tick">
-            <span className="tick-n">{n}</span>
-            <span className="tick-v" style={{ fontFamily: 'var(--font-display)', fontSize: 32, color: c }}>{v}</span>
-            <span className="tick-l">{l}</span>
+          { v: firmware.length,  l: 'Total versions',   c: undefined },
+          { v: activeCount,      l: 'Active firmware',  c: 'hsl(var(--good))' },
+          { v: inProgressCount,  l: 'Jobs in progress', c: 'hsl(var(--warn))' },
+          { v: completedCount,   l: 'Jobs completed',   c: 'hsl(var(--primary))' },
+        ].map(({ v, l, c }) => (
+          <div key={l}>
+            <div className="eyebrow" style={{ marginBottom: 8 }}>{l}</div>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 40, lineHeight: 1, letterSpacing: '-.03em', color: c }}>{v}</div>
           </div>
         ))}
       </div>
@@ -344,15 +343,16 @@ export function OtaPage() {
           <p className="dim" style={{ fontSize: 13, marginTop: 8, maxWidth: '22ch' }}>
             {firmware.length} version{firmware.length !== 1 ? 's' : ''} shown.
           </p>
-          <div className="seg" style={{ marginTop: 16 }}>
+        </div>
+        <div style={{ minWidth: 0 }}>
+          <div className="seg" style={{ marginBottom: 12 }}>
             {(['all', 'active', 'ready', 'deprecated', 'archived'] as const).map(f => (
               <button key={f} className={filter === f ? 'on' : ''} onClick={() => setFilter(f)}>
                 {f === 'all' ? 'All' : f.charAt(0).toUpperCase() + f.slice(1)}
               </button>
             ))}
           </div>
-        </div>
-        <div className="panel table-responsive" style={{ minWidth: 0, overflow: 'auto' }}>
+          <div className="panel table-responsive" style={{ overflow: 'auto' }}>
           {fwLoading ? (
             <div className="skeleton" style={{ height: 200 }} />
           ) : firmware.length === 0 ? (
@@ -390,6 +390,7 @@ export function OtaPage() {
               </tbody>
             </table>
           )}
+          </div>
         </div>
       </div>
 
