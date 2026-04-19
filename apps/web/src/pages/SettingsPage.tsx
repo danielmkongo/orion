@@ -77,7 +77,7 @@ export function SettingsPage() {
             <>
               {/* Theme */}
               <div className="section" style={{ paddingTop: 0, borderTop: 'none' }}>
-                <div className="ssh" style={{ fontSize: 20 }}><span className="no">№ 1</span>Theme</div>
+                <div className="ssh" style={{ fontSize: 20 }}>Theme</div>
                 <div>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 24 }}>
                     {[
@@ -127,7 +127,7 @@ export function SettingsPage() {
 
           {activeSection === 'notifications' && (
             <div className="section" style={{ paddingTop: 0, borderTop: 'none' }}>
-              <div className="ssh" style={{ fontSize: 20 }}><span className="no">№ 2</span>Notifications</div>
+              <div className="ssh" style={{ fontSize: 20 }}>Notifications</div>
               <div>
                 <div className="eyebrow" style={{ marginBottom: 12 }}>Alert channels</div>
                 {[
@@ -154,7 +154,7 @@ export function SettingsPage() {
 
           {activeSection === 'security' && (
             <div className="section" style={{ paddingTop: 0, borderTop: 'none' }}>
-              <div className="ssh" style={{ fontSize: 20 }}><span className="no">№ 3</span>Security</div>
+              <div className="ssh" style={{ fontSize: 20 }}>Security</div>
               <div>
                 <div className="eyebrow" style={{ marginBottom: 12 }}>Account security</div>
                 {[
@@ -176,7 +176,7 @@ export function SettingsPage() {
 
           {activeSection === 'organization' && (
             <div className="section" style={{ paddingTop: 0, borderTop: 'none' }}>
-              <div className="ssh" style={{ fontSize: 20 }}><span className="no">№ 4</span>Organization</div>
+              <div className="ssh" style={{ fontSize: 20 }}>Organization</div>
               <div style={{ maxWidth: 440 }}>
                 <div style={{ marginBottom: 16 }}>
                   <label className="eyebrow" style={{ fontSize: 9, display: 'block', marginBottom: 6 }}>Organization name</label>
@@ -203,7 +203,7 @@ export function SettingsPage() {
 
           {activeSection === 'data' && (
             <div className="section" style={{ paddingTop: 0, borderTop: 'none' }}>
-              <div className="ssh" style={{ fontSize: 20 }}><span className="no">№ 5</span>Data & Retention</div>
+              <div className="ssh" style={{ fontSize: 20 }}>Data & Retention</div>
               <div>
                 <div className="eyebrow" style={{ marginBottom: 12 }}>Retention periods</div>
                 {[

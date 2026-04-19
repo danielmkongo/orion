@@ -267,7 +267,7 @@ export function ControlPage() {
       {deviceId && (
         <div className="section">
           <div>
-            <div className="ssh"><span className="no">№ I</span>Device<br />Controls</div>
+            <div className="ssh">Device<br />Controls</div>
             <p className="dim" style={{ fontSize: 13, marginTop: 8, maxWidth: '22ch' }}>
               {selectedDevice?.name}<br />
               {controllableFields.length} control{controllableFields.length !== 1 ? 's' : ''} available.
@@ -328,7 +328,7 @@ export function ControlPage() {
       {/* ── Section II: Terminal ── */}
       <div className="section">
         <div>
-          <div className="ssh"><span className="no">№ II</span>Raw<br />Terminal</div>
+          <div className="ssh">Raw<br />Terminal</div>
           <p className="dim" style={{ fontSize: 13, marginTop: 8, maxWidth: '22ch' }}>
             Send arbitrary commands with a custom JSON payload.
           </p>
@@ -375,7 +375,7 @@ export function ControlPage() {
       {/* ── Section III: Command History ── */}
       <div className="section">
         <div>
-          <div className="ssh"><span className="no">№ III</span>Command<br />History</div>
+          <div className="ssh">Command<br />History</div>
           <p className="dim" style={{ fontSize: 13, marginTop: 8, maxWidth: '22ch' }}>
             {commands.length} record{commands.length !== 1 ? 's' : ''} dispatched.
           </p>

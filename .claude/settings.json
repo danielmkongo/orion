@@ -15,7 +15,11 @@
       "Bash(gunzip -c webfetch-1776589604537-bxmhiz.bin)",
       "Bash(tar -x -O orion/project/orion/index.html)",
       "Bash(tar -t)",
-      "Bash(pnpm --filter web exec tsc --noEmit)"
+      "Bash(pnpm --filter web exec tsc --noEmit)",
+      "Bash(npx --prefix apps/web tsc --noEmit)",
+      "Bash(python3 -c ' *)",
+      "Bash(pnpm --filter @orion/web typecheck)",
+      "Bash(pnpm --filter @orion/api typecheck)"
     ]
   }
 }

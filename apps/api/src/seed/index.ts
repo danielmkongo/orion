@@ -10,6 +10,8 @@ import { Telemetry } from '../models/Telemetry.js';
 import { Dashboard } from '../models/Dashboard.js';
 import { Alert } from '../models/Alert.js';
 import { Rule } from '../models/Rule.js';
+import { Firmware } from '../models/Firmware.js';
+import { OtaJob } from '../models/OtaJob.js';
 
 const DEVICE_SEEDS = [
   { name: 'Tracker Alpha-01', category: 'tracker', protocol: 'mqtt', lat: 1.3521, lng: 103.8198, tags: ['fleet', 'vehicle'] },
@@ -116,6 +118,8 @@ async function seed() {
     Dashboard.deleteMany({}),
     Alert.deleteMany({}),
     Rule.deleteMany({}),
+    Firmware.deleteMany({}),
+    OtaJob.deleteMany({}),
   ]);
 
   // Create demo org
@@ -270,6 +274,21 @@ async function seed() {
       createdBy: adminUser._id,
       fireCount: 1,
     },
+  ]);
+
+  // Create firmware versions
+  const fw1 = await Firmware.create({ orgId: org._id, name: 'Tracker Firmware',  version: '2.4.1', category: 'tracker',       size: '248 KB', status: 'active',     devices: 12, changelog: 'Improved GPS accuracy, reduced power consumption by 15%.', uploadedAt: new Date('2024-03-10') });
+  const fw2 = await Firmware.create({ orgId: org._id, name: 'Tracker Firmware',  version: '2.3.0', category: 'tracker',       size: '241 KB', status: 'deprecated', devices:  3, changelog: 'Added geofencing support.', uploadedAt: new Date('2024-01-22') });
+  const fw3 = await Firmware.create({ orgId: org._id, name: 'Env Sensor',        version: '1.8.0', category: 'environmental', size: '124 KB', status: 'active',     devices:  4, changelog: 'CO₂ sensor calibration fix.', uploadedAt: new Date('2024-03-05') });
+  const fw4 = await Firmware.create({ orgId: org._id, name: 'Gateway OS',        version: '3.1.2', category: 'gateway',       size: '1.2 MB', status: 'ready',      devices:  2, changelog: 'Security patch for CVE-2024-0012.', uploadedAt: new Date('2024-02-28') });
+  await    Firmware.create({ orgId: org._id, name: 'Gateway OS',        version: '3.0.5', category: 'gateway',       size: '1.1 MB', status: 'archived',   devices:  0, changelog: 'Legacy version — archived.', uploadedAt: new Date('2023-11-10') });
+
+  // Create OTA jobs
+  await OtaJob.insertMany([
+    { orgId: org._id, name: 'Fleet Tracker Update', firmwareId: fw1._id, firmwareVersion: fw1.version, status: 'in_progress', progress: 7,  total: 12, startedAt: new Date('2024-03-11T09:00:00Z') },
+    { orgId: org._id, name: 'Env Sensor Rollout',   firmwareId: fw3._id, firmwareVersion: fw3.version, status: 'completed',   progress: 4,  total: 4,  startedAt: new Date('2024-03-06T14:30:00Z'), completedAt: new Date('2024-03-06T15:10:00Z') },
+    { orgId: org._id, name: 'Gateway Patch',        firmwareId: fw4._id, firmwareVersion: fw4.version, status: 'failed',      progress: 1,  total: 2,  startedAt: new Date('2024-03-01T11:00:00Z') },
+    { orgId: org._id, name: 'Tracker Rollback',     firmwareId: fw2._id, firmwareVersion: fw2.version, status: 'completed',   progress: 3,  total: 3,  startedAt: new Date('2024-02-15T08:00:00Z'), completedAt: new Date('2024-02-15T09:30:00Z') },
   ]);
 
   // Create a default dashboard

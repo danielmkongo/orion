@@ -7,6 +7,7 @@ import { devicesApi } from '@/api/devices';
 import { timeAgo } from '@/lib/utils';
 import { Sparkline } from '@/components/charts/Charts';
 import { DeviceForm } from '@/components/devices/DeviceForm';
+import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import toast from 'react-hot-toast';
 import type { Device } from '@orion/shared';
 
@@ -57,11 +58,11 @@ export function DevicesPage() {
 
   const devices = data?.devices ?? [];
   const total = data?.total ?? 0;
+  const [deleteTarget, setDeleteTarget] = useState<Device | null>(null);
 
   function confirmDelete(e: React.MouseEvent, d: Device) {
     e.stopPropagation();
-    if (!window.confirm(`Delete "${d.name}"? This cannot be undone.`)) return;
-    deleteMut.mutate((d as any).id ?? (d as any)._id);
+    setDeleteTarget(d);
   }
 
   return (
@@ -181,11 +182,11 @@ export function DevicesPage() {
                     <td className="hide-sm" style={{ width: '110px' }}>
                       {battery != null ? <BatteryBar pct={battery} /> : <span className="faint mono" style={{ fontSize: '10.5px' }}>—</span>}
                     </td>
-                    <td className="hide-sm" style={{ width: '120px' }}>
+                    <td className="hide-sm" style={{ width: '220px', minWidth: '220px' }}>
                       <Sparkline
                         data={sp}
                         color={d.status === 'error' ? 'hsl(var(--bad))' : d.status === 'online' ? 'hsl(var(--primary))' : 'hsl(var(--muted-fg))'}
-                        height={28}
+                        height={32}
                       />
                     </td>
                     <td className="mono" style={{ fontSize: '11.5px', color: 'hsl(var(--muted-fg))' }}>
@@ -204,6 +205,19 @@ export function DevicesPage() {
 
       <AnimatePresence>
         {showForm && <DeviceForm onClose={() => setShowForm(false)} />}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {deleteTarget && (
+          <ConfirmModal
+            title="Delete device"
+            message={`Delete "${(deleteTarget as any).name}"? This cannot be undone.`}
+            confirmLabel="Delete"
+            danger
+            onConfirm={() => { deleteMut.mutate((deleteTarget as any).id ?? (deleteTarget as any)._id); setDeleteTarget(null); }}
+            onCancel={() => setDeleteTarget(null)}
+          />
+        )}
       </AnimatePresence>
     </div>
   );

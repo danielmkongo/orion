@@ -106,7 +106,7 @@ export function DashboardPage() {
     return () => { unsub(); u1(); u2(); };
   }, [on, refetchStats]);
 
-  const catColors = ['hsl(var(--primary))', 'hsl(var(--fg))', 'hsl(var(--info))', 'hsl(var(--good))', 'hsl(var(--warn))', '#8B5CF6', '#14B8A6'];
+  const catColors = ['#FF5B1F', '#0B0B0A', '#3B82F6', '#0F7A3D', '#FACC15', '#8B5CF6', '#14B8A6'];
 
   return (
     <div className="page">
@@ -114,7 +114,7 @@ export function DashboardPage() {
       <div className="ph">
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '6px' }}>
-            <span className="eyebrow">Orion · Device Intelligence · Vol 04 / №21</span>
+            <span className="eyebrow">Orion · Device Intelligence Platform</span>
             <span className="dot dot-online pulse" style={{ color: 'hsl(var(--good))' }} />
             <span className="mono faint" style={{ fontSize: '11px' }}>Live · real-time</span>
           </div>
@@ -188,7 +188,7 @@ export function DashboardPage() {
         <div style={{ padding: '24px 24px 24px 0', borderRight: '1px solid hsl(var(--border))' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px', gap: '12px', flexWrap: 'wrap' }}>
             <div>
-              <div className="eyebrow">№ I · Featured telemetry</div>
+              <div className="eyebrow">Featured telemetry</div>
               <div style={{ fontFamily: 'var(--font-display)', fontSize: '28px', lineHeight: 1, marginTop: '4px', textTransform: 'capitalize' }}>
                 {(devices as any[]).find(d => (d._id ?? d.id) === effectiveDeviceId)?.name ?? 'Select a device'}{' '}
                 <span style={{ fontStyle: 'italic', color: 'hsl(var(--primary))' }}>· 24 hours</span>
@@ -217,7 +217,7 @@ export function DashboardPage() {
 
         {/* Category donut — 1/3 */}
         <div style={{ padding: '24px 0 24px 24px' }}>
-          <div className="eyebrow" style={{ marginBottom: '12px' }}>№ II · Devices by category</div>
+          <div className="eyebrow" style={{ marginBottom: '12px' }}>Devices by category</div>
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px' }}>
             <Donut
               segments={byCategory.slice(0, 6).map((c: any, i: number) => ({ name: c._id, value: c.count, color: catColors[i % catColors.length] }))}
@@ -245,7 +245,7 @@ export function DashboardPage() {
 
           <hr className="hr" style={{ margin: '20px 0' }} />
 
-          <div className="eyebrow" style={{ marginBottom: '12px' }}>№ III · Active alerts</div>
+          <div className="eyebrow" style={{ marginBottom: '12px' }}>Active alerts</div>
           {alerts.length === 0 ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'hsl(var(--good))', fontSize: '13px' }}>
               <CheckCircle2 size={14} /> All clear
@@ -269,10 +269,7 @@ export function DashboardPage() {
       {/* ── Section IV: Recent devices ── */}
       <div className="section">
         <div>
-          <div className="ssh">
-            <span className="no">№ IV</span>
-            Recent devices
-          </div>
+          <div className="ssh">Recent devices</div>
           <p className="dim" style={{ fontSize: '13px', maxWidth: '28ch', marginTop: '8px' }}>
             Last-seen, category, signal. Click a row for the full device dossier.
           </p>

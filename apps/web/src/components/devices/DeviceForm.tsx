@@ -151,28 +151,85 @@ function Steps({ current }: { current: Step }) {
 }
 
 /* ─── Graph preview component ────────────────────────────────────────── */
-function GraphPreview({ field }: { field: DataField }) {
-  const sparklineData = useMemo(() =>
-    Array.from({ length: 20 }, (_, i) =>
-      30 - Math.sin(i / 3) * 18 + Math.cos(i / 2) * 8
-    ),
+function GraphPreview({ field, compact }: { field: DataField; compact?: boolean }) {
+  const vals = useMemo(() =>
+    Array.from({ length: 20 }, (_, i) => 30 + Math.sin(i / 3) * 18 + Math.cos(i / 2) * 8),
     []
   );
 
   if (field.type !== 'number') {
     return (
-      <div className="border border-[hsl(var(--rule))] p-6 text-center bg-muted/20">
-        <p className="text-[12px] text-muted-foreground">
-          Visualization available for <strong className="text-foreground">number</strong> fields only.
+      <div className="border border-[hsl(var(--rule))] p-4 text-center bg-muted/20">
+        <p className="text-[11px] text-muted-foreground">
+          Visualization for <strong className="text-foreground">number</strong> fields only.
         </p>
       </div>
     );
   }
 
+  const h = compact ? 40 : 60;
+  const c = field.chartColor || '#FF6A30';
+  const min = Math.min(...vals), max = Math.max(...vals), range = max - min || 1;
+  const pts = vals.map((v, i) => `${(i / (vals.length - 1)) * 100},${((max - v) / range) * (h - 4) + 2}`).join(' ');
+
+  const preview = (() => {
+    switch (field.chartType) {
+      case 'area':
+        return (
+          <svg viewBox={`0 0 100 ${h}`} preserveAspectRatio="none" style={{ width: '100%', height: h, display: 'block' }}>
+            <polygon points={`${pts} 100,${h} 0,${h}`} fill={c} fillOpacity="0.18" />
+            <polyline points={pts} fill="none" stroke={c} strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
+          </svg>
+        );
+      case 'bar':
+        return (
+          <svg viewBox={`0 0 100 ${h}`} preserveAspectRatio="none" style={{ width: '100%', height: h, display: 'block' }}>
+            {vals.map((v, i) => {
+              const bh = ((v - min) / range) * (h - 4);
+              return <rect key={i} x={i * (100 / vals.length) + 0.5} y={h - bh} width={100 / vals.length - 1} height={bh} fill={c} fillOpacity={0.75} />;
+            })}
+          </svg>
+        );
+      case 'gauge': {
+        const pct = 0.65;
+        const r = 38, cx = 50, cy = 52;
+        const startAngle = Math.PI, endAngle = 2 * Math.PI;
+        const angle = startAngle + pct * (endAngle - startAngle);
+        const x1 = cx + r * Math.cos(startAngle), y1 = cy + r * Math.sin(startAngle);
+        const x2 = cx + r * Math.cos(angle), y2 = cy + r * Math.sin(angle);
+        const nx = cx + 28 * Math.cos(angle), ny = cy + 28 * Math.sin(angle);
+        return (
+          <svg viewBox="0 0 100 60" style={{ width: '100%', height: h, display: 'block' }}>
+            <path d={`M ${x1} ${y1} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`} fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="6" />
+            <path d={`M ${x1} ${y1} A ${r} ${r} 0 0 1 ${x2} ${y2}`} fill="none" stroke={c} strokeWidth="6" />
+            <line x1={cx} y1={cy} x2={nx} y2={ny} stroke="white" strokeWidth="1.5" strokeLinecap="round" />
+            <circle cx={cx} cy={cy} r="3" fill="white" />
+          </svg>
+        );
+      }
+      case 'scatter':
+        return (
+          <svg viewBox={`0 0 100 ${h}`} preserveAspectRatio="none" style={{ width: '100%', height: h, display: 'block' }}>
+            {vals.map((v, i) => {
+              const cx = (i / (vals.length - 1)) * 96 + 2;
+              const cy = ((max - v) / range) * (h - 4) + 2;
+              return <circle key={i} cx={cx} cy={cy} r="2" fill={c} fillOpacity={0.8} />;
+            })}
+          </svg>
+        );
+      default: // line
+        return (
+          <svg viewBox={`0 0 100 ${h}`} preserveAspectRatio="none" style={{ width: '100%', height: h, display: 'block' }}>
+            <polyline points={pts} fill="none" stroke={c} strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
+          </svg>
+        );
+    }
+  })();
+
   return (
     <div className="border border-[hsl(var(--rule))] p-3 bg-muted/20">
-      <p className="eyebrow text-[9px] mb-2">Preview</p>
-      <Sparkline data={sparklineData} height={50} color={field.chartColor || '#FF6A30'} fill />
+      {!compact && <p className="eyebrow text-[9px] mb-2">Preview — {field.chartType}</p>}
+      {preview}
     </div>
   );
 }
@@ -859,33 +916,42 @@ export function DeviceForm({ onClose }: { onClose: () => void }) {
                     </div>
                   </div>
 
-                  {/* Fields */}
+                  {/* Fields with graph previews */}
                   {validFields.length > 0 && (
                     <div className="border border-[hsl(var(--rule))] p-4">
-                      <p className="eyebrow text-[9px] mb-2">Data fields · {validFields.length}</p>
-                      <div className="space-y-1.5">
+                      <p className="eyebrow text-[9px] mb-3">Data fields · {validFields.length}</p>
+                      <div className="space-y-3">
                         {validFields.map(f => (
-                          <div key={f.key} className="flex items-center justify-between text-[12px]">
-                            <div className="flex items-center gap-2 flex-1 min-w-0">
-                              <div className="w-2 h-2 flex-shrink-0" style={{ backgroundColor: f.chartColor }} />
-                              <span className="font-mono">{f.key}</span>
+                          <div key={f.key}>
+                            <div className="flex items-center justify-between text-[12px] mb-1.5">
+                              <div className="flex items-center gap-2">
+                                <div className="w-2 h-2 flex-shrink-0" style={{ backgroundColor: f.chartColor }} />
+                                <span className="font-mono">{f.key}</span>
+                                {f.unit && <span className="text-muted-foreground text-[10px]">{f.unit}</span>}
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-muted-foreground text-[10px]">{f.type}</span>
+                                {f.type === 'number' && f.chartType && (
+                                  <span className="tag text-[9px]">{f.chartType}</span>
+                                )}
+                              </div>
                             </div>
-                            <span className="text-muted-foreground text-[10px] ml-2">{f.type}</span>
+                            {f.type === 'number' && <GraphPreview field={f} compact />}
                           </div>
                         ))}
                       </div>
                     </div>
                   )}
 
-                  {/* Commands */}
+                  {/* Commands with widget previews */}
                   {commands.length > 0 && (
                     <div className="border border-[hsl(var(--rule))] p-4">
-                      <p className="eyebrow text-[9px] mb-2">Commands · {commands.length}</p>
-                      <div className="space-y-1.5">
-                        {commands.map(c => (
-                          <div key={c.name} className="flex items-center justify-between text-[12px]">
-                            <span className="font-mono">{c.name}</span>
-                            <span className="tag tag-accent text-[9px]">{c.ctype}</span>
+                      <p className="eyebrow text-[9px] mb-3">Commands · {commands.length}</p>
+                      <div className="space-y-4">
+                        {commands.map((c, i) => (
+                          <div key={i} className="bg-muted/30 border border-dashed border-[hsl(var(--rule))] p-3">
+                            <p className="eyebrow text-[8px] mb-3 text-muted-foreground">{c.name} — {c.ctype}</p>
+                            <CommandPreview cmd={c} />
                           </div>
                         ))}
                       </div>

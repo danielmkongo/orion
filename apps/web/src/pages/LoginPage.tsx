@@ -17,10 +17,10 @@ const FEATURES = [
 export function LoginPage() {
   const navigate = useNavigate();
   const { setAuth } = useAuthStore();
-  const [email, setEmail] = useState('admin@vortan.io');
+  const [email, setEmail]       = useState('admin@vortan.io');
   const [password, setPassword] = useState('demo1234');
-  const [showPwd, setShowPwd] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [showPwd, setShowPwd]   = useState(false);
+  const [loading, setLoading]   = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -37,96 +37,134 @@ export function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex bg-background">
+    <div style={{ minHeight: '100vh', display: 'flex', background: 'hsl(var(--bg))' }}>
+
       {/* ── Left brand panel ── */}
-      <div className="hidden lg:flex flex-col lg:w-[52%] xl:w-[56%] relative overflow-hidden bg-foreground">
-        {/* Subtle dot grid */}
-        <div
-          className="absolute inset-0 opacity-[0.04]"
-          style={{
-            backgroundImage: `radial-gradient(circle, white 1px, transparent 1px)`,
-            backgroundSize: '28px 28px',
-          }}
-        />
-
-        {/* Warm orange gradient wash */}
-        <div className="absolute inset-0 bg-gradient-to-br from-transparent via-transparent to-primary/20" />
-
-        {/* Large "O" background watermark */}
-        <div className="absolute right-[-80px] top-1/2 -translate-y-1/2 opacity-[0.06]">
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.5 }}
+        style={{
+          display: 'none',
+          width: '54%',
+          background: 'hsl(var(--fg))',
+          position: 'relative',
+          overflow: 'hidden',
+          flexDirection: 'column',
+          justifyContent: 'space-between',
+          padding: '56px 64px',
+        }}
+        className="login-left-panel"
+      >
+        {/* Dot grid */}
+        <div style={{
+          position: 'absolute', inset: 0, opacity: 0.04,
+          backgroundImage: 'radial-gradient(circle, white 1px, transparent 1px)',
+          backgroundSize: '28px 28px',
+        }} />
+        {/* Orange gradient wash */}
+        <div style={{
+          position: 'absolute', inset: 0,
+          background: 'radial-gradient(ellipse at bottom right, rgba(255,91,31,0.18) 0%, transparent 65%)',
+        }} />
+        {/* Watermark O */}
+        <div style={{ position: 'absolute', right: -80, top: '50%', transform: 'translateY(-50%)', opacity: 0.05 }}>
           <OrionMark size={480} className="text-white" />
         </div>
 
-        <div className="relative flex flex-col justify-between h-full p-14">
-          {/* Logo */}
-          <div className="flex items-center gap-3">
-            <OrionMark size={28} className="text-primary" />
-            <span className="text-[17px] font-semibold text-white tracking-tight">Orion</span>
-          </div>
-
-          {/* Headline */}
-          <motion.div
-            initial={{ opacity: 0, y: 24 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.1 }}
-            className="max-w-[480px]"
-          >
-            <h1 className="text-[3.25rem] font-semibold text-white leading-[1.12] tracking-tight mb-5">
-              Device intelligence,<br />
-              <span className="text-primary">redefined.</span>
-            </h1>
-            <p className="text-[1.0625rem] text-white/55 leading-relaxed">
-              Monitor, control, and analyze any connected device — from GPS trackers
-              to industrial sensors — in one cohesive platform.
-            </p>
-
-            {/* Feature grid */}
-            <div className="grid grid-cols-2 gap-3 mt-10">
-              {FEATURES.map(({ icon: Icon, label, desc }) => (
-                <div
-                  key={label}
-                  className="rounded-xl p-4 border border-white/10 bg-white/5 backdrop-blur-sm"
-                >
-                  <div className="w-7 h-7 rounded-lg bg-primary/20 flex items-center justify-center mb-3">
-                    <Icon size={14} className="text-primary" />
-                  </div>
-                  <p className="text-[13px] font-semibold text-white">{label}</p>
-                  <p className="text-[12px] text-white/45 mt-0.5">{desc}</p>
-                </div>
-              ))}
-            </div>
-          </motion.div>
-
-          <p className="text-[12px] text-white/30">© {new Date().getFullYear()} Orion by Vortan</p>
+        {/* Logo */}
+        <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <OrionMark size={28} className="text-primary" />
+          <span style={{ color: 'white', fontSize: 17, fontWeight: 600, letterSpacing: '-0.02em' }}>Orion</span>
         </div>
-      </div>
+
+        {/* Headline block */}
+        <motion.div
+          initial={{ opacity: 0, y: 24 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.15 }}
+          style={{ position: 'relative', maxWidth: 480 }}
+        >
+          <h1 style={{
+            fontFamily: 'var(--font-display)',
+            fontSize: 52,
+            lineHeight: 1.08,
+            letterSpacing: '-0.03em',
+            color: 'white',
+            marginBottom: 20,
+            fontWeight: 400,
+          }}>
+            Device intelligence,<br />
+            <em style={{ color: '#FF5B1F', fontStyle: 'italic' }}>redefined.</em>
+          </h1>
+          <p style={{ fontSize: 16, color: 'rgba(255,255,255,0.5)', lineHeight: 1.6, maxWidth: '44ch' }}>
+            Monitor, control, and analyze any connected device — from GPS trackers to industrial sensors — in one cohesive platform.
+          </p>
+
+          {/* Feature grid */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 40 }}>
+            {FEATURES.map(({ icon: Icon, label, desc }) => (
+              <div
+                key={label}
+                style={{
+                  padding: '16px',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  background: 'rgba(255,255,255,0.05)',
+                }}
+              >
+                <div style={{ width: 28, height: 28, background: 'rgba(255,91,31,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
+                  <Icon size={13} style={{ color: '#FF5B1F' }} />
+                </div>
+                <p style={{ fontSize: 13, fontWeight: 600, color: 'white', marginBottom: 2 }}>{label}</p>
+                <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>{desc}</p>
+              </div>
+            ))}
+          </div>
+        </motion.div>
+
+        <p style={{ position: 'relative', fontSize: 12, color: 'rgba(255,255,255,0.28)' }}>
+          © {new Date().getFullYear()} Orion by Vortan
+        </p>
+      </motion.div>
 
       {/* ── Right form panel ── */}
-      <div className="flex-1 flex items-center justify-center p-8">
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '32px 24px' }}>
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.35 }}
-          className="w-full max-w-[400px]"
+          style={{ width: '100%', maxWidth: 400 }}
         >
           {/* Mobile logo */}
-          <div className="flex items-center gap-2.5 mb-10 lg:hidden">
+          <div className="login-mobile-logo" style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 40 }}>
             <OrionMark size={24} className="text-primary" />
-            <span className="text-[16px] font-semibold text-foreground">Orion</span>
+            <span style={{ fontSize: 16, fontWeight: 600, color: 'hsl(var(--fg))' }}>Orion</span>
           </div>
 
-          <h2 className="text-[1.625rem] font-semibold text-foreground tracking-tight">Welcome back</h2>
-          <p className="text-[14px] text-muted-foreground mt-1 mb-8">Sign in to your workspace</p>
-
-          {/* Demo hint */}
-          <div className="rounded-xl border border-primary/20 bg-primary/5 p-3.5 mb-7">
-            <p className="text-[12px] font-semibold text-primary mb-0.5">Demo access</p>
-            <p className="text-[12px] text-muted-foreground font-mono">admin@vortan.io / demo1234</p>
+          <div style={{ marginBottom: 32 }}>
+            <h2 style={{
+              fontFamily: 'var(--font-display)',
+              fontSize: 36,
+              lineHeight: 1.1,
+              letterSpacing: '-0.03em',
+              fontWeight: 400,
+              color: 'hsl(var(--fg))',
+              marginBottom: 6,
+            }}>
+              Welcome <em style={{ color: '#FF5B1F', fontStyle: 'italic' }}>back.</em>
+            </h2>
+            <p style={{ fontSize: 14, color: 'hsl(var(--muted-fg))' }}>Sign in to your workspace</p>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Demo credentials */}
+          <div className="panel" style={{ padding: '12px 16px', marginBottom: 28, borderTop: '2px solid hsl(var(--primary))' }}>
+            <div className="eyebrow" style={{ fontSize: 9, marginBottom: 4, color: 'hsl(var(--primary))' }}>Demo access</div>
+            <p className="mono faint" style={{ fontSize: 12 }}>admin@vortan.io / demo1234</p>
+          </div>
+
+          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div>
-              <label className="block text-[13px] font-medium text-foreground mb-1.5">Email</label>
+              <label className="eyebrow" style={{ fontSize: 9, display: 'block', marginBottom: 6 }}>Email</label>
               <input
                 type="email"
                 value={email}
@@ -139,16 +177,19 @@ export function LoginPage() {
             </div>
 
             <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="text-[13px] font-medium text-foreground">Password</label>
-                <button type="button" className="text-[12px] text-primary hover:underline">Forgot password?</button>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                <label className="eyebrow" style={{ fontSize: 9 }}>Password</label>
+                <button type="button" style={{ fontSize: 11, color: 'hsl(var(--primary))', background: 'none', border: 0, cursor: 'pointer', fontFamily: 'var(--font-sans)' }}>
+                  Forgot password?
+                </button>
               </div>
-              <div className="relative">
+              <div style={{ position: 'relative' }}>
                 <input
                   type={showPwd ? 'text' : 'password'}
                   value={password}
                   onChange={e => setPassword(e.target.value)}
-                  className="input pr-10"
+                  className="input"
+                  style={{ paddingRight: 38 }}
                   placeholder="••••••••"
                   required
                   autoComplete="current-password"
@@ -156,7 +197,7 @@ export function LoginPage() {
                 <button
                   type="button"
                   onClick={() => setShowPwd(v => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                  style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 0, cursor: 'pointer', color: 'hsl(var(--muted-fg))' }}
                 >
                   {showPwd ? <EyeOff size={15} /> : <Eye size={15} />}
                 </button>
@@ -166,7 +207,8 @@ export function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="btn btn-primary btn-lg w-full mt-1"
+              className="btn btn-primary btn-lg"
+              style={{ width: '100%', marginTop: 4, gap: 8 }}
             >
               {loading
                 ? <><Loader2 size={16} className="animate-spin" /> Signing in…</>
@@ -175,14 +217,21 @@ export function LoginPage() {
             </button>
           </form>
 
-          <p className="text-center text-[13px] text-muted-foreground mt-6">
+          <p style={{ textAlign: 'center', fontSize: 13, color: 'hsl(var(--muted-fg))', marginTop: 24 }}>
             No account?{' '}
-            <Link to="/register" className="font-medium text-primary hover:underline">
+            <Link to="/register" style={{ color: 'hsl(var(--primary))', fontWeight: 500, textDecoration: 'none' }}>
               Create workspace
             </Link>
           </p>
         </motion.div>
       </div>
+
+      <style>{`
+        @media (min-width: 1024px) {
+          .login-left-panel { display: flex !important; }
+          .login-mobile-logo { display: none !important; }
+        }
+      `}</style>
     </div>
   );
 }

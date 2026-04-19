@@ -8,6 +8,7 @@ import { timeAgo, formatDate as fmtDate, getCategoryIconInfo } from '@/lib/utils
 import { useSocket } from '@/hooks/useSocket';
 import { LineChart } from '@/components/charts/Charts';
 import { ArrowLeft, Eye, EyeOff, Copy, RefreshCw, Terminal } from 'lucide-react';
+import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import toast from 'react-hot-toast';
 import L from 'leaflet';
 
@@ -46,6 +47,7 @@ export function DeviceDetailPage() {
   const [cmdName, setCmdName] = useState('');
   const [cmdPayload, setCmdPayload] = useState('{}');
   const [sending, setSending] = useState(false);
+  const [showRegenConfirm, setShowRegenConfirm] = useState(false);
   const { on, subscribeDevice } = useSocket();
   const queryClient = useQueryClient();
 
@@ -125,7 +127,6 @@ export function DeviceDetailPage() {
   };
 
   const regenerateKey = async () => {
-    if (!confirm('Regenerate API key? The existing key will stop working immediately.')) return;
     try {
       const { apiKey } = await devicesApi.regenerateKey(d._id);
       setCurrentKey(apiKey);
@@ -228,7 +229,7 @@ export function DeviceDetailPage() {
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12, gap: 12, flexWrap: 'wrap' }}>
             <div>
-              <div className="eyebrow">№ I · Live telemetry</div>
+              <div className="eyebrow">Live telemetry</div>
               <div style={{ fontFamily: 'var(--font-display)', fontSize: 28, lineHeight: 1, marginTop: 4, textTransform: 'capitalize' }}>
                 {chartField.replace(/_/g, ' ')} <span style={{ fontStyle: 'italic', color: 'hsl(var(--primary))' }}>· {chartRange}</span>
               </div>
@@ -252,7 +253,7 @@ export function DeviceDetailPage() {
 
         {/* Device info */}
         <div>
-          <div className="eyebrow" style={{ marginBottom: 12 }}>№ II · Device info</div>
+          <div className="eyebrow" style={{ marginBottom: 12 }}>Device info</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
             {[
               ['Category',   d.category,                            ''],
@@ -271,7 +272,7 @@ export function DeviceDetailPage() {
           </div>
 
           {/* API key */}
-          <div className="eyebrow" style={{ marginTop: 24, marginBottom: 8 }}>№ III · API key</div>
+          <div className="eyebrow" style={{ marginTop: 24, marginBottom: 8 }}>API key</div>
           <div className="panel" style={{ padding: 10 }}>
             <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
               <input
@@ -291,7 +292,7 @@ export function DeviceDetailPage() {
                 <Copy size={12} />
               </button>
             </div>
-            <button onClick={regenerateKey} className="dim" style={{ marginTop: 8, fontSize: 11, display: 'flex', alignItems: 'center', gap: 4, background: 'none', border: 0, cursor: 'pointer', color: 'hsl(var(--bad))', padding: 0 }}>
+            <button onClick={() => setShowRegenConfirm(true)} className="dim" style={{ marginTop: 8, fontSize: 11, display: 'flex', alignItems: 'center', gap: 4, background: 'none', border: 0, cursor: 'pointer', color: 'hsl(var(--bad))', padding: 0 }}>
               <RefreshCw size={10} /> Regenerate
             </button>
           </div>
@@ -301,7 +302,7 @@ export function DeviceDetailPage() {
       {/* ── Section IV: Location ── */}
       <div className="section">
         <div>
-          <div className="ssh"><span className="no">№ IV</span>Location</div>
+          <div className="ssh">Location</div>
           <p className="dim" style={{ fontSize: 13, marginTop: 8, maxWidth: '28ch' }}>
             Live position on satellite imagery.
           </p>
@@ -335,7 +336,7 @@ export function DeviceDetailPage() {
       {/* ── Section V: Commands ── */}
       <div className="section">
         <div>
-          <div className="ssh"><span className="no">№ V</span>Controls</div>
+          <div className="ssh">Controls</div>
           <p className="dim" style={{ fontSize: 13, marginTop: 8, maxWidth: '28ch' }}>
             Send a command to this device. Each gesture sends the matching payload.
           </p>
@@ -411,7 +412,7 @@ export function DeviceDetailPage() {
       {/* ── Section VI: Quick integration ── */}
       <div className="section">
         <div>
-          <div className="ssh"><span className="no">№ VI</span>Integration</div>
+          <div className="ssh">Integration</div>
           <p className="dim" style={{ fontSize: 13, marginTop: 8, maxWidth: '28ch' }}>
             Ingest telemetry via HTTP with your device API key.
           </p>
@@ -435,6 +436,17 @@ export function DeviceDetailPage() {
           </p>
         </div>
       </div>
+
+      {showRegenConfirm && (
+        <ConfirmModal
+          title="Regenerate API key"
+          message="The existing key will stop working immediately. Any devices using it will need to be updated."
+          confirmLabel="Regenerate"
+          danger
+          onConfirm={() => { setShowRegenConfirm(false); regenerateKey(); }}
+          onCancel={() => setShowRegenConfirm(false)}
+        />
+      )}
     </div>
   );
 }

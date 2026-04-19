@@ -4,7 +4,7 @@ import { devicesApi } from '@/api/devices';
 import { telemetryApi } from '@/api/telemetry';
 import { getCategoryIconInfo, downloadCSV, formatDate } from '@/lib/utils';
 import { LineChart } from '@/components/charts/Charts';
-import { Download } from 'lucide-react';
+import { Download, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 
 const COLORS = ['hsl(var(--primary))', 'hsl(var(--fg))', 'hsl(var(--info))', 'hsl(var(--good))', 'hsl(var(--warn))', '#A06CD5'];
 const RANGES = [{ label: '1h', h: 1 }, { label: '6h', h: 6 }, { label: '24h', h: 24 }, { label: '7d', h: 168 }];
@@ -12,6 +12,7 @@ const RANGES = [{ label: '1h', h: 1 }, { label: '6h', h: 6 }, { label: '24h', h:
 export function TelemetryPage() {
   const [selectedDeviceId, setSelectedDeviceId] = useState('');
   const [selectedFields, setSelectedFields] = useState<string[]>([]);
+  const [featuredField, setFeaturedField] = useState('');
   const [range, setRange] = useState(RANGES[2]);
   const [normalize, setNormalize] = useState(false);
   const [showArea, setShowArea] = useState(true);
@@ -37,10 +38,12 @@ export function TelemetryPage() {
     .filter(([, v]) => typeof v === 'number')
     .map(([k, v]) => ({ key: k, value: v as number }));
 
-  useEffect(() => { setSelectedFields([]); }, [deviceId]);
+  useEffect(() => { setSelectedFields([]); setFeaturedField(''); }, [deviceId]);
   useEffect(() => {
     if (selectedFields.length === 0 && numericFields.length > 0)
       setSelectedFields(numericFields.slice(0, 2).map(f => f.key));
+    if (!featuredField && numericFields.length > 0)
+      setFeaturedField(numericFields[0].key);
   }, [numericFields.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const from = new Date(Date.now() - range.h * 3600_000).toISOString();
@@ -60,6 +63,13 @@ export function TelemetryPage() {
     refetchInterval: 60_000,
   });
 
+  const { data: featuredSeriesData } = useQuery({
+    queryKey: ['series-featured', deviceId, featuredField, range.label],
+    queryFn: () => telemetryApi.series(deviceId, featuredField, from, to, 200).catch(() => null),
+    enabled: !!deviceId && !!featuredField,
+    refetchInterval: 30_000,
+  });
+
   const chartSeries = selectedFields.map((field, i) => ({
     name: field,
     data: ((seriesData?.[i] as any)?.data ?? []).map((p: any) => ({
@@ -68,6 +78,17 @@ export function TelemetryPage() {
     })),
     color: COLORS[i % COLORS.length],
   }));
+
+  const featuredPoints: { ts: number; value: number }[] = ((featuredSeriesData as any)?.data ?? []).map((p: any) => ({
+    ts: typeof p.ts === 'string' ? new Date(p.ts).getTime() : p.ts,
+    value: typeof p.value === 'number' ? p.value : 0,
+  }));
+  const featuredValues = featuredPoints.map(p => p.value);
+  const featuredMin = featuredValues.length ? Math.min(...featuredValues) : 0;
+  const featuredMax = featuredValues.length ? Math.max(...featuredValues) : 0;
+  const featuredCurrent = numericFields.find(f => f.key === featuredField)?.value ?? 0;
+  const featuredPrev = featuredPoints.length >= 2 ? featuredPoints[featuredPoints.length - 2]?.value : null;
+  const trend = featuredPrev == null ? 0 : featuredCurrent - featuredPrev;
 
   function toggleField(key: string) {
     setSelectedFields(prev =>
@@ -141,6 +162,44 @@ export function TelemetryPage() {
           })
         )}
       </div>
+
+      {/* ── Featured field KPI ── */}
+      {numericFields.length > 0 && (
+        <div className="panel" style={{ padding: '20px 24px', marginBottom: 24 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+            <div>
+              <div className="eyebrow" style={{ marginBottom: 6 }}>Featured telemetry</div>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 16 }}>
+                <div style={{ fontFamily: 'var(--font-display)', fontSize: 52, lineHeight: 1, letterSpacing: '-0.03em' }} className="num">
+                  {featuredCurrent.toFixed(2)}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: trend > 0 ? 'hsl(var(--good))' : trend < 0 ? 'hsl(var(--bad))' : 'hsl(var(--muted-fg))' }}>
+                    {trend > 0 ? <TrendingUp size={13} /> : trend < 0 ? <TrendingDown size={13} /> : <Minus size={13} />}
+                    {trend === 0 ? 'No change' : `${trend > 0 ? '+' : ''}${trend.toFixed(3)}`}
+                  </span>
+                  <span className="mono faint" style={{ fontSize: 10.5 }}>
+                    min {featuredMin.toFixed(2)} · max {featuredMax.toFixed(2)}
+                  </span>
+                </div>
+              </div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <label className="eyebrow" style={{ fontSize: 9 }}>Field</label>
+              <select
+                value={featuredField}
+                onChange={e => setFeaturedField(e.target.value)}
+                className="select"
+                style={{ minWidth: 160 }}
+              >
+                {numericFields.map(({ key }) => (
+                  <option key={key} value={key}>{key.replace(/_/g, ' ')}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Latest KPI strip ── */}
       {numericFields.length > 0 && (
@@ -257,7 +316,7 @@ export function TelemetryPage() {
       {chartSeries.length > 0 && chartSeries[0]?.data.length > 0 && (
         <div className="section">
           <div>
-            <div className="ssh"><span className="no">№ I</span>Recent readings</div>
+            <div className="ssh">Recent readings</div>
             <p className="dim" style={{ fontSize: 13, marginTop: 8, maxWidth: '28ch' }}>
               Latest 20 data points for the selected parameters.
             </p>
