@@ -22,10 +22,10 @@ const SECTIONS = [
 
 export function SettingsPage() {
   const { user } = useAuthStore();
-  const { theme, setTheme } = useUIStore();
+  const { theme, setTheme, sidebarCollapsed, setSidebarCollapsed } = useUIStore();
   const [activeSection, setActiveSection] = useState('appearance');
   const [notifState, setNotifState] = useState({ critical: true, offline: true, rules: false, ota: true, commands: false });
-  const [displayState, setDisplayState] = useState({ compact: false, relative: true, animated: true });
+  const [displayState, setDisplayState] = useState({ compact: sidebarCollapsed, relative: true, animated: true });
 
   return (
     <div className="page">
@@ -116,7 +116,10 @@ export function SettingsPage() {
                       </div>
                       <Toggle
                         enabled={displayState[key as keyof typeof displayState]}
-                        onChange={v => setDisplayState(s => ({ ...s, [key]: v }))}
+                        onChange={v => {
+                          setDisplayState(s => ({ ...s, [key]: v }));
+                          if (key === 'compact') setSidebarCollapsed(v);
+                        }}
                       />
                     </div>
                   ))}

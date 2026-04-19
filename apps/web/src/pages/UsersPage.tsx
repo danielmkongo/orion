@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import apiClient from '@/api/client';
 import { formatDate, timeAgo } from '@/lib/utils';
-import { Plus, UserX, Pencil, X, Eye, EyeOff } from 'lucide-react';
+import { Plus, UserX, Pencil, X, Eye, EyeOff, Shield, ShieldCheck, Sliders, FlaskConical, Wrench } from 'lucide-react';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import toast from 'react-hot-toast';
 
@@ -14,6 +14,15 @@ const ROLE_LABELS: Record<string, string> = {
   researcher:  'Researcher',
   technician:  'Technician',
   viewer:      'Viewer',
+};
+
+const ROLE_ICON: Record<string, React.ElementType> = {
+  super_admin: ShieldCheck,
+  admin:       Shield,
+  operator:    Sliders,
+  researcher:  FlaskConical,
+  technician:  Wrench,
+  viewer:      Eye,
 };
 
 function roleTag(role: string) {
@@ -341,7 +350,10 @@ export function UsersPage() {
                     </div>
                   </td>
                   <td>
-                    <span className={`tag ${roleTag(u.role)}`}>{ROLE_LABELS[u.role] ?? u.role}</span>
+                    <span className={`tag ${roleTag(u.role)}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                      {(() => { const Icon = ROLE_ICON[u.role] ?? Shield; return <Icon size={11} />; })()}
+                      {ROLE_LABELS[u.role] ?? u.role}
+                    </span>
                   </td>
                   <td className="hide-sm">
                     <span className={`tag tag-${u.isActive !== false ? 'online' : 'offline'}`}>

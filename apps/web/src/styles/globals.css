@@ -522,6 +522,11 @@
   }
   .dark .tt { background: hsl(var(--surface)); color: hsl(var(--fg)); border: 1px solid hsl(var(--border)); }
 
+  /* Dim bright ink-colored borders in dark mode */
+  .dark .ph       { border-bottom-color: hsl(var(--fg) / 0.18); }
+  .dark .ticker   { border-top-color:    hsl(var(--fg) / 0.18); }
+  .dark .hr-strong { border-top-color:   hsl(var(--fg) / 0.18); }
+
   /* ── Modal / sheet ───────────────────────────────────── */
   .modal-backdrop {
     position: fixed; inset: 0;
