@@ -166,13 +166,13 @@ export function DashboardPage() {
     refetchInterval: 15_000,
   });
 
-  const devices = Array.isArray(devicesData?.devices) ? devicesData.devices : [];
-  const total   = typeof stats?.total === 'number' ? stats.total : 0;
-  const online  = typeof stats?.online === 'number' ? stats.online : 0;
-  const offline = typeof stats?.offline === 'number' ? stats.offline : 0;
-  const byCategory = Array.isArray(stats?.byCategory) ? stats.byCategory : [];
-  const activeAlerts = typeof alertsData?.total === 'number' ? alertsData.total : 0;
-  const alerts  = Array.isArray(alertsData?.alerts) ? alertsData.alerts : Array.isArray(alertsData?.data) ? alertsData.data : [];
+  const devices = devicesData?.devices ?? [];
+  const total   = stats?.total ?? 0;
+  const online  = stats?.online ?? 0;
+  const offline = stats?.offline ?? 0;
+  const byCategory = stats?.byCategory ?? [];
+  const activeAlerts = alertsData?.total ?? 0;
+  const alerts  = alertsData?.alerts ?? alertsData?.data ?? [];
   const onlineRate = total > 0 ? Math.round((online / total) * 100) : 0;
 
   // Default featured device to first device
@@ -207,26 +207,17 @@ export function DashboardPage() {
     refetchInterval: 60_000,
   });
 
-  const featuredPoints = (Array.isArray(featuredSeries?.data) ? featuredSeries.data : []).map(p => {
-    const ts = typeof p?.ts === 'string' ? new Date(p.ts).getTime() : typeof p?.ts === 'number' ? p.ts : Date.now();
-    const value = typeof p?.value === 'number' ? p.value : 0;
-    return { ts: isNaN(ts) ? Date.now() : ts, value: isNaN(value) ? 0 : value };
-  });
+  const featuredPoints = (featuredSeries?.data ?? []).map(p => ({
+    ts: typeof p.ts === 'string' ? new Date(p.ts).getTime() : p.ts,
+    value: typeof p.value === 'number' ? p.value : 0,
+  }));
 
   // Sparkline data per device (mock last few values from latest)
   function sparkData(d: any): number[] {
-    try {
-      const f = featuredLatest?.fields ?? {};
-      const nums = Object.values(f).filter(v => typeof v === 'number') as number[];
-      if (nums.length === 0) return [];
-      const baseVal = typeof nums[0] === 'number' ? nums[0] : 0;
-      return Array.from({ length: 12 }, (_, i) => {
-        const charCode = d?.name?.charCodeAt?.(0) ?? 0;
-        return baseVal * (0.9 + Math.sin(i + charCode) * 0.08);
-      });
-    } catch {
-      return [];
-    }
+    const f = featuredLatest?.fields ?? {};
+    const nums = Object.values(f).filter(v => typeof v === 'number') as number[];
+    if (nums.length === 0) return [];
+    return Array.from({ length: 12 }, (_, i) => nums[0] * (0.9 + Math.sin(i + d.name?.charCodeAt(0)) * 0.08));
   }
 
   useEffect(() => {

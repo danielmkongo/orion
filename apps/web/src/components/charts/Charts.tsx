@@ -49,13 +49,7 @@ export function LineChart({
 
   const allMapped = series.flatMap(normalize_);
 
-  const renderEmpty = (msg = 'No data') => (
-    <div ref={wrapRef} style={{ height }} className="flex items-center justify-center">
-      <span style={{ fontSize: 13, opacity: 0.45 }}>{msg}</span>
-    </div>
-  );
-
-  if (!w || allMapped.length === 0) return renderEmpty();
+  const isEmpty = !w || allMapped.length === 0;
 
   const allTs = allMapped.map(d => d.ts);
   const minTs = Math.min(...allTs);
@@ -130,6 +124,11 @@ export function LineChart({
 
   return (
     <div ref={wrapRef} style={{ position: 'relative', height }}>
+      {isEmpty ? (
+        <div className="flex items-center justify-center h-full">
+          <span style={{ fontSize: 13, opacity: 0.45 }}>No data</span>
+        </div>
+      ) : (
       <svg
         width={w} height={height}
         style={{ overflow: 'visible', display: 'block' }}
@@ -190,9 +189,10 @@ export function LineChart({
             stroke="currentColor" strokeOpacity={0.15} strokeWidth={1} strokeDasharray="3 3" />
         )}
       </svg>
+      )}
 
       {/* Tooltip */}
-      {hover && (
+      {!isEmpty && hover && (
         <div className="tt" style={{
           position: 'absolute', top: PAD.top,
           left: hover.x > w * 0.65 ? hover.x - 8 : hover.x + 8,
@@ -233,20 +233,22 @@ export function Sparkline({
   const w = useWidth(ref);
   const uid = useRef(`sp-${Math.random().toString(36).slice(2)}`).current;
 
-  if (!w || data.length < 2) return <div ref={ref} style={{ height }} />;
-
-  const minV = Math.min(...data);
-  const maxV = Math.max(...data);
-  const range = maxV - minV || 1;
-  const pts = data.map((v, i) => ({
+  const isEmpty = !w || data.length < 2;
+  const minV = isEmpty ? 0 : Math.min(...data);
+  const maxV = isEmpty ? 0 : Math.max(...data);
+  const range = isEmpty ? 1 : (maxV - minV || 1);
+  const pts = isEmpty ? [] : data.map((v, i) => ({
     x: (i / (data.length - 1)) * w,
     y: (height - 2) - ((v - minV) / range) * (height - 4) + 1,
   }));
-  const path = pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ');
-  const area = `${path} L ${pts[pts.length - 1].x.toFixed(1)} ${height} L 0 ${height} Z`;
+  const path = isEmpty ? '' : pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ');
+  const area = isEmpty ? '' : `${path} L ${pts[pts.length - 1].x.toFixed(1)} ${height} L 0 ${height} Z`;
 
   return (
     <div ref={ref} style={{ height }}>
+      {isEmpty ? (
+        <div style={{ height }} />
+      ) : (
       <svg width={w} height={height} style={{ overflow: 'hidden', display: 'block' }}>
         {fill && (
           <>
@@ -262,6 +264,7 @@ export function Sparkline({
         <path d={path} fill="none" stroke={color} strokeWidth={1.5}
           strokeLinejoin="round" strokeLinecap="round" />
       </svg>
+      )}
     </div>
   );
 }
@@ -281,9 +284,8 @@ export function BarChart({
   const ref = useRef<HTMLDivElement | null>(null);
   const w = useWidth(ref);
 
-  if (!w || data.length === 0) return <div ref={ref} style={{ height }} />;
-
-  const maxV = Math.max(...data.map(d => d.value)) || 1;
+  const isEmpty = !w || data.length === 0;
+  const maxV = isEmpty ? 1 : Math.max(...data.map(d => d.value)) || 1;
   const PAD = { top: 8, right: horizontal ? 48 : 8, bottom: horizontal ? 8 : 24, left: horizontal ? 96 : 8 };
   const innerW = w - PAD.left - PAD.right;
   const innerH = height - PAD.top - PAD.bottom;
@@ -294,6 +296,9 @@ export function BarChart({
 
   return (
     <div ref={ref} style={{ height }}>
+      {isEmpty ? (
+        <div style={{ height }} />
+      ) : (
       <svg width={w} height={height} style={{ overflow: 'visible', display: 'block' }}>
         {data.map((d, i) => {
           const bc = d.color ?? color;
@@ -346,6 +351,7 @@ export function BarChart({
           );
         })}
       </svg>
+      )}
     </div>
   );
 }
