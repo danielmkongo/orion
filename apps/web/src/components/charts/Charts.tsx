@@ -15,6 +15,26 @@ function useWidth(ref: RefObject<HTMLDivElement | null>): number {
 
 const PALETTE = ['#FF6A30', '#5B8DEF', '#22C55E', '#F59E0B', '#8B5CF6', '#06B6D4', '#F43F5E', '#10B981'];
 
+/** Catmull-Rom → cubic Bézier smooth path through {x,y} points */
+function smoothCurve(pts: { x: number; y: number }[]): string {
+  if (pts.length === 0) return '';
+  if (pts.length === 1) return `M ${pts[0].x.toFixed(1)} ${pts[0].y.toFixed(1)}`;
+  const T = 0.4;
+  let d = `M ${pts[0].x.toFixed(1)} ${pts[0].y.toFixed(1)}`;
+  for (let i = 1; i < pts.length; i++) {
+    const p0 = pts[Math.max(0, i - 2)];
+    const p1 = pts[i - 1];
+    const p2 = pts[i];
+    const p3 = pts[Math.min(pts.length - 1, i + 1)];
+    const cp1x = p1.x + (p2.x - p0.x) * T;
+    const cp1y = p1.y + (p2.y - p0.y) * T;
+    const cp2x = p2.x - (p3.x - p1.x) * T;
+    const cp2y = p2.y - (p3.y - p1.y) * T;
+    d += ` C ${cp1x.toFixed(1)},${cp1y.toFixed(1)} ${cp2x.toFixed(1)},${cp2y.toFixed(1)} ${p2.x.toFixed(1)},${p2.y.toFixed(1)}`;
+  }
+  return d;
+}
+
 export interface ChartSeries {
   name: string;
   data: Array<{ ts: number | string; value: number }>;
@@ -87,14 +107,18 @@ export function LineChart({
     return d.toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit' });
   };
 
+  const toXY = (data: { ts: number; value: number }[], yFn: (v: number) => number) =>
+    data.map(p => ({ x: xScale(p.ts), y: yFn(p.value) }));
+
   const buildPath = (data: { ts: number; value: number }[], yFn: (v: number) => number) =>
-    data.map((p, i) => `${i === 0 ? 'M' : 'L'} ${xScale(p.ts).toFixed(1)} ${yFn(p.value).toFixed(1)}`).join(' ');
+    smoothCurve(toXY(data, yFn));
 
   const buildArea = (data: { ts: number; value: number }[], yFn: (v: number) => number) => {
     if (data.length < 2) return '';
-    const line = buildPath(data, yFn);
+    const xy = toXY(data, yFn);
+    const line = smoothCurve(xy);
     const bot = (PAD.top + innerH).toFixed(1);
-    return `${line} L ${xScale(data[data.length - 1].ts).toFixed(1)} ${bot} L ${xScale(data[0].ts).toFixed(1)} ${bot} Z`;
+    return `${line} L ${xy[xy.length - 1].x.toFixed(1)} ${bot} L ${xy[0].x.toFixed(1)} ${bot} Z`;
   };
 
   const yTicks = 4;
@@ -241,7 +265,7 @@ export function Sparkline({
     x: (i / (data.length - 1)) * w,
     y: (height - 2) - ((v - minV) / range) * (height - 4) + 1,
   }));
-  const path = isEmpty ? '' : pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ');
+  const path = isEmpty ? '' : smoothCurve(pts);
   const area = isEmpty ? '' : `${path} L ${pts[pts.length - 1].x.toFixed(1)} ${height} L 0 ${height} Z`;
 
   return (

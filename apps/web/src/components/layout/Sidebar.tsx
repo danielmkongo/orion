@@ -14,7 +14,7 @@ const NAV: Array<{
   { num: '02', href: '/telemetry', label: 'Telemetry',  icon: Activity,  group: 'MONITOR'      },
   { num: '03', href: '/alerts',    label: 'Alerts',     icon: Bell                              },
   { num: '04', href: '/map',       label: 'Map',        icon: Map                               },
-  { num: '05', href: '/devices',   label: 'Devices',    icon: Cpu,       group: 'FLEET'        },
+  { num: '05', href: '/devices',   label: 'Devices',    icon: Cpu,       group: 'DEVICES'      },
   { num: '06', href: '/control',   label: 'Control',    icon: Sliders                           },
   { num: '07', href: '/ota',       label: 'Firmware',   icon: Download                          },
   { num: '08', href: '/rules',     label: 'Rules',      icon: Zap,       group: 'INTELLIGENCE' },

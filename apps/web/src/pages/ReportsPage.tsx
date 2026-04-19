@@ -33,13 +33,24 @@ function LocalLineChart({ data, height, color }: { data: { v: number }[]; height
   const min = Math.min(...data.map(d => d.v));
   const max = Math.max(...data.map(d => d.v));
   const range = max - min || 1;
-  const pts = data.map((d, i) => `${(i / (data.length - 1)) * 100},${((max - d.v) / range) * 94 + 3}`).join(' ');
-  const fill = `${pts} 100,100 0,100`;
+  const pts = data.map((d, i) => ({
+    x: (i / (data.length - 1)) * 100,
+    y: ((max - d.v) / range) * 94 + 3,
+  }));
+  const T = 0.4;
+  let linePath = `M ${pts[0].x.toFixed(1)} ${pts[0].y.toFixed(1)}`;
+  for (let i = 1; i < pts.length; i++) {
+    const p0 = pts[Math.max(0, i - 2)], p1 = pts[i - 1], p2 = pts[i], p3 = pts[Math.min(pts.length - 1, i + 1)];
+    const cp1x = p1.x + (p2.x - p0.x) * T, cp1y = p1.y + (p2.y - p0.y) * T;
+    const cp2x = p2.x - (p3.x - p1.x) * T, cp2y = p2.y - (p3.y - p1.y) * T;
+    linePath += ` C ${cp1x.toFixed(1)},${cp1y.toFixed(1)} ${cp2x.toFixed(1)},${cp2y.toFixed(1)} ${p2.x.toFixed(1)},${p2.y.toFixed(1)}`;
+  }
+  const areaPath = `${linePath} L 100,100 L 0,100 Z`;
   const c = color || '#FF5B1F';
   return (
     <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ width: '100%', height, display: 'block' }}>
-      <polygon points={fill} fill={c} fillOpacity="0.08" />
-      <polyline points={pts} fill="none" stroke={c} strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
+      <path d={areaPath} fill={c} fillOpacity="0.08" />
+      <path d={linePath} fill="none" stroke={c} strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
     </svg>
   );
 }
@@ -128,7 +139,7 @@ export function ReportsPage() {
       ? devices.filter(d => report.devices.includes(d._id))
       : devices;
     printRef.current.innerHTML = `
-      <h1 style="font-family:serif;font-size:28px;margin-bottom:12px">${report?.title ?? 'Fleet Report'}</h1>
+      <h1 style="font-family:serif;font-size:28px;margin-bottom:12px">${report?.title ?? 'Device Report'}</h1>
       <p style="font-size:13px;color:#666;margin-bottom:24px">Range: ${report?.range ?? range} · Generated ${new Date().toLocaleString()}</p>
       <table style="width:100%;border-collapse:collapse;font-size:13px">
         <thead><tr style="border-bottom:2px solid #000">
@@ -161,7 +172,7 @@ export function ReportsPage() {
             <span className="eyebrow">Intelligence · Operational reports</span>
           </div>
           <h1><em>Reports</em>.</h1>
-          <p className="lede">Scheduled and ad-hoc reports across your entire Orion fleet. Export to PDF or CSV, or schedule an email digest.</p>
+          <p className="lede">Scheduled and ad-hoc reports across your entire Orion platform. Export to PDF or CSV, or schedule an email digest.</p>
         </div>
         <div style={{ gridColumn: 3, display: 'flex', alignItems: 'flex-end', gap: '8px', paddingBottom: '20px' }}>
           <div className="seg">
@@ -181,7 +192,7 @@ export function ReportsPage() {
       {/* ── KPI ticker ── */}
       <div className="ticker">
         {([
-          ['Fleet uptime', `${uptime}%`, '+2.1%', '#0F7A3D'],
+          ['Platform uptime', `${uptime}%`, '+2.1%', '#0F7A3D'],
           ['Avg. battery', `${avgBattery}%`, '−3.4%', '#FACC15'],
           ['Ingested events', '1.24M', '+18%', '#FF5B1F'],
           ['Incidents · week', String(incidents), incidents > 0 ? `+${incidents}` : '0', '#0B0B0A'],
@@ -329,7 +340,7 @@ export function ReportsPage() {
                     value={newTitle}
                     onChange={e => setNewTitle(e.target.value)}
                     className="input"
-                    placeholder="Fleet health weekly, Energy consumption…"
+                    placeholder="Device health weekly, Energy consumption…"
                   />
                 </div>
 

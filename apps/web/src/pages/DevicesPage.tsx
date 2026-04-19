@@ -73,7 +73,7 @@ export function DevicesPage() {
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '6px' }}>
             <span className="eyebrow">Inventory · Catalog</span>
           </div>
-          <h1>The <em>Fleet</em>.</h1>
+          <h1>The <em>Network</em>.</h1>
           <p className="lede">
             {isLoading ? 'Loading…' : `${devices.length} of ${total} devices.`} Search, filter, and jump into any device for live telemetry, commands, and location.
           </p>

@@ -220,7 +220,7 @@ export function MapPage() {
       <div style={{ display: 'flex', flexDirection: 'column', background: 'hsl(var(--bg))', borderLeft: '1px solid hsl(var(--border))', overflow: 'hidden' }}>
         {/* Panel header */}
         <div style={{ padding: '18px 20px', borderBottom: '1px solid hsl(var(--border))' }}>
-          <div className="eyebrow" style={{ marginBottom: '12px' }}>Geography · Fleet map</div>
+          <div className="eyebrow" style={{ marginBottom: '12px' }}>Geography · Device map</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', height: '34px', padding: '0 10px', border: '1px solid hsl(var(--border))', background: 'hsl(var(--surface))', marginBottom: '10px' }}>
             <Search size={13} style={{ color: 'hsl(var(--muted-fg))', flexShrink: 0 }} />
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search devices…"

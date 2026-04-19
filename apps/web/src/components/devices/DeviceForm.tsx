@@ -170,15 +170,28 @@ function GraphPreview({ field, compact }: { field: DataField; compact?: boolean 
   const h = compact ? 40 : 60;
   const c = field.chartColor || '#FF6A30';
   const min = Math.min(...vals), max = Math.max(...vals), range = max - min || 1;
-  const pts = vals.map((v, i) => `${(i / (vals.length - 1)) * 100},${((max - v) / range) * (h - 4) + 2}`).join(' ');
+  const xyPts = vals.map((v, i) => ({ x: (i / (vals.length - 1)) * 100, y: ((max - v) / range) * (h - 4) + 2 }));
+
+  // Catmull-Rom smooth curve
+  const T = 0.4;
+  const buildSmooth = (points: {x:number;y:number}[]) => {
+    let d = `M ${points[0].x.toFixed(1)} ${points[0].y.toFixed(1)}`;
+    for (let i = 1; i < points.length; i++) {
+      const p0 = points[Math.max(0,i-2)], p1 = points[i-1], p2 = points[i], p3 = points[Math.min(points.length-1,i+1)];
+      d += ` C ${(p1.x+(p2.x-p0.x)*T).toFixed(1)},${(p1.y+(p2.y-p0.y)*T).toFixed(1)} ${(p2.x-(p3.x-p1.x)*T).toFixed(1)},${(p2.y-(p3.y-p1.y)*T).toFixed(1)} ${p2.x.toFixed(1)},${p2.y.toFixed(1)}`;
+    }
+    return d;
+  };
+  const linePath = buildSmooth(xyPts);
+  const areaPath = `${linePath} L ${xyPts[xyPts.length-1].x.toFixed(1)},${h} L 0,${h} Z`;
 
   const preview = (() => {
     switch (field.chartType) {
       case 'area':
         return (
           <svg viewBox={`0 0 100 ${h}`} preserveAspectRatio="none" style={{ width: '100%', height: h, display: 'block' }}>
-            <polygon points={`${pts} 100,${h} 0,${h}`} fill={c} fillOpacity="0.18" />
-            <polyline points={pts} fill="none" stroke={c} strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
+            <path d={areaPath} fill={c} fillOpacity="0.18" />
+            <path d={linePath} fill="none" stroke={c} strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
           </svg>
         );
       case 'bar':
@@ -220,7 +233,7 @@ function GraphPreview({ field, compact }: { field: DataField; compact?: boolean 
       default: // line
         return (
           <svg viewBox={`0 0 100 ${h}`} preserveAspectRatio="none" style={{ width: '100%', height: h, display: 'block' }}>
-            <polyline points={pts} fill="none" stroke={c} strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
+            <path d={linePath} fill="none" stroke={c} strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
           </svg>
         );
     }

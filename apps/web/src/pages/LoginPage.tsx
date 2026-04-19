@@ -11,7 +11,7 @@ const FEATURES = [
   { icon: Wifi,      label: 'Any Protocol',    desc: 'MQTT · HTTP · WebSocket' },
   { icon: BarChart2, label: 'Live Analytics',   desc: 'Real-time dashboards'    },
   { icon: Shield,    label: 'Rules Engine',     desc: 'Automated responses'     },
-  { icon: Cpu,       label: 'Fleet Control',    desc: 'OTA · Commands · Alerts' },
+  { icon: Cpu,       label: 'Device Control',   desc: 'OTA · Commands · Alerts' },
 ];
 
 export function LoginPage() {

@@ -120,7 +120,7 @@ export function DashboardPage() {
           </div>
           <h1>{greeting()}, <em>{user?.name?.split(' ')[0] ?? 'there'}</em>.</h1>
           <p className="lede">
-            {total} device{total !== 1 ? 's' : ''} across {byCategory.length} categories reporting. Fleet health <strong style={{ color: 'hsl(var(--fg))' }}>{onlineRate}%</strong>.
+            {total} device{total !== 1 ? 's' : ''} across {byCategory.length} categories reporting. Platform health <strong style={{ color: 'hsl(var(--fg))' }}>{onlineRate}%</strong>.
             {activeAlerts > 0 && ` ${activeAlerts} alert${activeAlerts !== 1 ? 's' : ''} require attention.`}
           </p>
         </div>
@@ -162,7 +162,7 @@ export function DashboardPage() {
               <span className="mono" style={{ fontSize: '11px', color: 'hsl(var(--primary))' }}>{onlineRate}%</span>
             </div>
           </div>
-          <div className="mono faint" style={{ fontSize: '11px', marginTop: '4px' }}>fleet rate · live</div>
+          <div className="mono faint" style={{ fontSize: '11px', marginTop: '4px' }}>online rate · live</div>
         </div>
 
         <div>

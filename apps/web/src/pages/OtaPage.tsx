@@ -312,7 +312,7 @@ export function OtaPage() {
         <div>
           <div style={{ marginBottom: 6 }}><span className="eyebrow">Maintain · Firmware management</span></div>
           <h1>OTA <em>Updates</em>.</h1>
-          <p className="lede">Manage firmware versions and orchestrate over-the-air update rollouts across your fleet.</p>
+          <p className="lede">Manage firmware versions and orchestrate over-the-air update rollouts across your devices.</p>
         </div>
         <div style={{ gridColumn: 3, display: 'flex', alignItems: 'flex-end', gap: 8, paddingBottom: 20 }}>
           <button className="btn btn-primary btn-sm" style={{ gap: 6 }} onClick={() => setShowUpload(true)}>
