@@ -7,7 +7,7 @@ import {
   Code2, RefreshCw, Copy, Navigation2, Thermometer,
   Zap, Waves, Settings2, Radio, FlaskConical, Cog, Cpu,
   Smartphone, Building2, LineChart, AreaChart, BarChart2,
-  Gauge, Scatter,
+  Gauge, ScatterChart,
 } from 'lucide-react';
 import {
   APIProvider, Map as GMap, AdvancedMarker, useMap,
@@ -65,7 +65,7 @@ const CHART_TYPES: { value: DataField['chartType']; label: string; Icon: React.F
   { value: 'area',    label: 'Area',    Icon: AreaChart  },
   { value: 'bar',     label: 'Bar',     Icon: BarChart2  },
   { value: 'gauge',   label: 'Gauge',   Icon: Gauge      },
-  { value: 'scatter', label: 'Scatter', Icon: Scatter    },
+  { value: 'scatter', label: 'Scatter', Icon: ScatterChart },
 ];
 
 const CHART_COLORS = [
