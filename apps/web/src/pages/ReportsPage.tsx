@@ -1,59 +1,72 @@
 import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { motion } from 'framer-motion';
-import { Download, TrendingUp, TrendingDown } from 'lucide-react';
+import { Download, Plus } from 'lucide-react';
 import { devicesApi } from '@/api/devices';
-import { PageHeader } from '@/components/ui/PageHeader';
-import { Donut, BarChart } from '@/components/charts/Charts';
-import toast from 'react-hot-toast';
 
-interface Report {
-  period: '24h' | '7d' | '30d';
-  label: string;
+function Seg({ value, onChange, items }: { value: string; onChange: (v: string) => void; items: Array<{ v: string; l: string }> }) {
+  return (
+    <div
+      style={{
+        display: 'inline-flex',
+        padding: '3px',
+        border: '1px solid hsl(var(--border))',
+        background: 'hsl(var(--surface))',
+        borderRadius: 0,
+      }}
+    >
+      {items.map((item) => (
+        <button
+          key={item.v}
+          onClick={() => onChange(item.v)}
+          style={{
+            border: 0,
+            background: value === item.v ? 'hsl(var(--fg))' : 'transparent',
+            color: value === item.v ? 'hsl(var(--bg))' : 'hsl(var(--muted-fg))',
+            padding: '5px 12px',
+            fontFamily: 'var(--font-mono)',
+            fontSize: '10.5px',
+            letterSpacing: '0.14em',
+            textTransform: 'uppercase',
+            cursor: 'pointer',
+            fontWeight: 500,
+          }}
+        >
+          {item.l}
+        </button>
+      ))}
+    </div>
+  );
 }
 
-const PERIODS: Report[] = [
-  { period: '24h', label: '24h' },
-  { period: '7d', label: '7d' },
-  { period: '30d', label: '30d' },
-];
+function LineChart({ series, height, colors }: { series: Array<{ name: string; data: Array<{ t: number; v: number }> }>; height: number; colors?: string[] }) {
+  const data = series[0]?.data || [];
+  if (data.length === 0) return null;
 
-function StatTile({ label, value, unit, trend, color }: {
-  label: string; value: string | number; unit?: string; trend?: number; color?: string;
-}) {
+  const min = Math.min(...data.map((d) => d.v));
+  const max = Math.max(...data.map((d) => d.v));
+  const range = max - min || 1;
+  const points = data.map((d, i) => ({
+    x: (i / (data.length - 1)) * 100,
+    y: ((max - d.v) / range) * 100,
+  }));
+
+  const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
+  const color = colors?.[0] || 'hsl(var(--primary))';
+
   return (
-    <motion.div
-      layout
-      className="col p-4 border border-[hsl(var(--rule))]"
-      style={{ background: color ? `${color}11` : undefined }}
+    <svg
+      viewBox="0 0 100 100"
+      style={{ width: '100%', height, display: 'block' }}
+      preserveAspectRatio="none"
     >
-      <p className="eyebrow text-[9px]">{label}</p>
-      <div className="flex items-end gap-2 mt-3">
-        <span style={{ fontFamily: 'var(--font-display)', fontSize: '32px', lineHeight: 1 }}>
-          {value}
-        </span>
-        {unit && <span className="text-[13px] text-muted-foreground mb-1">{unit}</span>}
-      </div>
-      {trend !== undefined && (
-        <div className="flex items-center gap-1 mt-2">
-          {trend > 0 ? (
-            <TrendingUp size={12} className="text-green-500" />
-          ) : (
-            <TrendingDown size={12} className="text-red-500" />
-          )}
-          <span className={`text-[11px] font-mono ${trend > 0 ? 'text-green-500' : 'text-red-500'}`}>
-            {Math.abs(trend)}%
-          </span>
-        </div>
-      )}
-    </motion.div>
+      <path d={pathD} stroke={color} strokeWidth="2" fill="none" vectorEffect="non-scaling-stroke" />
+    </svg>
   );
 }
 
 export function ReportsPage() {
-  const [selectedPeriod, setSelectedPeriod] = useState<Report['period']>('7d');
+  const [range, setRange] = useState('7d');
 
-  // Fetch devices
   const { data } = useQuery({
     queryKey: ['devices'],
     queryFn: () => devicesApi.list(),
@@ -61,316 +74,485 @@ export function ReportsPage() {
 
   const devices = data?.devices ?? [];
 
-  // Calculate fleet stats
-  const fleetStats = useMemo(() => {
-    const total = devices.length;
-    const online = devices.filter(d => d.status === 'online').length;
-    const offline = devices.filter(d => d.status === 'offline').length;
-    const idle = devices.filter(d => d.status === 'idle').length;
-    const error = devices.filter(d => d.status === 'error').length;
-    const onlineRate = total > 0 ? Math.round((online / total) * 100) : 0;
-    const errorRate = total > 0 ? Math.round((error / total) * 100) : 0;
+  // Calculate KPI stats
+  const total = devices.length;
+  const online = devices.filter((d) => d.status === 'online').length;
+  const uptime = total > 0 ? Math.round((online / total) * 100) : 0;
+  const avgBattery = total > 0 ? Math.round(devices.reduce((s, d: any) => s + (d.battery || 50), 0) / total) : 0;
 
-    return { total, online, offline, idle, error, onlineRate, errorRate };
-  }, [devices]);
-
-  // Mock device uptime data
-  const uptimeData = useMemo(() => {
-    return devices.map(d => ({
-      name: d.name,
-      category: d.category,
-      protocol: d.protocol || 'http',
-      uptime24h: 95 + Math.random() * 5,
-      uptime7d: 92 + Math.random() * 6,
-      uptime30d: 88 + Math.random() * 8,
-      mtbf: 720 + Math.random() * 480,
-    })).sort((a, b) => b.uptime7d - a.uptime7d);
-  }, [devices]);
-
-  // Mock alert data
-  const alertStats = useMemo(() => {
-    const alerts24h = 12 + Math.floor(Math.random() * 20);
-    const alerts7d = 89 + Math.floor(Math.random() * 30);
-    const alerts30d = 350 + Math.floor(Math.random() * 100);
-
-    const topAlerts = [
-      { type: 'High Temperature', count: 15, trend: 8 },
-      { type: 'Connection Lost', count: 12, trend: -5 },
-      { type: 'Battery Low', count: 8, trend: 3 },
-      { type: 'Data Invalid', count: 5, trend: 0 },
-    ];
-
-    return { alerts24h, alerts7d, alerts30d, topAlerts };
+  // Mock ingestion series
+  const ingestSeries = useMemo(() => {
+    return Array.from({ length: 168 }, (_, i) => ({
+      t: i,
+      v: Math.abs(Math.sin(i / 10) * 2000) + 8000,
+    }));
   }, []);
 
-  // Export reports
-  const handleExportCSV = () => {
-    const headers = ['Device', 'Category', 'Protocol', 'Uptime 24h', 'Uptime 7d', 'Uptime 30d', 'MTBF (hours)'];
-    const rows = uptimeData.map(d => [
-      d.name, d.category, d.protocol,
-      d.uptime24h.toFixed(1) + '%',
-      d.uptime7d.toFixed(1) + '%',
-      d.uptime30d.toFixed(1) + '%',
-      d.mtbf.toFixed(0),
-    ]);
+  // Category breakdown
+  const catBreakdown = useMemo(() => {
+    const cats = devices.reduce(
+      (m, d: any) => {
+        m[d.category || 'uncategorized'] = (m[d.category || 'uncategorized'] || 0) + 1;
+        return m;
+      },
+      {} as Record<string, number>
+    );
+    return Object.entries(cats).map(([k, v]) => ({ cat: k, count: v }));
+  }, [devices]);
 
-    const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `orion-reports-${new Date().toISOString().split('T')[0]}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-    toast.success('Report exported');
-  };
+  const maxCatCount = Math.max(...catBreakdown.map((c) => c.count), 1);
 
-  const devicesByStatus = useMemo(() => [
-    { v: fleetStats.online, color: 'hsl(var(--good))' },
-    { v: fleetStats.idle, color: 'hsl(var(--warn))' },
-    { v: fleetStats.error, color: 'hsl(var(--bad))' },
-    { v: fleetStats.offline, color: 'hsl(var(--muted-fg))' },
-  ], [fleetStats]);
-
-  const alertTrendData = [
-    { label: 'Mon', value: 4 },
-    { label: 'Tue', value: 5 },
-    { label: 'Wed', value: 9 },
-    { label: 'Thu', value: 4 },
-    { label: 'Fri', value: 5 },
-    { label: 'Sat', value: 1 },
-    { label: 'Sun', value: 2 },
+  // Saved reports
+  const reports = [
+    {
+      title: 'Fleet health weekly',
+      sub: 'Uptime, battery, firmware drift across all devices.',
+      author: 'Auto · every Mon 09:00',
+      pages: 12,
+    },
+    {
+      title: 'Energy consumption · Dakar',
+      sub: 'Aggregated kWh by meter and by hour.',
+      author: 'A. Diallo · 2 days ago',
+      pages: 8,
+    },
+    {
+      title: 'Asset tracker incidents',
+      sub: 'Geo-fence exits, idle spikes, and recoveries.',
+      author: 'Auto · every Fri 18:00',
+      pages: 5,
+    },
+    {
+      title: 'Cold-chain compliance',
+      sub: 'Temperature excursions across Pharma-A cohort.',
+      author: 'M. Sarr · last week',
+      pages: 22,
+    },
   ];
 
   return (
-    <div className="page">
-      <PageHeader
-        eyebrow="Analysis"
-        title={<><em>Reports</em> & analytics.</>}
-        lede="Comprehensive device fleet analytics, uptime tracking, and performance metrics."
-        actions={
-          <button onClick={handleExportCSV} className="btn btn-primary btn-sm gap-1.5">
-            <Download size={13} /> Export CSV
-          </button>
-        }
-      />
-
-      {/* Period selector */}
-      <div className="mb-8 flex items-center gap-4">
-        <span className="eyebrow text-[9px]">Time period</span>
-        <div className="seg">
-          {PERIODS.map(p => (
-            <button
-              key={p.period}
-              onClick={() => setSelectedPeriod(p.period)}
-              className={selectedPeriod === p.period ? 'on' : ''}
+    <div style={{ padding: '40px 48px 80px', maxWidth: '1560px', margin: '0 auto' }}>
+      {/* Page Header */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'auto 1fr auto',
+          alignItems: 'flex-end',
+          gap: '24px',
+          paddingBottom: '20px',
+          borderBottom: '1px solid hsl(var(--border))',
+          marginBottom: '28px',
+        }}
+      >
+        <div>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              color: 'hsl(var(--muted-fg))',
+              marginBottom: '6px',
+            }}
+          >
+            <span
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: '10.5px',
+                fontWeight: 500,
+                letterSpacing: '0.18em',
+                textTransform: 'uppercase',
+              }}
             >
-              {p.label}
-            </button>
+              Intelligence · Operational reports
+            </span>
+          </div>
+          <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '64px', lineHeight: 0.92, letterSpacing: '-0.035em', marginTop: '6px' }}>
+            <em style={{ fontStyle: 'italic', color: 'hsl(var(--primary))' }}>Reports</em>.
+          </h1>
+          <p style={{ fontSize: '15px', color: 'hsl(var(--muted-fg))', maxWidth: '56ch', marginTop: '10px' }}>
+            Scheduled and ad-hoc reports across your entire Orion fleet. Export to PDF or Excel, or schedule an email digest.
+          </p>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <Seg value={range} onChange={setRange} items={[{ v: '24h', l: '24H' }, { v: '7d', l: '7D' }, { v: '30d', l: '30D' }, { v: '90d', l: '90D' }]} />
+          <button
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+              height: '36px',
+              padding: '0 14px',
+              fontFamily: 'var(--font-sans)',
+              fontSize: '13px',
+              fontWeight: 500,
+              border: '1px solid hsl(var(--border))',
+              background: 'hsl(var(--surface))',
+              color: 'hsl(var(--fg))',
+              cursor: 'pointer',
+            }}
+          >
+            <Download width="14" height="14" /> Export
+          </button>
+          <button
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+              height: '36px',
+              padding: '0 14px',
+              fontFamily: 'var(--font-sans)',
+              fontSize: '13px',
+              fontWeight: 500,
+              border: '1px solid hsl(var(--primary))',
+              background: 'hsl(var(--primary))',
+              color: '#fff',
+              cursor: 'pointer',
+            }}
+          >
+            <Plus width="14" height="14" /> New report
+          </button>
+        </div>
+      </div>
+
+      {/* KPI Strip */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', borderTop: '1px solid hsl(var(--border))' }}>
+        {[
+          ['Fleet uptime', uptime + '%', '+2.1%', 'hsl(var(--good))'],
+          ['Avg. battery', avgBattery + '%', '−3.4%', 'hsl(var(--warn))'],
+          ['Ingested events', '1.24M', '+18%', 'hsl(var(--primary))'],
+          ['Incidents · week', devices.length, '−1', 'hsl(var(--fg))'],
+        ].map(([k, v, c, color], i) => (
+          <div
+            key={k as string}
+            style={{
+              padding: '20px 22px 20px 0',
+              borderRight: i < 3 ? '1px solid hsl(var(--border))' : 0,
+              paddingLeft: i === 0 ? 0 : 22,
+              borderBottom: '1px solid hsl(var(--border))',
+            }}
+          >
+            <div
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: '10.5px',
+                fontWeight: 500,
+                letterSpacing: '0.18em',
+                textTransform: 'uppercase',
+                color: 'hsl(var(--muted-fg))',
+              }}
+            >
+              {k as string}
+            </div>
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'baseline',
+                marginTop: '8px',
+              }}
+            >
+              <div
+                style={{
+                  fontFamily: 'var(--font-display)',
+                  fontSize: '44px',
+                  lineHeight: 1,
+                  letterSpacing: '-0.03em',
+                  fontVariantNumeric: 'tabular-nums',
+                }}
+              >
+                {v as string}
+              </div>
+              <span
+                style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: '11px',
+                  color: color as string,
+                }}
+              >
+                {c as string}
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Section I: Ingestion Volume */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: '220px 1fr',
+          gap: '28px',
+          padding: '28px 0',
+          borderTop: '1px solid hsl(var(--border))',
+        }}
+      >
+        <div>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: '28px', lineHeight: 1, letterSpacing: '-0.02em' }}>
+            <span
+              style={{
+                display: 'block',
+                fontFamily: 'var(--font-mono)',
+                fontSize: '10.5px',
+                letterSpacing: '0.22em',
+                textTransform: 'uppercase',
+                color: 'hsl(var(--muted-fg))',
+                marginBottom: '10px',
+                fontWeight: 500,
+              }}
+            >
+              № I
+            </span>
+            Ingestion volume
+          </div>
+          <p
+            style={{
+              fontSize: '13px',
+              color: 'hsl(var(--muted-fg))',
+              maxWidth: '28ch',
+              marginTop: '8px',
+            }}
+          >
+            Events per hour across the entire platform over the selected window.
+          </p>
+        </div>
+        <div>
+          <LineChart series={[{ name: 'events/h', data: ingestSeries }]} height={260} colors={['hsl(var(--primary))']} />
+        </div>
+      </div>
+
+      {/* Section II: By Category */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: '220px 1fr',
+          gap: '28px',
+          padding: '28px 0',
+          borderTop: '1px solid hsl(var(--border))',
+        }}
+      >
+        <div>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: '28px', lineHeight: 1, letterSpacing: '-0.02em' }}>
+            <span
+              style={{
+                display: 'block',
+                fontFamily: 'var(--font-mono)',
+                fontSize: '10.5px',
+                letterSpacing: '0.22em',
+                textTransform: 'uppercase',
+                color: 'hsl(var(--muted-fg))',
+                marginBottom: '10px',
+                fontWeight: 500,
+              }}
+            >
+              № II
+            </span>
+            By category
+          </div>
+          <p
+            style={{
+              fontSize: '13px',
+              color: 'hsl(var(--muted-fg))',
+              maxWidth: '28ch',
+              marginTop: '8px',
+            }}
+          >
+            Events ingested and device count per category.
+          </p>
+        </div>
+        <div>
+          {catBreakdown.map(({ cat, count }, i) => (
+            <div key={cat} style={{ padding: '10px 0', borderBottom: '1px solid hsl(var(--border-strong))' }}>
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  marginBottom: '4px',
+                }}
+              >
+                <span style={{ fontSize: '13px', textTransform: 'capitalize' }}>{cat}</span>
+                <span
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '11px',
+                    color: 'hsl(var(--muted-fg))',
+                  }}
+                >
+                  {count} {count === 1 ? 'device' : 'devices'}
+                </span>
+              </div>
+              <div style={{ height: '6px', background: 'hsl(var(--border-strong)))', position: 'relative' }}>
+                <div
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    width: (count / maxCatCount) * 100 + '%',
+                    background: i === 0 ? 'hsl(var(--primary))' : 'hsl(var(--fg))',
+                  }}
+                />
+              </div>
+            </div>
           ))}
         </div>
       </div>
 
-      {/* Fleet Health Dashboard */}
-      <section className="mb-12">
-        <div className="mb-6">
-          <div className="no" style={{ fontFamily: 'var(--font-mono)', fontSize: '9.5px', letterSpacing: '.22em', textTransform: 'uppercase', color: 'hsl(var(--muted-fg))', marginBottom: 10 }}>№ I</div>
-          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '28px', lineHeight: 1 }}>Fleet health</h2>
-        </div>
-
-        <div className="ticker grid-cols-4 gap-px mb-8">
-          <StatTile label="Total devices" value={fleetStats.total} />
-          <StatTile label="Online now" value={fleetStats.online} unit={`/ ${fleetStats.total}`} trend={5} color="#10b981" />
-          <StatTile label="Error rate" value={fleetStats.errorRate} unit="%" color="#FF6A30" />
-          <StatTile label="Idle" value={fleetStats.idle} unit="devices" color="#F59E0B" />
-        </div>
-
-        <div className="grid grid-cols-3 gap-6">
-          {/* Online % chart */}
-          <div className="col">
-            <div className="panel p-6">
-              <div className="mb-6">
-                <p className="eyebrow text-[9px] mb-1">Fleet status</p>
-                <p style={{ fontFamily: 'var(--font-display)', fontSize: '18px', fontWeight: 500, marginTop: 4 }}>
-                  {fleetStats.onlineRate}% online
-                </p>
-              </div>
-              <Donut
-                segments={devicesByStatus}
-                size={140}
-                thickness={12}
-                centerText={
-                  <div style={{ textAlign: 'center' }}>
-                    <div style={{ fontFamily: 'var(--font-display)', fontSize: '24px', lineHeight: 1 }}>
-                      {fleetStats.online}
-                    </div>
-                    <div style={{ fontSize: '10px', marginTop: 4, color: 'hsl(var(--muted-fg))' }}>
-                      online
-                    </div>
-                  </div>
-                }
-              />
-            </div>
+      {/* Section III: Saved Reports */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: '220px 1fr',
+          gap: '28px',
+          padding: '28px 0',
+          borderTop: '1px solid hsl(var(--border))',
+        }}
+      >
+        <div>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: '28px', lineHeight: 1, letterSpacing: '-0.02em' }}>
+            <span
+              style={{
+                display: 'block',
+                fontFamily: 'var(--font-mono)',
+                fontSize: '10.5px',
+                letterSpacing: '0.22em',
+                textTransform: 'uppercase',
+                color: 'hsl(var(--muted-fg))',
+                marginBottom: '10px',
+                fontWeight: 500,
+              }}
+            >
+              № III
+            </span>
+            Saved reports
           </div>
-
-          {/* Status breakdown */}
-          <div className="col">
-            <div className="panel p-6">
-              <p className="eyebrow text-[9px] mb-4">Status breakdown</p>
-              <div className="space-y-3">
-                <div className="flex items-center justify-between text-[13px]">
-                  <span className="flex items-center gap-2">
-                    <span className="dot dot-online" />
-                    Online
-                  </span>
-                  <span className="font-mono font-semibold">{fleetStats.online}</span>
-                </div>
-                <div className="flex items-center justify-between text-[13px]">
-                  <span className="flex items-center gap-2">
-                    <span className="dot dot-warn" />
-                    Idle
-                  </span>
-                  <span className="font-mono font-semibold">{fleetStats.idle}</span>
-                </div>
-                <div className="flex items-center justify-between text-[13px]">
-                  <span className="flex items-center gap-2">
-                    <span className="dot dot-error" />
-                    Error
-                  </span>
-                  <span className="font-mono font-semibold">{fleetStats.error}</span>
-                </div>
-                <div className="flex items-center justify-between text-[13px]">
-                  <span className="flex items-center gap-2">
-                    <span className="dot dot-offline" />
-                    Offline
-                  </span>
-                  <span className="font-mono font-semibold">{fleetStats.offline}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Alert summary */}
-          <div className="col">
-            <div className="panel p-6">
-              <p className="eyebrow text-[9px] mb-4">Alert frequency</p>
-              <div className="space-y-3">
-                <div>
-                  <p className="text-[12px] text-muted-foreground">Last 24h</p>
-                  <p style={{ fontFamily: 'var(--font-display)', fontSize: '22px', fontWeight: 500, marginTop: 2 }}>
-                    {alertStats.alerts24h}
-                  </p>
-                </div>
-                <div className="pt-3 border-t border-[hsl(var(--rule))]">
-                  <p className="text-[12px] text-muted-foreground">Last 7d</p>
-                  <p style={{ fontFamily: 'var(--font-display)', fontSize: '22px', fontWeight: 500, marginTop: 2 }}>
-                    {alertStats.alerts7d}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
+          <p
+            style={{
+              fontSize: '13px',
+              color: 'hsl(var(--muted-fg))',
+              maxWidth: '28ch',
+              marginTop: '8px',
+            }}
+          >
+            Scheduled and custom reports. Click to open the generator.
+          </p>
         </div>
-      </section>
-
-      {/* Device Uptime Report */}
-      <section className="mb-12">
-        <div className="mb-6">
-          <div className="no" style={{ fontFamily: 'var(--font-mono)', fontSize: '9.5px', letterSpacing: '.22em', textTransform: 'uppercase', color: 'hsl(var(--muted-fg))', marginBottom: 10 }}>№ II</div>
-          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '28px', lineHeight: 1 }}>Device uptime</h2>
-          <p className="text-[13px] text-muted-foreground mt-2">Availability metrics across your fleet</p>
-        </div>
-
-        <div className="panel">
-          <table className="data-table w-full">
-            <thead>
-              <tr>
-                <th>Device</th>
-                <th>Category</th>
-                <th>Protocol</th>
-                <th className="text-right">24h</th>
-                <th className="text-right">7d</th>
-                <th className="text-right">30d</th>
-                <th className="text-right">MTBF</th>
-              </tr>
-            </thead>
-            <tbody>
-              {uptimeData.map(d => (
-                <tr key={d.name}>
-                  <td className="font-medium">{d.name}</td>
-                  <td className="capitalize text-[12px] text-muted-foreground">{d.category}</td>
-                  <td className="font-mono text-[11px]">{d.protocol}</td>
-                  <td className="text-right">
-                    <span className={d.uptime24h > 95 ? 'text-green-500' : d.uptime24h > 85 ? 'text-yellow-500' : 'text-red-500'}>
-                      {d.uptime24h.toFixed(1)}%
-                    </span>
-                  </td>
-                  <td className="text-right">
-                    <span className={d.uptime7d > 95 ? 'text-green-500' : d.uptime7d > 85 ? 'text-yellow-500' : 'text-red-500'}>
-                      {d.uptime7d.toFixed(1)}%
-                    </span>
-                  </td>
-                  <td className="text-right">
-                    <span className={d.uptime30d > 95 ? 'text-green-500' : d.uptime30d > 85 ? 'text-yellow-500' : 'text-red-500'}>
-                      {d.uptime30d.toFixed(1)}%
-                    </span>
-                  </td>
-                  <td className="text-right font-mono text-[11px] text-muted-foreground">
-                    {d.mtbf.toFixed(0)}h
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      {/* Top Alerts */}
-      <section className="mb-12">
-        <div className="mb-6">
-          <div className="no" style={{ fontFamily: 'var(--font-mono)', fontSize: '9.5px', letterSpacing: '.22em', textTransform: 'uppercase', color: 'hsl(var(--muted-fg))', marginBottom: 10 }}>№ III</div>
-          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '28px', lineHeight: 1 }}>Top alerts</h2>
-          <p className="text-[13px] text-muted-foreground mt-2">Most frequently triggered alert types</p>
-        </div>
-
-        <div className="grid grid-cols-4 gap-4">
-          {alertStats.topAlerts.map(alert => (
-            <motion.div key={alert.type} className="panel p-4">
-              <p className="text-[12px] font-medium mb-3">{alert.type}</p>
-              <div className="flex items-baseline gap-2">
-                <span style={{ fontFamily: 'var(--font-display)', fontSize: '28px', lineHeight: 1 }}>
-                  {alert.count}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0 }}>
+          {reports.map((r, i) => (
+            <div
+              key={i}
+              style={{
+                padding: '22px',
+                borderTop: '1px solid hsl(var(--border))',
+                borderRight: i % 2 === 0 ? '1px solid hsl(var(--border))' : 0,
+                cursor: 'pointer',
+                transition: 'background 0.15s',
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = 'hsl(var(--surface-raised))')}
+              onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  marginBottom: '8px',
+                }}
+              >
+                <span
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '10.5px',
+                    color: 'hsl(var(--muted-fg))',
+                  }}
+                >
+                  REPORT № {String(i + 1).padStart(2, '0')}
                 </span>
-                <div className="flex items-center gap-1">
-                  {alert.trend > 0 ? (
-                    <TrendingUp size={12} className="text-red-500" />
-                  ) : alert.trend < 0 ? (
-                    <TrendingDown size={12} className="text-green-500" />
-                  ) : (
-                    <span className="text-[11px] text-muted-foreground">—</span>
-                  )}
-                  <span className={`text-[11px] font-mono ${alert.trend > 0 ? 'text-red-500' : alert.trend < 0 ? 'text-green-500' : 'text-muted-foreground'}`}>
-                    {alert.trend > 0 ? '+' : ''}{alert.trend}%
-                  </span>
+                <span
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    fontSize: '10.5px',
+                    fontFamily: 'var(--font-mono)',
+                    letterSpacing: '0.1em',
+                    textTransform: 'uppercase',
+                    padding: '3px 8px',
+                    border: '1px solid hsl(var(--border))',
+                    borderRadius: 0,
+                    color: 'hsl(var(--muted-fg))',
+                  }}
+                >
+                  {r.pages}pp
+                </span>
+              </div>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: '24px', lineHeight: 1.1 }}>
+                {r.title}
+              </div>
+              <p
+                style={{
+                  fontSize: '13px',
+                  color: 'hsl(var(--muted-fg))',
+                  marginTop: '8px',
+                }}
+              >
+                {r.sub}
+              </p>
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  marginTop: '16px',
+                }}
+              >
+                <span
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '10.5px',
+                    color: 'hsl(var(--muted-fg))',
+                  }}
+                >
+                  {r.author}
+                </span>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      height: '30px',
+                      padding: '0 10px',
+                      fontFamily: 'var(--font-sans)',
+                      fontSize: '12px',
+                      fontWeight: 500,
+                      border: '1px solid hsl(var(--border))',
+                      background: 'transparent',
+                      color: 'hsl(var(--fg))',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <Download width="12" height="12" /> PDF
+                  </button>
+                  <button
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      height: '30px',
+                      padding: '0 10px',
+                      fontFamily: 'var(--font-sans)',
+                      fontSize: '12px',
+                      fontWeight: 500,
+                      border: '1px solid hsl(var(--border))',
+                      background: 'transparent',
+                      color: 'hsl(var(--fg))',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <Download width="12" height="12" /> XLSX
+                  </button>
                 </div>
               </div>
-            </motion.div>
+            </div>
           ))}
         </div>
-      </section>
-
-      {/* Alert Trend Chart */}
-      <section>
-        <div className="mb-6">
-          <div className="no" style={{ fontFamily: 'var(--font-mono)', fontSize: '9.5px', letterSpacing: '.22em', textTransform: 'uppercase', color: 'hsl(var(--muted-fg))', marginBottom: 10 }}>№ IV</div>
-          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '28px', lineHeight: 1 }}>Alert volume</h2>
-          <p className="text-[13px] text-muted-foreground mt-2">7-day alert trend</p>
-        </div>
-
-        <div className="panel p-6">
-          <BarChart data={alertTrendData} height={240} color="#F59E0B" />
-        </div>
-      </section>
+      </div>
     </div>
   );
 }
