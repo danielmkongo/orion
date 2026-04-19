@@ -113,6 +113,41 @@ export function debounce<T extends (...args: any[]) => any>(fn: T, delay: number
   }) as T;
 }
 
+/** Format a payload object according to the device's chosen payloadFormat */
+export function formatPayloadStr(data: Record<string, unknown>, format: string): string {
+  switch (format) {
+    case 'xml': {
+      const inner = Object.entries(data)
+        .map(([k, v]) => `  <${k}>${v}</${k}>`)
+        .join('\n');
+      return `<data>\n${inner}\n</data>`;
+    }
+    case 'csv': {
+      const keys = Object.keys(data).join(',');
+      const vals = Object.values(data).map(v => (typeof v === 'string' && v.includes(',') ? `"${v}"` : v)).join(',');
+      return `${keys}\n${vals}`;
+    }
+    case 'raw':
+      return Object.entries(data).map(([k, v]) => `${k}=${v}`).join('&');
+    default:
+      return JSON.stringify(data, null, 2);
+  }
+}
+
+/** Format a single command for dispatch in the device's payloadFormat */
+export function formatCommandStr(name: string, value: unknown, format: string): string {
+  switch (format) {
+    case 'xml':
+      return `<command>\n  <name>${name}</name>\n  <value>${value}</value>\n</command>`;
+    case 'csv':
+      return `${name},${value}`;
+    case 'raw':
+      return `${name}=${value}`;
+    default:
+      return JSON.stringify({ [name]: value }, null, 2);
+  }
+}
+
 export async function copyText(text: string): Promise<void> {
   try {
     await navigator.clipboard.writeText(text);

@@ -63,15 +63,17 @@ export function DashboardPage() {
     refetchInterval: 30_000,
   });
 
+  const numericFields = featuredLatest?.fields
+    ? Object.entries(featuredLatest.fields).filter(([, v]) => typeof v === 'number').map(([k]) => k)
+    : [];
+
+  const numericFieldsKey = numericFields.join(',');
   useEffect(() => {
-    if (!featuredLatest?.fields) return;
-    const numFields = Object.entries(featuredLatest.fields)
-      .filter(([, v]) => typeof v === 'number')
-      .map(([k]) => k);
-    if (numFields.length > 0 && !numFields.includes(featuredField)) {
-      setFeaturedField(numFields[0]);
+    if (numericFields.length > 0 && !numericFields.includes(featuredField)) {
+      setFeaturedField(numericFields[0]);
     }
-  }, [featuredLatest, effectiveDeviceId]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [effectiveDeviceId, numericFieldsKey]);
 
   const from = new Date(Date.now() - 24 * 3600_000).toISOString();
   const to = new Date().toISOString();
@@ -187,14 +189,36 @@ export function DashboardPage() {
         {/* Chart — 2/3 */}
         <div style={{ padding: '24px 24px 24px 0', borderRight: '1px solid hsl(var(--border))' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px', gap: '12px', flexWrap: 'wrap' }}>
-            <div>
-              <div className="eyebrow">Featured telemetry</div>
-              <div style={{ fontFamily: 'var(--font-display)', fontSize: '28px', lineHeight: 1, marginTop: '4px', textTransform: 'capitalize' }}>
-                {(devices as any[]).find(d => (d._id ?? d.id) === effectiveDeviceId)?.name ?? 'Select a device'}{' '}
-                <span style={{ fontStyle: 'italic', color: 'hsl(var(--primary))' }}>· 24 hours</span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div className="eyebrow" style={{ marginBottom: '8px' }}>Featured telemetry</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                <select
+                  value={effectiveDeviceId}
+                  onChange={e => setFeaturedDeviceId(e.target.value)}
+                  className="select"
+                  style={{ fontSize: '13px', maxWidth: '200px' }}
+                >
+                  {(devices as any[]).map(d => (
+                    <option key={d._id ?? d.id} value={d._id ?? d.id}>{d.name}</option>
+                  ))}
+                  {devices.length === 0 && <option value="">No devices</option>}
+                </select>
+                <span className="mono faint" style={{ fontSize: '11px' }}>Field:</span>
+                <select
+                  value={featuredField}
+                  onChange={e => setFeaturedField(e.target.value)}
+                  className="select"
+                  style={{ fontSize: '13px', maxWidth: '160px' }}
+                  disabled={numericFields.length === 0}
+                >
+                  {numericFields.length > 0
+                    ? numericFields.map(f => <option key={f} value={f}>{f}</option>)
+                    : <option value={featuredField}>{featuredField}</option>
+                  }
+                </select>
               </div>
             </div>
-            <div className="seg">
+            <div className="seg" style={{ flexShrink: 0 }}>
               {['1H', '6H', '24H', '7D'].map(l => (
                 <button key={l} className={range === l.toLowerCase() ? 'on' : ''} onClick={() => setRange(l.toLowerCase())}>{l}</button>
               ))}

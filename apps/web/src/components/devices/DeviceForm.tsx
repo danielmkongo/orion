@@ -9,6 +9,7 @@ import { devicesApi } from '@/api/devices';
 import type { DeviceCategory, DeviceProtocol, DevicePayloadFormat } from '@orion/shared';
 import toast from 'react-hot-toast';
 import { LineChart as CustomLineChart, Sparkline } from '@/components/charts/Charts';
+import { formatPayloadStr } from '@/lib/utils';
 
 /* ─── Types ─────────────────────────────────────────────────────── */
 export interface DataField {
@@ -332,11 +333,27 @@ function GraphPreview({ field, compact }: { field: DataField; compact?: boolean 
 }
 
 /* ─── Command preview ────────────────────────────────────────────────── */
-function CommandPreview({ cmd }: { cmd: Command }) {
+function CommandPreview({ cmd, payloadFormat = 'json' }: { cmd: Command; payloadFormat?: string }) {
   const [bv, setBv] = useState(cmd.def as boolean ?? false);
   const [nv, setNv] = useState(cmd.def as number ?? 0);
   const [ev, setEv] = useState((cmd.values || '').split(',')[0] || '');
   const [pressed, setPressed] = useState(false);
+
+  const previewStr = cmd.name
+    ? formatPayloadStr(
+        { [cmd.name]: cmd.ctype === 'boolean' ? bv : cmd.ctype === 'number' ? nv : cmd.ctype === 'enum' ? ev || 'option' : cmd.ctype === 'action' ? null : '' },
+        payloadFormat
+      )
+    : null;
+
+  const PreviewLine = () => previewStr ? (
+    <div style={{ marginTop: 10, borderTop: '1px solid hsl(var(--rule-ghost))', paddingTop: 8 }}>
+      <span style={{ fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'hsl(var(--primary))', fontFamily: 'var(--font-mono)', display: 'block', marginBottom: 4 }}>
+        {payloadFormat.toUpperCase()} payload
+      </span>
+      <pre style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'hsl(var(--muted-fg))', margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{previewStr}</pre>
+    </div>
+  ) : null;
 
   if (cmd.ctype === 'boolean') {
     return (
@@ -353,6 +370,7 @@ function CommandPreview({ cmd }: { cmd: Command }) {
             </label>
           </div>
         </div>
+        <PreviewLine />
       </motion.div>
     );
   }
@@ -401,6 +419,7 @@ function CommandPreview({ cmd }: { cmd: Command }) {
           <span>{min}{cmd.unit || ''}</span>
           <span>{max}{cmd.unit || ''}</span>
         </div>
+        <PreviewLine />
       </motion.div>
     );
   }
@@ -408,32 +427,38 @@ function CommandPreview({ cmd }: { cmd: Command }) {
   if (cmd.ctype === 'enum') {
     const vals = (cmd.values || '').split(',').map(s => s.trim()).filter(Boolean);
     return (
-      <motion.div layout className="flex items-center justify-between">
-        <span className="text-[13px]">{cmd.label || cmd.name}</span>
-        <select
-          value={ev}
-          onChange={e => setEv(e.target.value)}
-          className="select text-[12px] w-40"
-        >
-          {vals.map(v => <option key={v}>{v}</option>)}
-          {vals.length === 0 && <option>(define values)</option>}
-        </select>
+      <motion.div layout className="space-y-2">
+        <div className="flex items-center justify-between">
+          <span className="text-[13px]">{cmd.label || cmd.name}</span>
+          <select
+            value={ev}
+            onChange={e => setEv(e.target.value)}
+            className="select text-[12px] w-40"
+          >
+            {vals.map(v => <option key={v}>{v}</option>)}
+            {vals.length === 0 && <option>(define values)</option>}
+          </select>
+        </div>
+        <PreviewLine />
       </motion.div>
     );
   }
 
   // action
   return (
-    <motion.div layout className="flex items-center justify-between">
-      <span className="text-[13px]">{cmd.label || cmd.name}</span>
-      <motion.button
-        whileHover={{ scale: 1.02 }}
-        whileTap={{ scale: 0.98 }}
-        onClick={() => { setPressed(true); setTimeout(() => setPressed(false), 800); }}
-        className={`btn btn-sm ${pressed ? 'btn-primary' : 'btn-outline'}`}
-      >
-        {pressed ? '✓ Sent' : 'Trigger'}
-      </motion.button>
+    <motion.div layout className="space-y-2">
+      <div className="flex items-center justify-between">
+        <span className="text-[13px]">{cmd.label || cmd.name}</span>
+        <motion.button
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
+          onClick={() => { setPressed(true); setTimeout(() => setPressed(false), 800); }}
+          className={`btn btn-sm ${pressed ? 'btn-primary' : 'btn-outline'}`}
+        >
+          {pressed ? '✓ Sent' : 'Trigger'}
+        </motion.button>
+      </div>
+      <PreviewLine />
     </motion.div>
   );
 }
@@ -599,6 +624,11 @@ export function DeviceForm({ onClose }: { onClose: () => void }) {
   const [protocol, setProtocol] = useState<DeviceProtocol>('http');
   const [payloadFormat, setFormat] = useState<DevicePayloadFormat>('json');
   const [tags, setTagsStr] = useState('');
+  // Channel config
+  const [mqttTopicPrefix, setMqttTopicPrefix] = useState('');
+  const [wsDataEvent, setWsDataEvent] = useState('telemetry');
+  const [wsCommandEvent] = useState('command');
+  const [wsAckEvent] = useState('command_ack');
 
   // Step 2
   const [fields, setFields] = useState<DataField[]>([EMPTY_FIELD()]);
@@ -653,6 +683,7 @@ export function DeviceForm({ onClose }: { onClose: () => void }) {
 
   const validFields = fields.filter(f => f.key.trim());
   const payload = genPayload(validFields);
+  const payloadPreviewStr = validFields.length > 0 ? formatPayloadStr(payload, payloadFormat) : null;
 
   const mutation = useMutation({
     mutationFn: (input: any) => devicesApi.create(input),
@@ -674,6 +705,11 @@ export function DeviceForm({ onClose }: { onClose: () => void }) {
       tags: tags ? tags.split(',').map(t => t.trim()).filter(Boolean) : [],
       meta: {
         dataSchema: { fields: validFields },
+        channelConfig: protocol === 'mqtt'
+          ? { topicPrefix: mqttTopicPrefix || serialNumber.trim() || name.trim().toLowerCase().replace(/\s+/g, '_') }
+          : protocol === 'websocket'
+          ? { dataEvent: wsDataEvent, commandEvent: wsCommandEvent, ackEvent: wsAckEvent }
+          : {},
         commands: commands.map(c => ({
           name: c.name,
           type: c.ctype,
@@ -781,6 +817,70 @@ export function DeviceForm({ onClose }: { onClose: () => void }) {
                       </select>
                     </div>
                   </div>
+
+                  {/* ── Channel configuration ── */}
+                  {protocol === 'mqtt' && (
+                    <div className="border border-[hsl(var(--rule))] p-3 space-y-3">
+                      <p className="eyebrow text-[9px] text-primary">MQTT Channel Config</p>
+                      <div>
+                        <label className="eyebrow text-[9px] block mb-1.5">Topic prefix <span className="text-muted-foreground font-normal">(defaults to serial number)</span></label>
+                        <input
+                          className="input font-mono text-[11px]"
+                          placeholder={serialNumber || name.toLowerCase().replace(/\s+/g, '_') || 'device_id'}
+                          value={mqttTopicPrefix}
+                          onChange={e => setMqttTopicPrefix(e.target.value)}
+                        />
+                      </div>
+                      {(() => {
+                        const pfx = mqttTopicPrefix || serialNumber || name.toLowerCase().replace(/\s+/g, '_') || 'device';
+                        return (
+                          <div className="space-y-1.5 text-[10px] font-mono text-muted-foreground">
+                            {[
+                              { label: 'PUBLISH data', topic: `/${pfx}/data`, color: '#0F7A3D' },
+                              { label: 'SUBSCRIBE commands', topic: `/${pfx}/commands`, color: '#0284c7' },
+                              { label: 'PUBLISH poll pending', topic: `/${pfx}/commands/pending`, color: '#B45309' },
+                              { label: 'PUBLISH ack', topic: `/${pfx}/commands/{commandId}/ack`, color: '#FF5B1F' },
+                            ].map(r => (
+                              <div key={r.label} className="flex justify-between gap-4">
+                                <span style={{ color: r.color }}>{r.label}</span>
+                                <code style={{ color: 'hsl(var(--fg))' }}>{r.topic}</code>
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
+
+                  {protocol === 'websocket' && (
+                    <div className="border border-[hsl(var(--rule))] p-3 space-y-3">
+                      <p className="eyebrow text-[9px] text-primary">WebSocket Channel Config</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="eyebrow text-[9px] block mb-1.5">Data event</label>
+                          <input className="input font-mono text-[11px]" value={wsDataEvent} onChange={e => setWsDataEvent(e.target.value)} />
+                        </div>
+                        <div>
+                          <label className="eyebrow text-[9px] block mb-1.5">Commands event <span className="text-muted-foreground">(system → device)</span></label>
+                          <input value={wsCommandEvent} readOnly className="input font-mono text-[11px] opacity-60 cursor-not-allowed" />
+                        </div>
+                        <div>
+                          <label className="eyebrow text-[9px] block mb-1.5">ACK event <span className="text-muted-foreground">(device → system)</span></label>
+                          <input value={wsAckEvent} readOnly className="input font-mono text-[11px] opacity-60 cursor-not-allowed" />
+                        </div>
+                      </div>
+                      <p className="text-[10px] text-muted-foreground">Include <code className="font-mono">deviceId</code> and <code className="font-mono">apiKey</code> in every emitted payload.</p>
+                    </div>
+                  )}
+
+                  {protocol === 'http' && (
+                    <div className="border border-[hsl(var(--rule))] p-3 space-y-1.5 text-[10px] font-mono text-muted-foreground">
+                      <p className="eyebrow text-[9px] text-primary mb-2">HTTP Endpoints</p>
+                      <div><span className="text-[#0F7A3D]">POST</span> /telemetry/ingest — send data (api_key in body)</div>
+                      <div><span className="text-[#0284c7]">GET </span> /commands/pending?apiKey=… — poll for commands</div>
+                      <div><span className="text-[#FF5B1F]">POST</span> /commands/&#123;id&#125;/ack — acknowledge execution</div>
+                    </div>
+                  )}
                 </motion.div>
               )}
 
@@ -952,16 +1052,16 @@ export function DeviceForm({ onClose }: { onClose: () => void }) {
                   {/* JSON Payload - BELOW */}
                   <div className="border-t border-[hsl(var(--rule))] pt-4 mt-6">
                     <div className="flex items-center justify-between mb-2">
-                      <p className="eyebrow text-[9px]">Payload to be sent</p>
+                      <p className="eyebrow text-[9px]">Payload preview · <span className="text-primary">{payloadFormat.toUpperCase()}</span></p>
                       <button
-                        onClick={() => { navigator.clipboard.writeText(JSON.stringify(payload, null, 2)); toast.success('Copied!'); }}
+                        onClick={() => { const s = validFields.length > 0 ? formatPayloadStr(payload, payloadFormat) : ''; if (s) { navigator.clipboard.writeText(s); toast.success('Copied!'); } }}
                         className="text-[10px] text-primary hover:underline flex items-center gap-1"
                       >
                         Copy
                       </button>
                     </div>
                     <pre className="p-3 bg-muted/30 border border-[hsl(var(--rule))] text-[11px] font-mono text-foreground/80 overflow-x-auto max-h-[140px] leading-relaxed">
-                      {validFields.length > 0 ? JSON.stringify(payload, null, 2) : '// Add fields above'}
+                      {validFields.length > 0 ? formatPayloadStr(payload, payloadFormat) : `// Add fields above`}
                     </pre>
                   </div>
                 </motion.div>
@@ -1058,7 +1158,7 @@ export function DeviceForm({ onClose }: { onClose: () => void }) {
                           {/* Preview */}
                           <div className="bg-muted/30 border border-dashed border-[hsl(var(--rule))] p-3 mt-3">
                             <p className="eyebrow text-[8px] mb-3">Preview</p>
-                            <CommandPreview key={`${i}-${cmd.ctype}`} cmd={cmd} />
+                            <CommandPreview key={`${i}-${cmd.ctype}`} cmd={cmd} payloadFormat={payloadFormat} />
                           </div>
                         </motion.div>
                       ))}
@@ -1127,6 +1227,16 @@ export function DeviceForm({ onClose }: { onClose: () => void }) {
                           </div>
                         ))}
                       </div>
+                      {payloadPreviewStr && (
+                        <div style={{ marginTop: 16, borderTop: '1px solid hsl(var(--rule))', paddingTop: 12 }}>
+                          <span style={{ fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'hsl(var(--primary))', fontFamily: 'var(--font-mono)', display: 'block', marginBottom: 6 }}>
+                            Sample {payloadFormat.toUpperCase()} payload
+                          </span>
+                          <pre style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'hsl(var(--muted-fg))', margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-all', background: 'hsl(var(--muted))', padding: '8px 10px' }}>
+                            {payloadPreviewStr}
+                          </pre>
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -1138,7 +1248,7 @@ export function DeviceForm({ onClose }: { onClose: () => void }) {
                         {commands.map((c, i) => (
                           <div key={i} className="bg-muted/30 border border-dashed border-[hsl(var(--rule))] p-3">
                             <p className="eyebrow text-[8px] mb-3 text-muted-foreground">{c.name} — {c.ctype}</p>
-                            <CommandPreview cmd={c} />
+                            <CommandPreview cmd={c} payloadFormat={payloadFormat} />
                           </div>
                         ))}
                       </div>
@@ -1171,9 +1281,18 @@ export function DeviceForm({ onClose }: { onClose: () => void }) {
                 },
                 schema: { fields: validFields },
                 commands: commands.map(c => ({ name: c.name, type: c.ctype })),
-                sample_payload: payload,
               }, null, 2)}
             </pre>
+            {payloadPreviewStr && (
+              <div style={{ marginTop: 20, borderTop: '1px solid #2a2a2a', paddingTop: 16 }}>
+                <p style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'hsl(var(--primary))', marginBottom: 8 }}>
+                  Sample {payloadFormat.toUpperCase()} payload
+                </p>
+                <pre style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: '#b5b09a', whiteSpace: 'pre-wrap', margin: 0, lineHeight: 1.5 }}>
+                  {payloadPreviewStr}
+                </pre>
+              </div>
+            )}
           </div>
         </div>
 

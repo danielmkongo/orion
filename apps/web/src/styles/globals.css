@@ -595,6 +595,11 @@
   50%       { box-shadow: 0 0 0 8px var(--glow-color, rgba(255,91,31,0)), 0 4px 16px rgba(0,0,0,0.4); }
 }
 
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
 /* ── Print styles (for report PDF export) ─────────────────── */
 @media print {
   body > * { display: none !important; }

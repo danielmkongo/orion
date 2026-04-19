@@ -4,10 +4,10 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { devicesApi } from '@/api/devices';
 import { telemetryApi } from '@/api/telemetry';
 import apiClient from '@/api/client';
-import { timeAgo, formatDate as fmtDate, getCategoryIconInfo, copyText } from '@/lib/utils';
+import { timeAgo, formatDate as fmtDate, getCategoryIconInfo, copyText, formatPayloadStr, formatCommandStr } from '@/lib/utils';
 import { useSocket } from '@/hooks/useSocket';
 import { LineChart } from '@/components/charts/Charts';
-import { ArrowLeft, Eye, EyeOff, Copy, RefreshCw, Terminal, Plus, Trash2, Check, ChevronDown, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Eye, EyeOff, Copy, RefreshCw, Terminal, Plus, Trash2, Check, ChevronDown, ChevronRight, Pencil, X } from 'lucide-react';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import toast from 'react-hot-toast';
 import { CommandWidget } from '@/components/devices/CommandWidget';
@@ -101,6 +101,7 @@ export function DeviceDetailPage() {
   const [newCmdUnit, setNewCmdUnit] = useState('');
   const [newCmdValues, setNewCmdValues] = useState('');
   const [savingCmd, setSavingCmd] = useState(false);
+  const [editCmds, setEditCmds] = useState(false);
   const { on, subscribeDevice } = useSocket();
   const queryClient = useQueryClient();
 
@@ -196,16 +197,24 @@ export function DeviceDetailPage() {
     finally { setSending(false); }
   };
 
-  // Real-time payload preview
+  // Real-time payload preview (respects device payloadFormat)
   const payloadPreview = useMemo(() => {
-    if (!cmdName.trim()) return null;
-    try {
-      const parsed = JSON.parse(cmdPayload);
-      return JSON.stringify({ [cmdName]: parsed }, null, 2);
-    } catch {
-      return JSON.stringify({ [cmdName]: cmdPayload }, null, 2);
-    }
-  }, [cmdName, cmdPayload]);
+    if (!cmdName.trim() || !d) return null;
+    let value: unknown = cmdPayload;
+    try { value = JSON.parse(cmdPayload); } catch {}
+    return formatCommandStr(cmdName, typeof value === 'object' ? JSON.stringify(value) : value, d?.payloadFormat ?? 'json');
+  }, [cmdName, cmdPayload, d?.payloadFormat]); // eslint-disable-line
+
+  // Live preview for the "Add command" form
+  const newCmdPreview = useMemo(() => {
+    if (!newCmdName.trim() || !d) return null;
+    const sampleValue = newCmdType === 'boolean' ? true
+      : newCmdType === 'number' ? newCmdMin
+      : newCmdType === 'enum' ? (newCmdValues.split(',')[0]?.trim() || 'option')
+      : newCmdType === 'action' ? null
+      : 'value';
+    return formatCommandStr(newCmdName, sampleValue, d?.payloadFormat ?? 'json');
+  }, [newCmdName, newCmdType, newCmdMin, newCmdValues, d?.payloadFormat]); // eslint-disable-line
 
   const regenerateKey = async () => {
     try {
@@ -455,9 +464,20 @@ export function DeviceDetailPage() {
           <p className="dim" style={{ fontSize: 13, marginTop: 8, maxWidth: '28ch' }}>
             Device commands defined in the schema.
           </p>
-          <button className="btn btn-ghost btn-sm" style={{ marginTop: 12, gap: 4, fontSize: 12 }} onClick={() => setShowAddCmd(v => !v)}>
-            <Plus size={11} /> {showAddCmd ? 'Cancel' : 'Add command'}
-          </button>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 12 }}>
+            <button className="btn btn-ghost btn-sm" style={{ gap: 4, fontSize: 12 }} onClick={() => { setShowAddCmd(v => !v); setEditCmds(false); }}>
+              <Plus size={11} /> {showAddCmd ? 'Cancel' : 'Add command'}
+            </button>
+            {schemaCommands.length > 0 && (
+              <button
+                className={`btn btn-sm ${editCmds ? 'btn-primary' : 'btn-ghost'}`}
+                style={{ gap: 4, fontSize: 12 }}
+                onClick={() => setEditCmds(v => !v)}
+              >
+                {editCmds ? <><X size={11} /> Done</> : <><Pencil size={11} /> Edit</>}
+              </button>
+            )}
+          </div>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
 
@@ -465,21 +485,22 @@ export function DeviceDetailPage() {
           {schemaCommands.length > 0 ? (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 10 }}>
               {schemaCommands.map((cmd, idx) => (
-                <div key={idx} style={{ position: 'relative' }}>
+                <div key={idx} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   <CommandWidget
                     cmd={cmd}
                     payloadFormat={d.payloadFormat}
                     onSend={sendControl}
                     compact
                   />
-                  <button
-                    onClick={() => removeSchemaCommand(idx)}
-                    className="btn btn-ghost btn-sm btn-icon"
-                    style={{ position: 'absolute', top: 8, right: 8, color: 'hsl(var(--bad))', opacity: 0.5 }}
-                    title="Remove command"
-                  >
-                    <Trash2 size={10} />
-                  </button>
+                  {editCmds && (
+                    <button
+                      onClick={() => removeSchemaCommand(idx)}
+                      className="btn btn-ghost btn-sm"
+                      style={{ gap: 4, color: 'hsl(var(--bad))', fontSize: 11, justifyContent: 'center' }}
+                    >
+                      <Trash2 size={10} /> Remove "{cmd.label || cmd.name}"
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
@@ -536,6 +557,17 @@ export function DeviceDetailPage() {
                   <div>
                     <label className="eyebrow" style={{ fontSize: 9, display: 'block', marginBottom: 6 }}>Options (comma-separated)</label>
                     <input className="input" placeholder="low, medium, high" value={newCmdValues} onChange={e => setNewCmdValues(e.target.value)} />
+                  </div>
+                )}
+                {/* Live payload preview */}
+                {newCmdPreview && (
+                  <div>
+                    <div className="eyebrow" style={{ fontSize: 9, marginBottom: 6 }}>
+                      Payload preview · <span className="mono" style={{ color: 'hsl(var(--primary))' }}>{(d.payloadFormat ?? 'json').toUpperCase()}</span>
+                    </div>
+                    <pre style={{ padding: '8px 12px', fontSize: 10.5, fontFamily: 'var(--font-mono)', lineHeight: 1.6, margin: 0, color: 'hsl(var(--muted-fg))', background: 'hsl(var(--surface-raised))', border: '1px solid hsl(var(--border))' }}>
+                      {newCmdPreview}
+                    </pre>
                   </div>
                 )}
                 <div style={{ display: 'flex', gap: 8 }}>
@@ -620,9 +652,19 @@ export function DeviceDetailPage() {
                     <tr key={cmd._id}>
                       <td className="mono acc" style={{ fontSize: 12 }}>{cmd.name}</td>
                       <td>
-                        <span className={`tag tag-${cmd.status === 'executed' ? 'online' : cmd.status === 'failed' ? 'error' : 'offline'}`}>
-                          {cmd.status}
-                        </span>
+                        {['pending', 'sent', 'acknowledged'].includes(cmd.status) ? (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, fontFamily: 'var(--font-mono)' }}>
+                            <svg width="13" height="13" viewBox="0 0 13 13" style={{ animation: 'spin 1s linear infinite', flexShrink: 0 }}>
+                              <circle cx="6.5" cy="6.5" r="5" fill="none" stroke="hsl(var(--border))" strokeWidth="1.5" />
+                              <path d="M 6.5 1.5 A 5 5 0 0 1 11.5 6.5" fill="none" stroke="hsl(var(--primary))" strokeWidth="1.5" strokeLinecap="round" />
+                            </svg>
+                            {cmd.status}
+                          </span>
+                        ) : (
+                          <span className={`tag tag-${cmd.status === 'executed' ? 'online' : cmd.status === 'failed' ? 'error' : 'offline'}`}>
+                            {cmd.status}
+                          </span>
+                        )}
                       </td>
                       <td className="mono faint" style={{ fontSize: 11 }}>{timeAgo(cmd.createdAt)}</td>
                       <td className="mono faint" style={{ fontSize: 11, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -637,67 +679,153 @@ export function DeviceDetailPage() {
         </div>
       </div>
 
-      {/* ── Section VI: Quick integration ── */}
+      {/* ── Section VI: Integration ── */}
       <div className="section">
         <div>
           <div className="ssh">Integration</div>
           <p className="dim" style={{ fontSize: 13, marginTop: 8, maxWidth: '28ch' }}>
-            Send telemetry to Orion via HTTP POST.
+            {d.protocol === 'mqtt' ? 'MQTT broker topics and payload format.'
+              : d.protocol === 'websocket' ? 'WebSocket events and connection details.'
+              : 'HTTP endpoints for telemetry and commands.'}
           </p>
+          <div className="mono faint" style={{ marginTop: 12, fontSize: 10, letterSpacing: '0.12em' }}>
+            PROTOCOL · {d.protocol?.toUpperCase()}<br />
+            FORMAT · {d.payloadFormat?.toUpperCase() ?? 'JSON'}
+          </div>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-          {/* Endpoint */}
-          <div>
-            <div className="eyebrow" style={{ marginBottom: 8 }}>Endpoint</div>
-            <div className="panel" style={{ padding: '10px 14px', fontFamily: 'var(--font-mono)', fontSize: 12 }}>
-              <span className="acc">POST</span>{' '}
-              <span style={{ color: 'hsl(var(--muted-fg))' }}>{API_BASE}/</span>
-              <span style={{ color: 'hsl(var(--fg))' }}>telemetry/ingest</span>
-            </div>
-          </div>
 
-          {/* Payload */}
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-              <div className="eyebrow">JSON payload</div>
-              <button
-                onClick={() => {
-                  const obj: Record<string, unknown> = { api_key: currentKey };
-                  schemaFields.forEach((f: any) => {
-                    obj[f.key] = f.type === 'number' ? 0 : f.type === 'boolean' ? false : f.type === 'timestamp' ? new Date().toISOString() : '';
-                  });
-                  if (schemaFields.length === 0) { obj['temperature'] = 24.3; obj['humidity'] = 65; }
-                  copyText(JSON.stringify(obj, null, 2)).then(() => toast.success('Copied!'));
-                }}
-                className="btn btn-ghost btn-sm"
-                style={{ gap: 4, fontSize: 11 }}
-              >
-                <Copy size={10} /> Copy
-              </button>
-            </div>
-            <pre className="panel" style={{ padding: '14px 16px', fontSize: 11, fontFamily: 'var(--font-mono)', overflowX: 'auto', lineHeight: 1.7, margin: 0 }}>
-              {JSON.stringify(
-                (() => {
-                  const obj: Record<string, unknown> = {
-                    api_key: apiKeyVisible ? currentKey : `${currentKey?.slice(0, 8) ?? ''}••••••••`,
-                  };
-                  if (schemaFields.length === 0) {
-                    obj['temperature'] = 24.3;
-                    obj['humidity'] = 65;
-                  } else {
-                    schemaFields.forEach((f: any) => {
-                      obj[f.key] = f.type === 'number' ? 0 : f.type === 'boolean' ? false : f.type === 'timestamp' ? new Date().toISOString() : '';
-                    });
-                  }
-                  return obj;
-                })(),
-                null, 2
-              )}
-            </pre>
-            <p className="dim" style={{ fontSize: 11, marginTop: 8 }}>
-              <span className="mono acc">api_key</span> is stripped before storage — only your data fields are saved.
-            </p>
-          </div>
+          {/* ── MQTT ── */}
+          {d.protocol === 'mqtt' && (() => {
+            const serial = d.serialNumber ?? d._id?.slice(-8) ?? 'device';
+            const dataTopic    = `/${serial}/data`;
+            const cmdTopic     = `/${serial}/commands`;
+            const pendingTopic = `/${serial}/commands/pending`;
+            const ackTopic     = `/${serial}/commands/{commandId}/ack`;
+            const dataPayload = (() => {
+              const obj: Record<string, unknown> = {};
+              (schemaFields.length > 0 ? schemaFields : [{ key: 'temperature', type: 'number' }, { key: 'humidity', type: 'number' }])
+                .forEach((f: any) => { obj[f.key] = f.type === 'number' ? 24.3 : f.type === 'boolean' ? false : ''; });
+              return formatPayloadStr(obj, d.payloadFormat ?? 'json');
+            })();
+            const rows = [
+              { label: 'PUBLISH · data', topic: dataTopic, color: 'hsl(var(--good))' },
+              { label: 'SUBSCRIBE · commands', topic: cmdTopic, color: 'hsl(var(--info))' },
+              { label: 'PUBLISH · poll pending', topic: pendingTopic, color: 'hsl(var(--warn))' },
+              { label: 'PUBLISH · acknowledge', topic: ackTopic, color: 'hsl(var(--primary))' },
+            ];
+            return (
+              <>
+                <div>
+                  <div className="eyebrow" style={{ marginBottom: 8 }}>Topics</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                    {rows.map(r => (
+                      <div key={r.label} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 0', borderBottom: '1px solid hsl(var(--rule-ghost))' }}>
+                        <span className="eyebrow" style={{ fontSize: 9, color: r.color }}>{r.label}</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <code className="mono" style={{ fontSize: 11 }}>{r.topic}</code>
+                          <button onClick={() => copyText(r.topic).then(() => toast.success('Copied!'))} className="btn btn-ghost btn-sm btn-icon"><Copy size={10} /></button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <div className="eyebrow">Data payload ({d.payloadFormat?.toUpperCase()})</div>
+                    <button onClick={() => copyText(dataPayload).then(() => toast.success('Copied!'))} className="btn btn-ghost btn-sm" style={{ gap: 4, fontSize: 11 }}><Copy size={10} /> Copy</button>
+                  </div>
+                  <pre className="panel" style={{ padding: '12px 16px', fontSize: 11, fontFamily: 'var(--font-mono)', overflowX: 'auto', lineHeight: 1.7, margin: 0 }}>{dataPayload}</pre>
+                </div>
+                <div>
+                  <div className="eyebrow" style={{ marginBottom: 8 }}>Acknowledge payload</div>
+                  <pre className="panel" style={{ padding: '12px 16px', fontSize: 11, fontFamily: 'var(--font-mono)', overflowX: 'auto', lineHeight: 1.7, margin: 0 }}>
+                    {formatPayloadStr({ commandId: '<commandId>', status: 'executed' }, d.payloadFormat ?? 'json')}
+                  </pre>
+                  <p className="dim" style={{ fontSize: 11, marginTop: 6 }}>Publish to <code className="mono acc">{ackTopic}</code> after executing a command.</p>
+                </div>
+              </>
+            );
+          })()}
+
+          {/* ── WebSocket ── */}
+          {d.protocol === 'websocket' && (() => {
+            const wsUrl = `${API_BASE.replace(/^http/, 'ws').replace(/\/api\/v1$/, '')}/ws?apiKey=${apiKeyVisible ? currentKey : currentKey?.slice(0, 8) + '••••'}`;
+            const dataPayload = (() => {
+              const obj: Record<string, unknown> = { deviceId: d.serialNumber ?? d._id };
+              (schemaFields.length > 0 ? schemaFields : [{ key: 'temperature', type: 'number' }])
+                .forEach((f: any) => { obj[f.key] = f.type === 'number' ? 24.3 : false; });
+              return formatPayloadStr(obj, d.payloadFormat ?? 'json');
+            })();
+            return (
+              <>
+                <div>
+                  <div className="eyebrow" style={{ marginBottom: 8 }}>Connection URL</div>
+                  <div className="panel" style={{ padding: '10px 14px', fontFamily: 'var(--font-mono)', fontSize: 11, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ color: 'hsl(var(--muted-fg))' }}>{wsUrl}</span>
+                    <button onClick={() => copyText(wsUrl).then(() => toast.success('Copied!'))} className="btn btn-ghost btn-sm btn-icon"><Copy size={10} /></button>
+                  </div>
+                </div>
+                {[
+                  { label: 'EMIT · telemetry data', event: 'telemetry', payload: dataPayload, color: 'hsl(var(--good))' },
+                  { label: 'LISTEN · receive command', event: 'command', payload: formatPayloadStr({ commandId: '<id>', name: '<cmd>', payload: {} }, 'json'), color: 'hsl(var(--info))' },
+                  { label: 'EMIT · acknowledge', event: 'command_ack', payload: formatPayloadStr({ commandId: '<id>', status: 'executed' }, 'json'), color: 'hsl(var(--primary))' },
+                ].map(row => (
+                  <div key={row.event}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                      <span className="eyebrow" style={{ fontSize: 9, color: row.color }}>{row.label}</span>
+                      <code className="mono acc" style={{ fontSize: 11 }}>'{row.event}'</code>
+                    </div>
+                    <pre className="panel" style={{ padding: '10px 14px', fontSize: 11, fontFamily: 'var(--font-mono)', overflowX: 'auto', lineHeight: 1.6, margin: 0 }}>{row.payload}</pre>
+                  </div>
+                ))}
+              </>
+            );
+          })()}
+
+          {/* ── HTTP ── */}
+          {(!d.protocol || d.protocol === 'http' || d.protocol === 'https') && (() => {
+            const dataObj: Record<string, unknown> = { api_key: apiKeyVisible ? currentKey : `${currentKey?.slice(0, 8) ?? ''}••••••••` };
+            (schemaFields.length > 0 ? schemaFields : [{ key: 'temperature', type: 'number' }, { key: 'humidity', type: 'number' }])
+              .forEach((f: any) => { dataObj[f.key] = f.type === 'number' ? 0 : f.type === 'boolean' ? false : f.type === 'timestamp' ? new Date().toISOString() : ''; });
+            const dataPayload = formatPayloadStr(dataObj, d.payloadFormat ?? 'json');
+            const endpointLabel = d.payloadFormat === 'json' ? 'JSON payload' : `${(d.payloadFormat ?? 'json').toUpperCase()} payload`;
+            return (
+              <>
+                {[
+                  { method: 'POST', path: `${API_BASE}/telemetry/ingest`, note: 'Send telemetry data (include api_key in body)', color: 'hsl(var(--good))' },
+                  { method: 'GET',  path: `${API_BASE}/commands/pending?apiKey=${apiKeyVisible ? currentKey : currentKey?.slice(0,8)+'••••'}`, note: 'Poll for pending commands — call periodically', color: 'hsl(var(--info))' },
+                  { method: 'POST', path: `${API_BASE}/commands/{id}/ack`, note: 'Acknowledge command execution', color: 'hsl(var(--primary))' },
+                ].map(ep => (
+                  <div key={ep.path}>
+                    <div className="eyebrow" style={{ fontSize: 9, marginBottom: 6, color: ep.color }}>{ep.note}</div>
+                    <div className="panel" style={{ padding: '10px 14px', fontFamily: 'var(--font-mono)', fontSize: 11, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                      <div style={{ display: 'flex', gap: 10, alignItems: 'center', overflow: 'hidden' }}>
+                        <span className="acc" style={{ flexShrink: 0 }}>{ep.method}</span>
+                        <span style={{ color: 'hsl(var(--muted-fg))', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ep.path}</span>
+                      </div>
+                      <button onClick={() => copyText(ep.path).then(() => toast.success('Copied!'))} className="btn btn-ghost btn-sm btn-icon" style={{ flexShrink: 0 }}><Copy size={10} /></button>
+                    </div>
+                  </div>
+                ))}
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <div className="eyebrow">{endpointLabel}</div>
+                    <button onClick={() => copyText(dataPayload).then(() => toast.success('Copied!'))} className="btn btn-ghost btn-sm" style={{ gap: 4, fontSize: 11 }}><Copy size={10} /> Copy</button>
+                  </div>
+                  <pre className="panel" style={{ padding: '14px 16px', fontSize: 11, fontFamily: 'var(--font-mono)', overflowX: 'auto', lineHeight: 1.7, margin: 0 }}>{dataPayload}</pre>
+                  <p className="dim" style={{ fontSize: 11, marginTop: 8 }}>
+                    <span className="mono acc">api_key</span> is stripped before storage — only your data fields are saved.
+                  </p>
+                  <div className="eyebrow" style={{ fontSize: 9, marginTop: 16, marginBottom: 6 }}>ACK body</div>
+                  <pre className="panel" style={{ padding: '10px 14px', fontSize: 11, fontFamily: 'var(--font-mono)', lineHeight: 1.6, margin: 0 }}>
+                    {formatPayloadStr({ status: 'executed', message: 'optional note' }, d.payloadFormat ?? 'json')}
+                  </pre>
+                </div>
+              </>
+            );
+          })()}
+
         </div>
       </div>
 
