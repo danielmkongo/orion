@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, lazy, Suspense } from 'react-router-dom';
 import { useAuthStore } from '@/store/auth.store';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { LoginPage } from '@/pages/LoginPage';
@@ -6,7 +6,7 @@ import { RegisterPage } from '@/pages/RegisterPage';
 import { DashboardPage } from '@/pages/DashboardPage';
 import { DevicesPage } from '@/pages/DevicesPage';
 import { DeviceDetailPage } from '@/pages/DeviceDetailPage';
-// import { MapPage } from '@/pages/MapPage'; // Disabled: @vis.gl/react-google-maps not installed
+import { MapPage } from '@/pages/MapPage';
 import { TelemetryPage } from '@/pages/TelemetryPage';
 import { AlertsPage } from '@/pages/AlertsPage';
 import { ControlPage } from '@/pages/ControlPage';
@@ -39,7 +39,7 @@ export default function App() {
         <Route path="dashboard"   element={<DashboardPage />} />
         <Route path="devices"     element={<DevicesPage />} />
         <Route path="devices/:id" element={<DeviceDetailPage />} />
-        {/* <Route path="map"         element={<MapPage />} /> Disabled: @vis.gl/react-google-maps not installed */}
+        <Route path="map"         element={<MapPage />} />
         <Route path="telemetry"   element={<TelemetryPage />} />
         <Route path="alerts"      element={<AlertsPage />} />
         <Route path="control"     element={<ControlPage />} />
