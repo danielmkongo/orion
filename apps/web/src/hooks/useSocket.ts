@@ -6,38 +6,57 @@ import type { RealtimeEventType } from '@orion/shared';
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL ?? '';
 
 let socket: Socket | null = null;
+let socketToken: string | null = null; // track which token the socket was built with
+
+function createSocket(token: string): Socket {
+  const s = io(SOCKET_URL, {
+    auth: { token },
+    transports: ['websocket', 'polling'],
+    path: '/socket.io',
+    reconnection: true,
+    reconnectionDelay: 2000,
+    reconnectionAttempts: 5,
+  });
+  s.on('connect',       () => console.log('[socket] connected:', s.id));
+  s.on('disconnect',    () => console.log('[socket] disconnected'));
+  s.on('connect_error', err => console.error('[socket] error:', err.message));
+  return s;
+}
 
 export function getSocket(): Socket | null {
   return socket;
 }
 
 export function useSocket() {
-  const { accessToken, isAuthenticated } =  useAuthStore();
+  const { accessToken, isAuthenticated } = useAuthStore();
   const socketRef = useRef<Socket | null>(null);
 
   useEffect(() => {
-    if (!isAuthenticated || !accessToken) return;
-
-    if (!socket || !socket.connected) {
-      socket = io(SOCKET_URL, {
-        auth: { token: accessToken },
-        transports: ['websocket', 'polling'],
-        path: '/socket.io',
-        reconnection: true,
-        reconnectionDelay: 1000,
-        reconnectionAttempts: 10,
-      });
-
-      socket.on('connect', () => console.log('[socket] connected:', socket?.id));
-      socket.on('disconnect', () => console.log('[socket] disconnected'));
-      socket.on('connect_error', err => console.error('[socket] error:', err.message));
+    if (!isAuthenticated || !accessToken) {
+      // Unauthenticated — disconnect any existing socket
+      if (socket) {
+        socket.disconnect();
+        socket = null;
+        socketToken = null;
+      }
+      return;
     }
 
-    socketRef.current = socket;
+    // Socket exists and was built with the same token — nothing to do
+    if (socket && socketToken === accessToken) {
+      socketRef.current = socket;
+      return;
+    }
 
-    return () => {
-      // Don't disconnect on component unmount — keep the single global socket
-    };
+    // Token changed (e.g. after refresh) or no socket yet — replace
+    if (socket) {
+      socket.disconnect();
+      socket = null;
+    }
+
+    socket = createSocket(accessToken);
+    socketToken = accessToken;
+    socketRef.current = socket;
   }, [isAuthenticated, accessToken]);
 
   const on = useCallback(<T>(event: RealtimeEventType | string, handler: (data: T) => void) => {

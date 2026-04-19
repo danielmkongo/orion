@@ -1,192 +1,144 @@
 import { NavLink, useLocation } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import type { LucideIcon } from 'lucide-react';
 import {
   LayoutDashboard, Activity, Bell, Map, Cpu, Sliders,
-  Download, Zap, BarChart3, Users, Settings, ChevronLeft,
-  LogOut,
+  Download, Zap, BarChart3, Users, Settings, LogOut, Sun, Moon,
 } from 'lucide-react';
 import { useUIStore } from '@/store/ui.store';
 import { useAuthStore } from '@/store/auth.store';
 import { OrionMark } from '@/components/ui/OrionLogo';
 
-const NAV = [
-  {
-    items: [
-      { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-    ],
-  },
-  {
-    label: 'Monitor',
-    items: [
-      { href: '/telemetry', icon: Activity,  label: 'Telemetry' },
-      { href: '/alerts',    icon: Bell,      label: 'Alerts' },
-      { href: '/map',       icon: Map,       label: 'Map' },
-    ],
-  },
-  {
-    label: 'Fleet',
-    items: [
-      { href: '/devices',   icon: Cpu,       label: 'Devices' },
-      { href: '/control',   icon: Sliders,   label: 'Control' },
-      { href: '/ota',       icon: Download,  label: 'Firmware' },
-    ],
-  },
-  {
-    label: 'Intelligence',
-    items: [
-      { href: '/rules',     icon: Zap,       label: 'Rules' },
-      { href: '/reports',   icon: BarChart3, label: 'Reports' },
-    ],
-  },
-  {
-    label: 'Admin',
-    items: [
-      { href: '/users',     icon: Users,     label: 'Users' },
-      { href: '/settings',  icon: Settings,  label: 'Settings' },
-    ],
-  },
+const NAV: Array<{
+  num: string; href: string; label: string; icon: LucideIcon; group?: string;
+}> = [
+  { num: '01', href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { num: '02', href: '/telemetry', label: 'Telemetry',  icon: Activity,  group: 'MONITOR'      },
+  { num: '03', href: '/alerts',    label: 'Alerts',     icon: Bell                              },
+  { num: '04', href: '/map',       label: 'Map',        icon: Map                               },
+  { num: '05', href: '/devices',   label: 'Devices',    icon: Cpu,       group: 'FLEET'        },
+  { num: '06', href: '/control',   label: 'Control',    icon: Sliders                           },
+  { num: '07', href: '/ota',       label: 'Firmware',   icon: Download                          },
+  { num: '08', href: '/rules',     label: 'Rules',      icon: Zap,       group: 'INTELLIGENCE' },
+  { num: '09', href: '/reports',   label: 'Reports',    icon: BarChart3                         },
+  { num: '10', href: '/users',     label: 'Users',      icon: Users,     group: 'ADMIN'        },
+  { num: '11', href: '/settings',  label: 'Settings',   icon: Settings                          },
 ];
 
 export function Sidebar() {
-  const { sidebarCollapsed, toggleSidebar } = useUIStore();
+  const { sidebarCollapsed, theme, toggleTheme } = useUIStore();
   const { user, logout } = useAuthStore();
   const location = useLocation();
 
-  const W = sidebarCollapsed ? 70 : 244;
-
   return (
-    <motion.aside
-      animate={{ width: W }}
-      transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
-      className="fixed left-0 top-0 h-full flex flex-col border-r border-border bg-surface z-30 overflow-hidden"
-      style={{ width: W }}
-    >
-      {/* Logo */}
-      <div className="flex items-center justify-between px-4 h-[60px] border-b border-border flex-shrink-0">
-        <div className="flex items-center gap-2.5 overflow-hidden">
-          <OrionMark size={26} className="text-primary flex-shrink-0" />
-          <AnimatePresence>
-            {!sidebarCollapsed && (
-              <motion.span
-                initial={{ opacity: 0, x: -8 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -8 }}
-                transition={{ duration: 0.15 }}
-                className="font-semibold text-[15px] tracking-tight text-foreground whitespace-nowrap"
-              >
-                Orion
-              </motion.span>
-            )}
-          </AnimatePresence>
-        </div>
-        <button
-          onClick={toggleSidebar}
-          className="btn-ghost btn btn-sm !px-0 w-7 h-7 flex-shrink-0 rounded-lg"
-          aria-label="Toggle sidebar"
-        >
-          <motion.div
-            animate={{ rotate: sidebarCollapsed ? 180 : 0 }}
-            transition={{ duration: 0.2 }}
-          >
-            <ChevronLeft size={15} />
-          </motion.div>
-        </button>
-      </div>
+    <>
+      {/* Mobile overlay */}
+      {!sidebarCollapsed && (
+        <div
+          className="fixed inset-0 z-20 bg-black/40 md:hidden"
+          onClick={() => useUIStore.getState().setSidebarCollapsed(true)}
+        />
+      )}
 
-      {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto overflow-x-hidden py-3 px-2.5 no-scrollbar">
-        {NAV.map((group, gi) => (
-          <div key={gi} className="mb-1">
-            {group.label && !sidebarCollapsed && (
-              <div className="px-2 pt-3 pb-1">
-                <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60 whitespace-nowrap">
-                  {group.label}
-                </span>
-              </div>
-            )}
-            {group.label && sidebarCollapsed && (
-              <div className="h-px bg-border mx-2 my-2" />
-            )}
-
-            {group.items.map(({ href, icon: Icon, label }) => {
-              const active = location.pathname === href || (href !== '/dashboard' && location.pathname.startsWith(href));
-              return (
-                <NavLink
-                  key={href}
-                  to={href}
-                  title={sidebarCollapsed ? label : undefined}
-                  className={`nav-item mb-0.5 ${active ? 'nav-item-active' : ''} ${sidebarCollapsed ? 'justify-center !px-0' : ''}`}
-                >
-                  <Icon
-                    size={17}
-                    className={`flex-shrink-0 ${active ? 'text-primary' : ''}`}
-                    strokeWidth={active ? 2.2 : 1.8}
-                  />
-                  <AnimatePresence>
-                    {!sidebarCollapsed && (
-                      <motion.span
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        transition={{ duration: 0.1 }}
-                        className="truncate"
-                      >
-                        {label}
-                      </motion.span>
-                    )}
-                  </AnimatePresence>
-                </NavLink>
-              );
-            })}
-          </div>
-        ))}
-      </nav>
-
-      {/* User footer */}
-      <div className="flex-shrink-0 border-t border-border p-2.5">
-        <div className={`flex items-center gap-2.5 px-2 py-1.5 rounded-lg ${sidebarCollapsed ? 'justify-center' : ''}`}>
-          <div className="w-7 h-7 rounded-full bg-primary/12 flex items-center justify-center flex-shrink-0 border border-primary/20">
-            <span className="text-[11px] font-semibold text-primary uppercase">
-              {user?.name?.charAt(0) ?? 'U'}
+      <aside
+        className={[
+          'fixed left-0 top-0 h-full z-30 flex flex-col',
+          'border-r border-[hsl(var(--rule))] bg-[hsl(var(--surface))]',
+          'transition-transform duration-200',
+          'w-[248px]',
+          // mobile: slide in/out; desktop: always visible
+          sidebarCollapsed ? '-translate-x-full md:translate-x-0' : 'translate-x-0',
+        ].join(' ')}
+      >
+        {/* Brand */}
+        <div className="flex items-center gap-3 px-5 h-[58px] border-b border-[hsl(var(--rule))] flex-shrink-0">
+          <OrionMark size={22} className="text-primary flex-shrink-0" />
+          <div>
+            <span
+              className="text-[15px] font-semibold tracking-tight text-foreground"
+              style={{ fontFamily: 'var(--font-display)' }}
+            >
+              <em>Orion</em>
+            </span>
+            <span className="text-[10px] text-muted-foreground ml-2 font-mono uppercase tracking-widest opacity-60">
+              by Vortan
             </span>
           </div>
-          <AnimatePresence>
-            {!sidebarCollapsed && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="flex-1 min-w-0"
-              >
-                <p className="text-[13px] font-medium text-foreground truncate leading-tight">
+        </div>
+
+        {/* Nav */}
+        <nav className="flex-1 overflow-y-auto py-3 px-3 no-scrollbar space-y-px">
+          {NAV.map(({ num, href, label, icon: Icon, group }, i) => {
+            const active =
+              location.pathname === href ||
+              (href !== '/dashboard' && location.pathname.startsWith(href));
+            return (
+              <div key={href}>
+                {group && (
+                  <div className="pt-4 pb-1 px-2">
+                    <span className="eyebrow text-[9px]">{group}</span>
+                  </div>
+                )}
+                <NavLink
+                  to={href}
+                  className={[
+                    'flex items-center gap-3 px-3 py-2 w-full transition-colors duration-100',
+                    'border-l-2',
+                    active
+                      ? 'border-primary bg-primary/[0.07] text-primary'
+                      : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-[hsl(var(--muted))]',
+                  ].join(' ')}
+                >
+                  <span
+                    className="font-mono text-[10px] w-5 flex-shrink-0 text-right opacity-40"
+                    aria-hidden="true"
+                  >
+                    {num}
+                  </span>
+                  <Icon size={14} strokeWidth={active ? 2.2 : 1.8} className="flex-shrink-0" />
+                  <span className="text-[13px] font-medium leading-none">{label}</span>
+                </NavLink>
+              </div>
+            );
+          })}
+        </nav>
+
+        {/* Footer */}
+        <div className="flex-shrink-0 border-t border-[hsl(var(--rule))] p-3 space-y-2">
+          <div className="flex items-center justify-between px-2">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-7 h-7 flex items-center justify-center flex-shrink-0 bg-primary/10 border border-primary/20">
+                <span className="text-[11px] font-semibold text-primary uppercase leading-none">
+                  {user?.name?.charAt(0) ?? 'U'}
+                </span>
+              </div>
+              <div className="min-w-0">
+                <p className="text-[12px] font-medium text-foreground truncate leading-tight">
                   {user?.name ?? 'User'}
                 </p>
-                <p className="text-[11px] text-muted-foreground truncate leading-tight">
+                <p className="text-[10px] text-muted-foreground truncate leading-tight font-mono">
                   {user?.email ?? ''}
                 </p>
-              </motion.div>
-            )}
-          </AnimatePresence>
-          {!sidebarCollapsed && (
-            <button
-              onClick={logout}
-              className="btn-ghost btn btn-sm !px-0 w-7 h-7 rounded-lg flex-shrink-0 ml-auto"
-              title="Log out"
-            >
-              <LogOut size={14} />
-            </button>
-          )}
+              </div>
+            </div>
+            <div className="flex items-center gap-1 flex-shrink-0">
+              <button
+                onClick={toggleTheme}
+                className="w-7 h-7 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+                title={theme === 'light' ? 'Dark mode' : 'Light mode'}
+              >
+                {theme === 'light' ? <Moon size={13} /> : <Sun size={13} />}
+              </button>
+              <button
+                onClick={logout}
+                className="w-7 h-7 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+                title="Log out"
+              >
+                <LogOut size={13} />
+              </button>
+            </div>
+          </div>
         </div>
-        {sidebarCollapsed && (
-          <button
-            onClick={logout}
-            className="nav-item justify-center !px-0 w-full mt-1"
-            title="Log out"
-          >
-            <LogOut size={14} />
-          </button>
-        )}
-      </div>
-    </motion.aside>
+      </aside>
+    </>
   );
 }

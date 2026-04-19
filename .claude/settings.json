@@ -11,7 +11,10 @@
       "Bash(pnpm --filter=@orion/web typecheck)",
       "Bash(pnpm --filter=@orion/web list leaflet)",
       "Read(//c/Program Files/MongoDB/**)",
-      "Bash(curl -s http://0.0.0.0:7001/health)"
+      "Bash(curl -s http://0.0.0.0:7001/health)",
+      "Bash(gunzip -c webfetch-1776589604537-bxmhiz.bin)",
+      "Bash(tar -x -O orion/project/orion/index.html)",
+      "Bash(tar -t)"
     ]
   }
 }

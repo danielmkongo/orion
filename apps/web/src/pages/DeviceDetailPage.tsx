@@ -1,23 +1,58 @@
 import { useParams, Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
-import ReactECharts from 'echarts-for-react';
 import { devicesApi } from '@/api/devices';
 import { telemetryApi } from '@/api/telemetry';
 import apiClient from '@/api/client';
-import { cn, timeAgo, formatDate as fmtDate, getCategoryIconInfo, generateChartColor } from '@/lib/utils';
+import { timeAgo, formatDate as fmtDate, getCategoryIconInfo } from '@/lib/utils';
 import { useSocket } from '@/hooks/useSocket';
-import { useUIStore } from '@/store/ui.store';
-import { ArrowLeft, MapPin, Terminal, Eye, EyeOff, Copy, RefreshCw } from 'lucide-react';
+import { LineChart } from '@/components/charts/Charts';
+import {
+  ArrowLeft, Eye, EyeOff, Copy, RefreshCw, Terminal, ChevronDown,
+} from 'lucide-react';
 import toast from 'react-hot-toast';
+import L from 'leaflet';
 
-type TabId = 'overview' | 'telemetry' | 'commands' | 'location' | 'config';
+/* ── Leaflet satellite map ──────────────────────────────────────── */
+function SatelliteMap({ lat, lng }: { lat: number; lng: number }) {
+  const mapRef = useRef<HTMLDivElement | null>(null);
+  const leafletRef = useRef<L.Map | null>(null);
 
+  useEffect(() => {
+    if (!mapRef.current || leafletRef.current) return;
+    const map = L.map(mapRef.current, { zoomControl: true, scrollWheelZoom: false });
+    L.tileLayer(
+      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+      { attribution: 'Tiles © Esri', maxZoom: 18 }
+    ).addTo(map);
+    const icon = L.divIcon({
+      className: '',
+      html: `<div style="width:14px;height:14px;background:#FF6A30;border:2px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.5)"></div>`,
+      iconSize: [14, 14],
+      iconAnchor: [7, 7],
+    });
+    L.marker([lat, lng], { icon }).addTo(map);
+    map.setView([lat, lng], 13);
+    leafletRef.current = map;
+    return () => { map.remove(); leafletRef.current = null; };
+  }, [lat, lng]);
+
+  return <div ref={mapRef} style={{ width: '100%', height: 280 }} />;
+}
+
+/* ── main page ───────────────────────────────────────────────────── */
 export function DeviceDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const [tab, setTab] = useState<TabId>('overview');
   const [liveFields, setLiveFields] = useState<Record<string, any>>({});
+  const [chartField, setChartField] = useState('');
+  const [chartRange, setChartRange] = useState('24h');
+  const [fieldDropdown, setFieldDropdown] = useState(false);
+  const [apiKeyVisible, setApiKeyVisible] = useState(false);
+  const [currentKey, setCurrentKey] = useState('');
+  const [cmdName, setCmdName] = useState('');
+  const [cmdPayload, setCmdPayload] = useState('{}');
+  const [sending, setSending] = useState(false);
   const { on, subscribeDevice } = useSocket();
   const queryClient = useQueryClient();
 
@@ -37,9 +72,22 @@ export function DeviceDetailPage() {
   const { data: commands } = useQuery({
     queryKey: ['commands', id],
     queryFn: () => apiClient.get('/commands', { params: { deviceId: id, limit: 20 } }).then(r => r.data),
-    enabled: !!id && tab === 'commands',
+    enabled: !!id,
+    refetchInterval: 60_000,
   });
 
+  const hoursMap: Record<string, number> = { '1h': 1, '6h': 6, '24h': 24, '7d': 168 };
+  const from = new Date(Date.now() - (hoursMap[chartRange] ?? 24) * 3600_000).toISOString();
+  const to   = new Date().toISOString();
+
+  const { data: seriesData } = useQuery({
+    queryKey: ['series', id, chartField, chartRange],
+    queryFn: () => telemetryApi.series(id!, chartField, from, to, 500),
+    enabled: !!id && !!chartField,
+    refetchInterval: 60_000,
+  });
+
+  // Subscribe to live telemetry
   useEffect(() => {
     if (!id) return;
     const unsub = subscribeDevice(id);
@@ -52,16 +100,60 @@ export function DeviceDetailPage() {
     return () => { unsub(); unsubTelemetry(); };
   }, [id, on, subscribeDevice, queryClient]);
 
+  const d = device as any;
+  const fields = liveFields && Object.keys(liveFields).length > 0 ? liveFields : latestTelemetry?.fields ?? {};
+  const numericFields = Object.entries(fields).filter(([, v]) => typeof v === 'number') as [string, number][];
+  const allFields     = Object.entries(fields) as [string, any][];
+
+  // Auto-set chart field
+  useEffect(() => {
+    if (!chartField && numericFields.length > 0) setChartField(numericFields[0][0]);
+  }, [numericFields.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (d?.apiKey) setCurrentKey(d.apiKey);
+  }, [d?.apiKey]);
+
+  const seriesPoints = (seriesData?.data ?? []).map(p => ({
+    ts: typeof p.ts === 'string' ? new Date(p.ts).getTime() : p.ts,
+    value: typeof p.value === 'number' ? p.value : 0,
+  }));
+
+  const { Icon: CatIcon, color: catColor } = d ? getCategoryIconInfo(d.category) : { Icon: () => null, color: '#ea580c' };
+
+  const sendCommand = async () => {
+    if (!cmdName.trim()) return;
+    setSending(true);
+    try {
+      let payload = {};
+      try { payload = JSON.parse(cmdPayload); } catch {}
+      await apiClient.post('/commands', { deviceId: id, name: cmdName, payload });
+      toast.success('Command sent');
+      setCmdName(''); setCmdPayload('{}');
+      queryClient.invalidateQueries({ queryKey: ['commands', id] });
+    } catch { toast.error('Failed to send command'); }
+    finally { setSending(false); }
+  };
+
+  const regenerateKey = async () => {
+    if (!confirm('Regenerate API key? The existing key will stop working immediately.')) return;
+    try {
+      const { apiKey } = await devicesApi.regenerateKey(d._id);
+      setCurrentKey(apiKey);
+      toast.success('API key regenerated');
+    } catch { toast.error('Failed to regenerate key'); }
+  };
+
   if (isLoading) {
     return (
       <div className="space-y-4">
-        <div className="skeleton h-8 w-48 rounded-lg" />
-        <div className="skeleton h-32 w-full rounded-xl" />
+        <div className="h-6 w-36 bg-muted animate-pulse" />
+        <div className="h-40 w-full bg-muted animate-pulse" />
       </div>
     );
   }
 
-  if (!device) {
+  if (!d) {
     return (
       <div className="text-center py-16">
         <p className="text-muted-foreground mb-4">Device not found</p>
@@ -70,419 +162,316 @@ export function DeviceDetailPage() {
     );
   }
 
-  const d = device as any;
-  const { Icon: CatIcon, color: catColor } = getCategoryIconInfo(d.category);
-  const fields = liveFields && Object.keys(liveFields).length > 0 ? liveFields : latestTelemetry?.fields ?? {};
+  const statusColor = d.status === 'online' ? '#22C55E' : d.status === 'error' ? '#EF4444' : '#6B7280';
 
   return (
-    <div className="space-y-6 max-w-[1400px] mx-auto">
-      {/* Breadcrumb + header */}
-      <div className="flex items-start gap-4">
-        <Link to="/devices" className="btn btn-ghost btn-sm mt-0.5 !px-2">
-          <ArrowLeft size={15} />
+    <div className="space-y-8 max-w-[1400px]">
+
+      {/* ── Breadcrumb + heading ──────────────────────────────────── */}
+      <div className="flex items-start gap-4 pt-1">
+        <Link to="/devices" className="mt-1 w-7 h-7 flex items-center justify-center border border-[hsl(var(--rule))] hover:bg-muted transition-colors text-muted-foreground hover:text-foreground flex-shrink-0">
+          <ArrowLeft size={13} />
         </Link>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-3 mb-1 flex-wrap">
-            <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style={{ backgroundColor: `${catColor}15` }}>
-              <CatIcon size={16} style={{ color: catColor }} />
-            </div>
-            <h1 className="text-[20px] font-semibold text-foreground">{d.name}</h1>
-            <span className={cn('badge',
-              d.status === 'online' ? 'badge-online' :
-              d.status === 'error'  ? 'badge-error'  : 'badge-offline'
-            )}>
-              <span className={cn('w-1.5 h-1.5 rounded-full mr-1',
-                d.status === 'online' ? 'bg-green-500' :
-                d.status === 'error'  ? 'bg-red-500'   : 'bg-gray-400'
-              )} />
+        <div className="min-w-0">
+          <p className="eyebrow text-[9px] mb-1">Devices / {d.category}</p>
+          <div className="flex items-center gap-3 flex-wrap">
+            <h1 className="text-[26px] leading-none tracking-tight text-foreground" style={{ fontFamily: 'var(--font-display)' }}>
+              <em>{d.name}</em>
+            </h1>
+            <span className="flex items-center gap-1.5 font-mono text-[10px] border border-current px-2 py-0.5" style={{ color: statusColor }}>
+              <span className="w-1.5 h-1.5" style={{ backgroundColor: statusColor }} />
               {d.status}
             </span>
           </div>
-          <p className="text-[13px] text-muted-foreground ml-11 capitalize">
-            {d.category} · {d.protocol?.toUpperCase()} · Last seen {d.lastSeenAt ? timeAgo(d.lastSeenAt) : 'never'}
+          <p className="text-[12px] text-muted-foreground mt-1.5 font-mono">
+            {d.category} · {d.protocol?.toUpperCase()} · {d.lastSeenAt ? `Last seen ${timeAgo(d.lastSeenAt)}` : 'Never connected'}
           </p>
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="border-b border-border">
-        <nav className="flex gap-0.5">
-          {(['overview', 'telemetry', 'commands', 'location', 'config'] as TabId[]).map(t => (
-            <button
-              key={t}
-              onClick={() => setTab(t)}
-              className={cn(
-                'px-4 py-2.5 text-[13px] font-medium transition-colors border-b-2 -mb-px',
-                tab === t
-                  ? 'text-primary border-primary'
-                  : 'text-muted-foreground hover:text-foreground border-transparent'
-              )}
-            >
-              {t.charAt(0).toUpperCase() + t.slice(1)}
-            </button>
+      {/* ── Section I — Identity ─────────────────────────────────── */}
+      <div>
+        <div className="flex items-center gap-2 pb-3 mb-4 border-b border-[hsl(var(--rule))]">
+          <span className="serif-i text-muted-foreground mr-2">№ I</span>
+          <span className="eyebrow">Identity</span>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-px bg-[hsl(var(--rule))] border border-[hsl(var(--rule))]">
+          {[
+            { label: 'Category',    value: d.category },
+            { label: 'Protocol',    value: d.protocol?.toUpperCase() },
+            { label: 'Format',      value: d.payloadFormat?.toUpperCase() },
+            { label: 'Serial',      value: d.serialNumber || '—' },
+            { label: 'Firmware',    value: d.firmwareVersion || '—' },
+            { label: 'First seen',  value: d.firstSeenAt ? fmtDate(d.firstSeenAt) : '—' },
+            { label: 'Created',     value: d.createdAt ? fmtDate(d.createdAt) : '—' },
+            { label: 'Tags',        value: d.tags?.join(', ') || '—' },
+          ].map(({ label, value }) => (
+            <div key={label} className="bg-[hsl(var(--surface))] px-4 py-3.5">
+              <p className="eyebrow text-[9px] mb-1">{label}</p>
+              <p className="text-[13px] font-medium text-foreground capitalize font-mono">{value}</p>
+            </div>
           ))}
-        </nav>
+        </div>
       </div>
 
-      {/* Tab content */}
-      {tab === 'overview'  && <OverviewTab device={d} fields={fields} latestTs={latestTelemetry?.timestamp} />}
-      {tab === 'telemetry' && <TelemetryTab deviceId={id!} />}
-      {tab === 'commands'  && <CommandsTab deviceId={id!} commands={commands?.data ?? []} />}
-      {tab === 'location'  && <LocationTab device={d} />}
-      {tab === 'config'    && <ConfigTab device={d} />}
-    </div>
-  );
-}
-
-/* ── Overview ───────────────────────────────────────────────────── */
-function OverviewTab({ device, fields, latestTs }: { device: any; fields: any; latestTs?: string }) {
-  const entries = Object.entries(fields).filter(([, v]) => typeof v === 'number' || typeof v === 'string' || typeof v === 'boolean');
-
-  return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      <div className="card p-5 space-y-3">
-        <h3 className="text-[13px] font-semibold text-foreground mb-1">Device Info</h3>
-        {[
-          { label: 'Category',    value: device.category },
-          { label: 'Protocol',    value: device.protocol?.toUpperCase() },
-          { label: 'Format',      value: device.payloadFormat?.toUpperCase() },
-          { label: 'Serial #',    value: device.serialNumber || '—' },
-          { label: 'Firmware',    value: device.firmwareVersion || '—' },
-          { label: 'First seen',  value: device.firstSeenAt ? fmtDate(device.firstSeenAt) : '—' },
-        ].map(({ label, value }) => (
-          <div key={label} className="flex items-center justify-between text-[13px]">
-            <span className="text-muted-foreground">{label}</span>
-            <span className="text-foreground font-medium capitalize">{value}</span>
-          </div>
-        ))}
-        {device.tags?.length > 0 && (
-          <div className="pt-2 border-t border-border">
-            <p className="text-[11px] text-muted-foreground mb-1.5">Tags</p>
-            <div className="flex flex-wrap gap-1">
-              {device.tags.map((t: string) => (
-                <span key={t} className="badge badge-primary text-[11px]">{t}</span>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-
-      <div className="lg:col-span-2">
-        <div className="card p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-[13px] font-semibold text-foreground">Live Telemetry</h3>
-            {latestTs && <span className="text-[11px] text-muted-foreground">{timeAgo(latestTs)}</span>}
-          </div>
-          {entries.length === 0 ? (
-            <div className="py-10 text-center text-[13px] text-muted-foreground">No telemetry received yet</div>
-          ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {entries.map(([key, value], i) => (
-                <motion.div
-                  key={key}
-                  initial={{ opacity: 0.7 }}
-                  animate={{ opacity: 1 }}
-                  className="bg-surface-raised rounded-xl p-4 border border-border"
-                >
-                  <p className="text-[11px] text-muted-foreground mb-1 truncate capitalize">{key}</p>
-                  <p className="text-[18px] font-semibold" style={{ color: generateChartColor(i) }}>
-                    {typeof value === 'number' ? value.toFixed(2) : String(value)}
-                  </p>
-                </motion.div>
-              ))}
-            </div>
+      {/* ── Section II — Live Telemetry ──────────────────────────── */}
+      <div>
+        <div className="flex items-center gap-2 pb-3 mb-4 border-b border-[hsl(var(--rule))]">
+          <span className="serif-i text-muted-foreground mr-2">№ II</span>
+          <span className="eyebrow">Live Telemetry</span>
+          {latestTelemetry?.timestamp && (
+            <span className="ml-auto font-mono text-[10px] text-muted-foreground">{timeAgo(latestTelemetry.timestamp)}</span>
           )}
         </div>
-      </div>
-    </div>
-  );
-}
 
-/* ── Telemetry ──────────────────────────────────────────────────── */
-function TelemetryTab({ deviceId }: { deviceId: string }) {
-  const { theme } = useUIStore();
-  const isDark = theme === 'dark';
-  const [field, setField] = useState('temperature');
-  const [range, setRange] = useState('24h');
-
-  const hoursMap: Record<string, number> = { '1h': 1, '6h': 6, '24h': 24, '7d': 168 };
-  const from = new Date(Date.now() - hoursMap[range] * 3600_000).toISOString();
-  const to   = new Date().toISOString();
-
-  const { data: seriesData } = useQuery({
-    queryKey: ['series', deviceId, field, range],
-    queryFn: () => telemetryApi.series(deviceId, field, from, to, 500),
-  });
-
-  const points = seriesData?.data ?? [];
-
-  const labelColor   = isDark ? '#6b7280' : '#9ca3af';
-  const splitColor   = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.06)';
-  const tooltipBg    = isDark ? '#1a1a1a' : '#ffffff';
-  const tooltipBorder = isDark ? '#333' : '#e5e7eb';
-  const tooltipText  = isDark ? '#f5f5f5' : '#111827';
-  const lineColor    = '#ea580c';
-
-  const option = {
-    backgroundColor: 'transparent',
-    tooltip: {
-      trigger: 'axis',
-      backgroundColor: tooltipBg,
-      borderColor: tooltipBorder,
-      borderWidth: 1,
-      textStyle: { color: tooltipText, fontSize: 12 },
-    },
-    grid: { left: '2%', right: '2%', bottom: 20, top: 20, containLabel: true },
-    xAxis: {
-      type: 'time',
-      axisLabel: { color: labelColor, fontSize: 10 },
-      axisLine: { show: false }, axisTick: { show: false }, splitLine: { show: false },
-    },
-    yAxis: {
-      axisLabel: { color: labelColor, fontSize: 10 },
-      axisLine: { show: false }, axisTick: { show: false },
-      splitLine: { lineStyle: { color: splitColor } },
-    },
-    series: [{
-      type: 'line', smooth: true, symbol: 'none',
-      data: points.map((p: any) => [new Date(p.ts).getTime(), typeof p.value === 'number' ? parseFloat(p.value.toFixed(3)) : p.value]),
-      lineStyle: { width: 2, color: lineColor },
-      itemStyle: { color: lineColor },
-      areaStyle: {
-        color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
-          colorStops: [{ offset: 0, color: `${lineColor}30` }, { offset: 1, color: `${lineColor}05` }],
-        },
-      },
-    }],
-  };
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-3 flex-wrap">
-        <input
-          type="text"
-          value={field}
-          onChange={e => setField(e.target.value)}
-          placeholder="Field name (e.g. temperature)"
-          className="input max-w-xs"
-        />
-        <div className="flex items-center gap-1 bg-muted rounded-xl p-1">
-          {['1h', '6h', '24h', '7d'].map(r => (
-            <button key={r} onClick={() => setRange(r)}
-              className={cn(
-                'text-[11px] px-3 py-1.5 rounded-lg transition-all',
-                range === r
-                  ? 'bg-surface text-foreground shadow-sm border border-border'
-                  : 'text-muted-foreground hover:text-foreground'
-              )}>
-              {r}
-            </button>
-          ))}
-        </div>
-      </div>
-      <div className="card p-5">
-        {points.length === 0 ? (
-          <div className="h-[300px] flex items-center justify-center text-[13px] text-muted-foreground">
-            No data for <strong className="mx-1">{field}</strong> in this time range
+        {allFields.length === 0 ? (
+          <div className="border border-[hsl(var(--rule))] py-12 text-center">
+            <p className="text-[13px] text-muted-foreground">No telemetry received yet</p>
           </div>
         ) : (
-          <ReactECharts option={option} style={{ height: 300 }} notMerge />
-        )}
-      </div>
-      {points.length > 0 && (
-        <div className="card overflow-hidden">
-          <div className="px-4 py-3 border-b border-border">
-            <p className="text-[12px] font-medium text-muted-foreground">Recent data points ({points.length})</p>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="data-table">
-              <thead><tr><th>Timestamp</th><th>{field}</th></tr></thead>
-              <tbody>
-                {points.slice(-20).reverse().map((p: any, i: number) => (
-                  <tr key={i}>
-                    <td className="font-mono text-[12px]">{fmtDate(p.ts)}</td>
-                    <td className="font-medium">{typeof p.value === 'number' ? p.value.toFixed(3) : String(p.value)}</td>
-                  </tr>
+          <>
+            {/* Numeric metrics grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-px bg-[hsl(var(--rule))] border border-[hsl(var(--rule))] mb-4">
+              {numericFields.slice(0, 10).map(([key, val], i) => {
+                const COLORS = ['#FF6A30','#5B8DEF','#22C55E','#F59E0B','#8B5CF6','#06B6D4'];
+                const col = COLORS[i % COLORS.length];
+                return (
+                  <motion.button
+                    key={key}
+                    initial={{ opacity: 0.7 }}
+                    animate={{ opacity: 1 }}
+                    onClick={() => setChartField(key)}
+                    className={`bg-[hsl(var(--surface))] px-4 py-3.5 text-left transition-colors hover:bg-[hsl(var(--muted))] ${chartField === key ? 'ring-1 ring-inset ring-primary/30' : ''}`}
+                  >
+                    <p className="eyebrow text-[9px] mb-1 capitalize">{key}</p>
+                    <p className="text-[1.4rem] font-semibold leading-none" style={{ color: col }}>
+                      {val.toFixed(2)}
+                    </p>
+                  </motion.button>
+                );
+              })}
+            </div>
+
+            {/* String/bool fields */}
+            {allFields.filter(([, v]) => typeof v !== 'number').length > 0 && (
+              <div className="flex flex-wrap gap-2 mb-4">
+                {allFields.filter(([, v]) => typeof v !== 'number').map(([key, val]) => (
+                  <div key={key} className="border border-[hsl(var(--rule))] px-3 py-1.5">
+                    <span className="font-mono text-[10px] text-muted-foreground">{key}:</span>
+                    <span className="font-mono text-[11px] text-foreground ml-1.5">{String(val)}</span>
+                  </div>
                 ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
+              </div>
+            )}
 
-/* ── Commands ───────────────────────────────────────────────────── */
-function CommandsTab({ deviceId, commands }: { deviceId: string; commands: any[] }) {
-  const queryClient = useQueryClient();
-  const [cmdName, setCmdName] = useState('');
-  const [cmdPayload, setCmdPayload] = useState('{}');
-  const [sending, setSending] = useState(false);
+            {/* Chart */}
+            <div className="border border-[hsl(var(--rule))] bg-[hsl(var(--surface))] p-5">
+              <div className="flex items-center gap-3 mb-4 flex-wrap">
+                {/* Field selector */}
+                <div className="relative">
+                  <button
+                    onClick={() => setFieldDropdown(v => !v)}
+                    className="flex items-center gap-2 text-[12px] font-mono border border-[hsl(var(--rule))] px-3 py-1.5 hover:bg-muted transition-colors"
+                  >
+                    <span className="text-primary">{chartField || 'Select field'}</span>
+                    <ChevronDown size={11} className={`transition-transform ${fieldDropdown ? 'rotate-180' : ''}`} />
+                  </button>
+                  {fieldDropdown && (
+                    <>
+                      <div className="fixed inset-0 z-10" onClick={() => setFieldDropdown(false)} />
+                      <div className="absolute left-0 top-full mt-1 bg-[hsl(var(--surface))] border border-[hsl(var(--rule))] shadow-xl z-20 min-w-[140px] animate-fade-in">
+                        {numericFields.map(([k]) => (
+                          <button
+                            key={k}
+                            onClick={() => { setChartField(k); setFieldDropdown(false); }}
+                            className={`w-full px-3 py-2 text-left font-mono text-[11px] hover:bg-muted transition-colors ${k === chartField ? 'text-primary' : 'text-foreground'}`}
+                          >
+                            {k}
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
 
-  const sendCommand = async () => {
-    if (!cmdName.trim()) return;
-    setSending(true);
-    try {
-      let payload = {};
-      try { payload = JSON.parse(cmdPayload); } catch {}
-      await apiClient.post('/commands', { deviceId, name: cmdName, payload });
-      toast.success('Command sent');
-      setCmdName('');
-      setCmdPayload('{}');
-      queryClient.invalidateQueries({ queryKey: ['commands', deviceId] });
-    } catch {
-      toast.error('Failed to send command');
-    } finally {
-      setSending(false);
-    }
-  };
+                {/* Range */}
+                <div className="flex items-center gap-px border border-[hsl(var(--rule))]">
+                  {['1h','6h','24h','7d'].map(r => (
+                    <button
+                      key={r}
+                      onClick={() => setChartRange(r)}
+                      className={`px-3 py-1.5 text-[11px] font-mono transition-colors ${chartRange === r ? 'bg-primary text-white' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}
+                    >
+                      {r}
+                    </button>
+                  ))}
+                </div>
 
-  return (
-    <div className="space-y-4">
-      <div className="card p-5">
-        <h3 className="text-[13px] font-semibold text-foreground mb-4">Send Command</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div>
-            <label className="block text-[12px] text-muted-foreground mb-1.5">Command Name</label>
-            <input value={cmdName} onChange={e => setCmdName(e.target.value)} className="input" placeholder="e.g. reboot, get_status" />
-          </div>
-          <div>
-            <label className="block text-[12px] text-muted-foreground mb-1.5">Payload (JSON)</label>
-            <input value={cmdPayload} onChange={e => setCmdPayload(e.target.value)} className="input font-mono" placeholder="{}" />
-          </div>
-        </div>
-        <button onClick={sendCommand} disabled={sending || !cmdName} className="btn btn-primary mt-3">
-          <Terminal size={14} />
-          {sending ? 'Sending…' : 'Send Command'}
-        </button>
-      </div>
+                <span className="ml-auto font-mono text-[10px] text-muted-foreground">{seriesPoints.length} points</span>
+              </div>
 
-      <div className="card overflow-hidden">
-        <div className="px-4 py-3 border-b border-border">
-          <h3 className="text-[13px] font-semibold text-foreground">Command History</h3>
-        </div>
-        {commands.length === 0 ? (
-          <div className="py-10 text-center text-[13px] text-muted-foreground">No commands sent yet</div>
-        ) : (
-          <table className="data-table">
-            <thead><tr><th>Command</th><th>Status</th><th>Sent</th><th>Response</th></tr></thead>
-            <tbody>
-              {commands.map((cmd: any) => (
-                <tr key={cmd._id}>
-                  <td><span className="font-mono text-[13px] text-primary">{cmd.name}</span></td>
-                  <td>
-                    <span className={cn('badge',
-                      cmd.status === 'executed' ? 'badge-online' :
-                      cmd.status === 'failed'   ? 'badge-error'  :
-                      cmd.status === 'sent'     ? 'badge-info'   : 'badge-offline'
-                    )}>{cmd.status}</span>
-                  </td>
-                  <td className="text-[12px] text-muted-foreground">{timeAgo(cmd.createdAt)}</td>
-                  <td className="text-[12px] text-muted-foreground font-mono">
-                    {cmd.response ? JSON.stringify(cmd.response).slice(0, 40) : '—'}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+              {seriesPoints.length === 0 ? (
+                <div className="h-[200px] flex items-center justify-center text-[13px] text-muted-foreground">
+                  No data for <strong className="mx-1 font-mono">{chartField}</strong> in {chartRange}
+                </div>
+              ) : (
+                <LineChart
+                  series={[{ name: chartField, data: seriesPoints, color: '#FF6A30' }]}
+                  height={200}
+                  showArea
+                />
+              )}
+            </div>
+          </>
         )}
       </div>
-    </div>
-  );
-}
 
-/* ── Location ───────────────────────────────────────────────────── */
-function LocationTab({ device }: { device: any }) {
-  return (
-    <div className="space-y-4">
-      {device.location?.lat ? (
-        <div className="card p-5">
-          <h3 className="text-[13px] font-semibold text-foreground mb-4">Last Known Position</h3>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {[
-              { label: 'Latitude',  value: device.location.lat?.toFixed(6) },
-              { label: 'Longitude', value: device.location.lng?.toFixed(6) },
-              { label: 'Altitude',  value: device.location.alt ? `${device.location.alt?.toFixed(1)} m` : '—' },
-              { label: 'Speed',     value: device.location.speed ? `${device.location.speed?.toFixed(1)} km/h` : '—' },
-              { label: 'Heading',   value: device.location.heading ? `${device.location.heading?.toFixed(0)}°` : '—' },
-              { label: 'Updated',   value: device.location.timestamp ? timeAgo(device.location.timestamp) : '—' },
-            ].map(({ label, value }) => (
-              <div key={label} className="bg-muted rounded-xl p-4">
-                <p className="text-[11px] text-muted-foreground mb-1">{label}</p>
-                <p className="text-[14px] font-semibold text-foreground">{value}</p>
-              </div>
-            ))}
+      {/* ── Section III — Location ────────────────────────────────── */}
+      <div>
+        <div className="flex items-center gap-2 pb-3 mb-4 border-b border-[hsl(var(--rule))]">
+          <span className="serif-i text-muted-foreground mr-2">№ III</span>
+          <span className="eyebrow">Location</span>
+        </div>
+        {d.location?.lat ? (
+          <div className="border border-[hsl(var(--rule))]">
+            <div className="overflow-hidden">
+              <SatelliteMap lat={d.location.lat} lng={d.location.lng ?? d.location.lon ?? 0} />
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-px bg-[hsl(var(--rule))] border-t border-[hsl(var(--rule))]">
+              {[
+                { label: 'Latitude',  value: d.location.lat?.toFixed(6) },
+                { label: 'Longitude', value: (d.location.lng ?? d.location.lon)?.toFixed(6) },
+                { label: 'Altitude',  value: d.location.alt ? `${d.location.alt?.toFixed(1)} m` : '—' },
+                { label: 'Speed',     value: d.location.speed ? `${d.location.speed?.toFixed(1)} km/h` : '—' },
+                { label: 'Heading',   value: d.location.heading ? `${d.location.heading?.toFixed(0)}°` : '—' },
+                { label: 'Updated',   value: d.location.timestamp ? timeAgo(d.location.timestamp) : '—' },
+              ].map(({ label, value }) => (
+                <div key={label} className="bg-[hsl(var(--surface))] px-4 py-3">
+                  <p className="eyebrow text-[9px] mb-1">{label}</p>
+                  <p className="font-mono text-[12px] text-foreground">{value}</p>
+                </div>
+              ))}
+            </div>
           </div>
-          <Link to="/map" className="btn btn-secondary mt-4 inline-flex">
-            <MapPin size={14} /> View on Map
-          </Link>
-        </div>
-      ) : (
-        <div className="card p-12 text-center">
-          <MapPin size={24} className="text-muted-foreground/40 mx-auto mb-3" />
-          <p className="text-[14px] font-medium text-foreground">No location data</p>
-          <p className="text-[12px] text-muted-foreground mt-1">This device has not sent location data yet</p>
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* ── Config ─────────────────────────────────────────────────────── */
-function ConfigTab({ device }: { device: any }) {
-  const queryClient = useQueryClient();
-  const [apiKeyVisible, setApiKeyVisible] = useState(false);
-  const [currentKey, setCurrentKey] = useState(device.apiKey ?? '');
-
-  const regenerate = async () => {
-    if (!confirm('Regenerate API key? The existing key will stop working immediately.')) return;
-    try {
-      const { apiKey } = await devicesApi.regenerateKey(device._id);
-      setCurrentKey(apiKey);
-      toast.success('API key regenerated');
-    } catch {
-      toast.error('Failed to regenerate key');
-    }
-  };
-
-  return (
-    <div className="space-y-4 max-w-xl">
-      <div className="card p-5">
-        <h3 className="text-[13px] font-semibold text-foreground mb-4">Device API Key</h3>
-        <div className="flex items-center gap-2">
-          <input
-            type={apiKeyVisible ? 'text' : 'password'}
-            value={currentKey}
-            readOnly
-            className="input font-mono text-[12px] flex-1"
-          />
-          <button onClick={() => setApiKeyVisible(v => !v)} className="btn btn-secondary btn-sm !px-2.5">
-            {apiKeyVisible ? <EyeOff size={14} /> : <Eye size={14} />}
-          </button>
-          <button
-            onClick={() => { navigator.clipboard.writeText(currentKey); toast.success('Copied!'); }}
-            className="btn btn-secondary btn-sm"
-          >
-            <Copy size={13} /> Copy
-          </button>
-        </div>
-        <p className="text-[12px] text-muted-foreground mt-2">
-          Use this key in the <code className="font-mono bg-muted px-1.5 py-0.5 rounded text-primary text-[11px]">X-API-Key</code> header
-        </p>
-        <button onClick={regenerate} className="btn btn-ghost mt-3 text-red-500 hover:text-red-600 dark:hover:text-red-400">
-          <RefreshCw size={13} /> Regenerate Key
-        </button>
+        ) : (
+          <div className="border border-[hsl(var(--rule))] border-dashed py-12 text-center">
+            <p className="text-[13px] text-muted-foreground">No location data — device has not sent GPS coordinates</p>
+          </div>
+        )}
       </div>
 
-      <div className="card p-5">
-        <h3 className="text-[13px] font-semibold text-foreground mb-3">Ingestion Example</h3>
-        <pre className="bg-muted rounded-xl p-4 text-[12px] font-mono text-muted-foreground overflow-x-auto leading-relaxed">
+      {/* ── Section IV — Commands ─────────────────────────────────── */}
+      <div>
+        <div className="flex items-center gap-2 pb-3 mb-4 border-b border-[hsl(var(--rule))]">
+          <span className="serif-i text-muted-foreground mr-2">№ IV</span>
+          <span className="eyebrow">Commands</span>
+        </div>
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-px bg-[hsl(var(--rule))] border border-[hsl(var(--rule))]">
+
+          {/* Send form */}
+          <div className="bg-[hsl(var(--surface))] p-5">
+            <p className="text-[12px] font-semibold text-foreground mb-4 uppercase tracking-wider">Send Command</p>
+            <div className="space-y-3">
+              <div>
+                <label className="eyebrow text-[9px] block mb-1.5">Command Name</label>
+                <input
+                  value={cmdName}
+                  onChange={e => setCmdName(e.target.value)}
+                  className="input font-mono"
+                  placeholder="reboot, get_status, set_mode…"
+                />
+              </div>
+              <div>
+                <label className="eyebrow text-[9px] block mb-1.5">Payload (JSON)</label>
+                <input
+                  value={cmdPayload}
+                  onChange={e => setCmdPayload(e.target.value)}
+                  className="input font-mono"
+                  placeholder="{}"
+                />
+              </div>
+              <button
+                onClick={sendCommand}
+                disabled={sending || !cmdName.trim()}
+                className="btn btn-primary gap-2"
+              >
+                <Terminal size={13} />
+                {sending ? 'Sending…' : 'Send'}
+              </button>
+            </div>
+          </div>
+
+          {/* Command history */}
+          <div className="bg-[hsl(var(--surface))]">
+            <div className="px-5 py-3 border-b border-[hsl(var(--rule))]">
+              <p className="text-[12px] font-semibold text-foreground uppercase tracking-wider">History</p>
+            </div>
+            <div className="max-h-[280px] overflow-y-auto">
+              {(commands?.data ?? []).length === 0 ? (
+                <div className="py-10 text-center text-[12px] text-muted-foreground">No commands sent yet</div>
+              ) : (
+                (commands?.data ?? []).map((cmd: any) => (
+                  <div key={cmd._id} className="flex items-center gap-3 px-5 py-2.5 border-b border-[hsl(var(--rule)/0.5)] last:border-0">
+                    <span className="font-mono text-[12px] text-primary flex-1 truncate">{cmd.name}</span>
+                    <span className={`font-mono text-[10px] border px-1.5 py-0.5 ${
+                      cmd.status === 'executed' ? 'border-emerald-500/40 text-emerald-600 dark:text-emerald-400' :
+                      cmd.status === 'failed'   ? 'border-red-500/40 text-red-600 dark:text-red-400' :
+                      'border-[hsl(var(--rule))] text-muted-foreground'
+                    }`}>{cmd.status}</span>
+                    <span className="text-[10px] text-muted-foreground font-mono">{timeAgo(cmd.createdAt)}</span>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Section V — Configuration ─────────────────────────────── */}
+      <div>
+        <div className="flex items-center gap-2 pb-3 mb-4 border-b border-[hsl(var(--rule))]">
+          <span className="serif-i text-muted-foreground mr-2">№ V</span>
+          <span className="eyebrow">Configuration</span>
+        </div>
+        <div className="border border-[hsl(var(--rule))] bg-[hsl(var(--surface))] p-5 max-w-2xl">
+          <p className="eyebrow text-[9px] mb-3">Device API Key</p>
+          <div className="flex items-center gap-2">
+            <input
+              type={apiKeyVisible ? 'text' : 'password'}
+              value={currentKey}
+              readOnly
+              className="input font-mono text-[12px] flex-1"
+            />
+            <button onClick={() => setApiKeyVisible(v => !v)} className="btn btn-secondary btn-sm !px-2.5">
+              {apiKeyVisible ? <EyeOff size={13} /> : <Eye size={13} />}
+            </button>
+            <button
+              onClick={() => { navigator.clipboard.writeText(currentKey); toast.success('Copied!'); }}
+              className="btn btn-secondary btn-sm"
+            >
+              <Copy size={12} /> Copy
+            </button>
+          </div>
+          <p className="text-[11px] text-muted-foreground mt-2 font-mono">
+            Include as <span className="text-primary">X-API-Key</span> header in your requests
+          </p>
+          <button
+            onClick={regenerateKey}
+            className="mt-3 flex items-center gap-1.5 text-[11px] text-red-500 hover:text-red-600 dark:hover:text-red-400 transition-colors"
+          >
+            <RefreshCw size={11} /> Regenerate key
+          </button>
+
+          <div className="mt-5 pt-4 border-t border-[hsl(var(--rule))]">
+            <p className="eyebrow text-[9px] mb-2">Quick ingestion example</p>
+            <pre className="bg-muted px-4 py-3 text-[11px] font-mono text-muted-foreground overflow-x-auto leading-relaxed">
 {`curl -X POST https://orion.vortan.io/api/v1/telemetry/ingest \\
-  -H "X-API-Key: ${currentKey?.slice(0, 20)}..." \\
+  -H "X-API-Key: ${currentKey?.slice(0, 16) || '<api-key>'}..." \\
   -H "Content-Type: application/json" \\
-  -d '{"temperature": 24.3, "humidity": 65.1}'`}
-        </pre>
+  -d '{"temperature": 24.3, "humidity": 65}'`}
+            </pre>
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -65,8 +65,9 @@ const config: Config = {
         },
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', 'sans-serif'],
-        mono: ['JetBrains Mono', 'Fira Code', 'monospace'],
+        sans:    ['Geist', 'system-ui', 'sans-serif'],
+        display: ['Instrument Serif', 'Georgia', 'serif'],
+        mono:    ['JetBrains Mono', 'Fira Code', 'monospace'],
       },
       animation: {
         'fade-in':   'fadeIn 0.2s ease-out',
