@@ -1,82 +1,87 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  X, Plus, Trash2, ChevronRight, ChevronLeft,
-  Check, Loader2, MapPin, Activity, AlertTriangle,
-  Code2, Copy, Navigation2, Thermometer,
-  Zap, Waves, Radio, FlaskConical, Cog, Cpu,
-  Search, LineChart, AreaChart, BarChart2, Gauge, ScatterChart,
+  X, Plus, Trash2, Check, Loader2, MapPin,
+  LineChart, AreaChart, BarChart2, Gauge, ScatterChart,
 } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { devicesApi } from '@/api/devices';
 import type { DeviceCategory, DeviceProtocol, DevicePayloadFormat } from '@orion/shared';
 import toast from 'react-hot-toast';
 import L from 'leaflet';
+import { LineChart as CustomLineChart, Sparkline } from '@/components/charts/Charts';
 
 /* ─── Types ─────────────────────────────────────────────────────── */
 export interface DataField {
-  key:        string;
-  label:      string;
-  type:       'number' | 'string' | 'boolean' | 'location' | 'timestamp';
-  unit?:      string;
+  key: string;
+  label: string;
+  type: 'number' | 'string' | 'boolean' | 'location' | 'timestamp';
+  unit?: string;
   chartable?: boolean;
   chartType?: 'line' | 'area' | 'bar' | 'gauge' | 'scatter';
   chartColor?: string;
 }
 
-type Step = 1 | 2 | 3 | 4;
+interface Command {
+  name: string;
+  ctype: 'boolean' | 'number' | 'enum' | 'action';
+  label: string;
+  min?: number;
+  max?: number;
+  step?: number;
+  unit?: string;
+  def?: boolean | number;
+  values?: string;
+}
+
+type Step = 1 | 2 | 3 | 4 | 5;
 
 const EMPTY_FIELD = (): DataField => ({
   key: '', label: '', type: 'number', unit: '',
   chartable: true, chartType: 'line', chartColor: '#FF6A30',
 });
 
-/* ─── Categories ─────────────────────────────────────────────────── */
+const EMPTY_COMMAND = (): Command => ({
+  name: '', ctype: 'boolean', label: '', def: false,
+});
+
+/* ─── Constants ──────────────────────────────────────────────────── */
 const CATEGORIES: {
-  value: DeviceCategory; label: string; Icon: React.FC<any>; color: string;
+  value: DeviceCategory; label: string; color: string;
 }[] = [
-  { value: 'environmental', label: 'Environmental', Icon: Thermometer, color: '#10b981' },
-  { value: 'industrial',    label: 'Industrial',    Icon: Cog,         color: '#ef4444' },
-  { value: 'energy',        label: 'Energy',        Icon: Zap,         color: '#f59e0b' },
-  { value: 'water',         label: 'Water',         Icon: Waves,       color: '#0ea5e9' },
-  { value: 'tracker',       label: 'Tracker',       Icon: Navigation2, color: '#6366f1' },
-  { value: 'gateway',       label: 'Gateway',       Icon: Radio,       color: '#06b6d4' },
-  { value: 'research',      label: 'Research',      Icon: FlaskConical,color: '#a855f7' },
-  { value: 'custom',        label: 'Custom',        Icon: Cpu,         color: '#FF6A30' },
+  { value: 'environmental', label: 'Environmental', color: '#10b981' },
+  { value: 'industrial', label: 'Industrial', color: '#ef4444' },
+  { value: 'energy', label: 'Energy', color: '#f59e0b' },
+  { value: 'water', label: 'Water', color: '#0ea5e9' },
+  { value: 'tracker', label: 'Tracker', color: '#6366f1' },
+  { value: 'gateway', label: 'Gateway', color: '#06b6d4' },
+  { value: 'research', label: 'Research', color: '#a855f7' },
+  { value: 'custom', label: 'Custom', color: '#FF6A30' },
 ];
 
 const PROTOCOLS: { value: DeviceProtocol; label: string }[] = [
-  { value: 'http',      label: 'HTTP/S'    },
-  { value: 'mqtt',      label: 'MQTT'      },
+  { value: 'http', label: 'HTTP/S' },
+  { value: 'mqtt', label: 'MQTT' },
   { value: 'websocket', label: 'WebSocket' },
-  { value: 'coap',      label: 'CoAP'      },
-  { value: 'tcp',       label: 'TCP'       },
-  { value: 'custom',    label: 'Custom'    },
+  { value: 'coap', label: 'CoAP' },
+  { value: 'tcp', label: 'TCP' },
+  { value: 'custom', label: 'Custom' },
 ];
 
 const CHART_TYPES: { value: DataField['chartType']; label: string; Icon: React.FC<any> }[] = [
-  { value: 'line',    label: 'Line',    Icon: LineChart   },
-  { value: 'area',    label: 'Area',    Icon: AreaChart   },
-  { value: 'bar',     label: 'Bar',     Icon: BarChart2   },
-  { value: 'gauge',   label: 'Gauge',   Icon: Gauge       },
+  { value: 'line', label: 'Line', Icon: LineChart },
+  { value: 'area', label: 'Area', Icon: AreaChart },
+  { value: 'bar', label: 'Bar', Icon: BarChart2 },
+  { value: 'gauge', label: 'Gauge', Icon: Gauge },
   { value: 'scatter', label: 'Scatter', Icon: ScatterChart },
 ];
 
 const CHART_COLORS = ['#FF6A30','#5B8DEF','#22C55E','#F59E0B','#8B5CF6','#06B6D4','#F43F5E','#0ea5e9'];
 
-const FORMAT_TABS = [
-  { key: 'json',  label: 'JSON'  },
-  { key: 'csv',   label: 'CSV'   },
-  { key: 'xml',   label: 'XML'   },
-  { key: 'mqtt',  label: 'MQTT'  },
-  { key: 'http',  label: 'HTTP'  },
-  { key: 'proto', label: 'Proto' },
-];
-
 /* ─── Helpers ────────────────────────────────────────────────────── */
 function inferType(value: unknown): DataField['type'] {
   if (typeof value === 'boolean') return 'boolean';
-  if (typeof value === 'number')  return 'number';
+  if (typeof value === 'number') return 'number';
   if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}/.test(value)) return 'timestamp';
   return 'string';
 }
@@ -85,71 +90,209 @@ function parseJsonToFields(raw: string): DataField[] | null {
   try {
     const parsed = JSON.parse(raw);
     if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return null;
-    return Object.entries(parsed).map(([key, value]) => ({
+    return Object.entries(parsed).map(([key, value], idx) => ({
       key,
       label: key.charAt(0).toUpperCase() + key.slice(1).replace(/[_-]/g, ' '),
-      type:  inferType(value),
-      unit:  '',
+      type: inferType(value),
+      unit: '',
       chartable: inferType(value) === 'number',
       chartType: 'line' as const,
-      chartColor: '#FF6A30',
+      chartColor: CHART_COLORS[idx % CHART_COLORS.length],
     }));
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }
 
-function genJsonPayload(fields: DataField[]): string {
+function genPayload(fields: DataField[]): Record<string, unknown> {
   const obj: Record<string, unknown> = {};
   fields.filter(f => f.key).forEach(f => {
-    if (f.type === 'number')    obj[f.key] = 0;
-    else if (f.type === 'boolean') obj[f.key] = true;
+    if (f.type === 'number') obj[f.key] = 0;
+    else if (f.type === 'boolean') obj[f.key] = false;
     else if (f.type === 'timestamp') obj[f.key] = new Date().toISOString();
     else obj[f.key] = '';
   });
-  return JSON.stringify(obj, null, 2);
+  return obj;
 }
 
-function genCsvPayload(fields: DataField[]): string {
-  const valid = fields.filter(f => f.key);
-  const keys = valid.map(f => f.key);
-  const vals = valid.map(f => f.type === 'number' ? '0' : f.type === 'boolean' ? 'true' : '""');
-  return `${keys.join(',')},timestamp\n${vals.join(',')},${new Date().toISOString()}`;
+/* ─── Step indicator ──────────────────────────────────────────────── */
+function Steps({ current }: { current: Step }) {
+  const STEPS: { n: Step; label: string }[] = [
+    { n: 1, label: 'Identity' },
+    { n: 2, label: 'Data Fields' },
+    { n: 3, label: 'Commands' },
+    { n: 4, label: 'Location' },
+    { n: 5, label: 'Review' },
+  ];
+
+  return (
+    <div className="flex items-center gap-0 mb-8">
+      {STEPS.map(({ n, label }, i) => (
+        <div key={n} className="flex items-center flex-1">
+          <div className="flex flex-col items-center gap-1.5 flex-shrink-0">
+            <div className={`w-8 h-8 flex items-center justify-center text-[11px] font-semibold transition-all ${
+              current > n ? 'bg-primary text-white'
+              : current === n ? 'bg-primary text-white ring-4 ring-primary/30'
+              : 'bg-muted text-muted-foreground border border-[hsl(var(--rule))]'
+            }`}>
+              {current > n ? <Check size={14} strokeWidth={3} /> : n}
+            </div>
+            <span className={`text-[9px] whitespace-nowrap font-mono text-center ${current >= n ? 'text-foreground' : 'text-muted-foreground'}`}>
+              {label}
+            </span>
+          </div>
+          {i < STEPS.length - 1 && (
+            <div className={`flex-1 h-px mx-2 mb-6 transition-colors ${current > n ? 'bg-primary' : 'bg-[hsl(var(--rule))]'}`} />
+          )}
+        </div>
+      ))}
+    </div>
+  );
 }
 
-function genXmlPayload(fields: DataField[]): string {
-  const inner = fields.filter(f => f.key).map(f => {
-    const v = f.type === 'number' ? '0' : f.type === 'boolean' ? 'true' : '';
-    return `  <${f.key}>${v}</${f.key}>`;
-  }).join('\n');
-  return `<?xml version="1.0" encoding="UTF-8"?>\n<telemetry>\n${inner}\n  <timestamp>${new Date().toISOString()}</timestamp>\n</telemetry>`;
+/* ─── Graph preview component ────────────────────────────────────────── */
+function GraphPreview({ field }: { field: DataField }) {
+  const sparklineData = useMemo(() =>
+    Array.from({ length: 20 }, (_, i) => ({
+      t: i,
+      v: 30 - Math.sin(i / 3) * 18 + Math.cos(i / 2) * 8,
+    })),
+    []
+  );
+
+  if (field.type !== 'number') {
+    return (
+      <div className="border border-[hsl(var(--rule))] p-6 text-center bg-muted/20">
+        <p className="text-[12px] text-muted-foreground">
+          Visualization available for <strong className="text-foreground">number</strong> fields only.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="border border-[hsl(var(--rule))] p-3 bg-muted/20">
+      <p className="eyebrow text-[9px] mb-2">Preview</p>
+      <Sparkline data={sparklineData} height={50} color={field.chartColor || '#FF6A30'} fill />
+    </div>
+  );
 }
 
-function genMqttExample(fields: DataField[]): string {
-  const obj = Object.fromEntries(fields.filter(f => f.key).map(f => [f.key, f.type === 'number' ? 0 : true]));
-  return `Topic:   devices/<device-id>/telemetry\nQoS:     1\nPayload: ${JSON.stringify(obj)}`;
+/* ─── Command preview ────────────────────────────────────────────────── */
+function CommandPreview({ cmd }: { cmd: Command }) {
+  const [bv, setBv] = useState(cmd.def as boolean ?? false);
+  const [nv, setNv] = useState(cmd.def as number ?? 0);
+  const [ev, setEv] = useState((cmd.values || '').split(',')[0] || '');
+  const [pressed, setPressed] = useState(false);
+
+  if (cmd.ctype === 'boolean') {
+    return (
+      <motion.div layout className="space-y-2">
+        <div className="flex items-center justify-between">
+          <span className="text-[13px]">{cmd.label || cmd.name}</span>
+          <div className="flex items-center gap-2">
+            <span className={`text-[11px] font-mono ${bv ? 'text-green-500' : 'text-muted-foreground'}`}>
+              {bv ? 'ON' : 'OFF'}
+            </span>
+            <label className="switch">
+              <input type="checkbox" checked={bv} onChange={e => setBv(e.target.checked)} />
+              <span />
+            </label>
+          </div>
+        </div>
+      </motion.div>
+    );
+  }
+
+  if (cmd.ctype === 'number') {
+    const min = cmd.min ?? 0, max = cmd.max ?? 100, step = cmd.step ?? 1;
+    const pct = ((nv - min) / (max - min || 1)) * 100;
+    return (
+      <motion.div layout className="space-y-3">
+        <div className="flex items-center justify-between">
+          <span className="text-[13px]">{cmd.label || cmd.name}</span>
+          <span className="font-mono text-[14px] text-primary font-semibold">
+            {(+nv).toFixed(step < 1 ? 2 : 0)}{cmd.unit || ''}
+          </span>
+        </div>
+        <div className="space-y-1.5">
+          <div style={{
+            position: 'relative',
+            height: '6px',
+            background: 'hsl(var(--muted))',
+            overflow: 'hidden'
+          }}>
+            <motion.div
+              layout
+              style={{
+                position: 'absolute',
+                inset: 0,
+                width: `${pct}%`,
+                background: 'hsl(var(--primary))',
+              }}
+              transition={{ duration: 0.2 }}
+            />
+          </div>
+          <input
+            type="range"
+            min={min}
+            max={max}
+            step={step}
+            value={nv}
+            onChange={e => setNv(+e.target.value)}
+            className="w-full h-6 cursor-pointer"
+            style={{ accentColor: 'hsl(var(--primary))' }}
+          />
+        </div>
+        <div className="flex items-center justify-between text-[10px] text-muted-foreground font-mono">
+          <span>{min}{cmd.unit || ''}</span>
+          <span>{max}{cmd.unit || ''}</span>
+        </div>
+      </motion.div>
+    );
+  }
+
+  if (cmd.ctype === 'enum') {
+    const vals = (cmd.values || '').split(',').map(s => s.trim()).filter(Boolean);
+    return (
+      <motion.div layout className="flex items-center justify-between">
+        <span className="text-[13px]">{cmd.label || cmd.name}</span>
+        <select
+          value={ev}
+          onChange={e => setEv(e.target.value)}
+          className="select text-[12px] w-40"
+        >
+          {vals.map(v => <option key={v}>{v}</option>)}
+          {vals.length === 0 && <option>(define values)</option>}
+        </select>
+      </motion.div>
+    );
+  }
+
+  // action
+  return (
+    <motion.div layout className="flex items-center justify-between">
+      <span className="text-[13px]">{cmd.label || cmd.name}</span>
+      <motion.button
+        whileHover={{ scale: 1.02 }}
+        whileTap={{ scale: 0.98 }}
+        onClick={() => { setPressed(true); setTimeout(() => setPressed(false), 800); }}
+        className={`btn btn-sm ${pressed ? 'btn-primary' : 'btn-outline'}`}
+      >
+        {pressed ? '✓ Sent' : 'Trigger'}
+      </motion.button>
+    </motion.div>
+  );
 }
 
-function genHttpExample(fields: DataField[]): string {
-  return `POST /api/v1/telemetry/ingest HTTP/1.1\nHost: orion.vortan.io\nX-API-Key: <device-api-key>\nContent-Type: application/json\n\n${genJsonPayload(fields)}`;
-}
-
-function genProtoExample(fields: DataField[]): string {
-  const numF = fields.filter(f => f.key && f.type === 'number');
-  return ['syntax = "proto3";', '', 'message TelemetryPayload {',
-    ...numF.map((f, i) => `  float ${f.key} = ${i + 1};`),
-    '}'].join('\n');
-}
-
-/* ─── Leaflet location picker ─────────────────────────────────────── */
-function LeafletLocationPicker({ lat, lng, onChange }: {
+/* ─── Leaflet location picker ────────────────────────────────────────── */
+function LocationPicker({ lat, lng, onChange }: {
   lat: number; lng: number;
   onChange: (lat: number, lng: number) => void;
 }) {
-  const mapRef   = useRef<HTMLDivElement | null>(null);
-  const leafRef  = useRef<L.Map | null>(null);
+  const mapRef = useRef<HTMLDivElement | null>(null);
+  const leafRef = useRef<L.Map | null>(null);
   const markerRef = useRef<L.Marker | null>(null);
-  const [searchQ, setSearchQ] = useState('');
-  const [results, setResults] = useState<any[]>([]);
-  const [searching, setSearching] = useState(false);
 
   useEffect(() => {
     if (!mapRef.current || leafRef.current) return;
@@ -162,7 +305,7 @@ function LeafletLocationPicker({ lat, lng, onChange }: {
 
     const icon = L.divIcon({
       className: '',
-      html: `<div style="width:14px;height:14px;background:#FF6A30;border:2px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.5)"></div>`,
+      html: `<div style="width:14px;height:14px;background:hsl(var(--primary));border:2px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.5)"></div>`,
       iconSize: [14, 14],
       iconAnchor: [7, 7],
     });
@@ -187,94 +330,15 @@ function LeafletLocationPicker({ lat, lng, onChange }: {
 
     leafRef.current = map;
     return () => { map.remove(); leafRef.current = null; markerRef.current = null; };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  async function nominatimSearch() {
-    if (!searchQ.trim()) return;
-    setSearching(true);
-    try {
-      const res = await fetch(
-        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(searchQ)}&format=json&limit=5`,
-        { headers: { 'Accept-Language': 'en' } }
-      );
-      const data = await res.json();
-      setResults(data);
-    } catch { toast.error('Search failed'); }
-    finally { setSearching(false); }
-  }
-
-  function selectResult(r: any) {
-    const la = parseFloat(r.lat);
-    const ln = parseFloat(r.lon);
-    onChange(la, ln);
-    setResults([]);
-    setSearchQ(r.display_name.split(',')[0]);
-    if (leafRef.current) {
-      leafRef.current.setView([la, ln], 14);
-      const icon = L.divIcon({
-        className: '',
-        html: `<div style="width:14px;height:14px;background:#FF6A30;border:2px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.5)"></div>`,
-        iconSize: [14, 14], iconAnchor: [7, 7],
-      });
-      if (markerRef.current) {
-        markerRef.current.setLatLng([la, ln]);
-      } else {
-        const m = L.marker([la, ln], { icon, draggable: true }).addTo(leafRef.current);
-        m.on('dragend', () => { const p = m.getLatLng(); onChange(p.lat, p.lng); });
-        markerRef.current = m;
-      }
-    }
-  }
+  }, []);
 
   return (
     <div className="space-y-3">
-      {/* Nominatim search */}
-      <div className="relative">
-        <div className="flex gap-2">
-          <div className="relative flex-1">
-            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <input
-              className="input !pl-9"
-              placeholder="Search location…"
-              value={searchQ}
-              onChange={e => setSearchQ(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') nominatimSearch(); }}
-            />
-          </div>
-          <button
-            onClick={nominatimSearch}
-            disabled={searching}
-            className="btn btn-secondary btn-sm px-4"
-          >
-            {searching ? <Loader2 size={13} className="animate-spin" /> : 'Search'}
-          </button>
-        </div>
-        {results.length > 0 && (
-          <div className="absolute left-0 right-0 top-full mt-1 bg-[hsl(var(--surface))] border border-[hsl(var(--rule))] shadow-xl z-20 max-h-48 overflow-y-auto">
-            {results.map((r: any) => (
-              <button
-                key={r.place_id}
-                onClick={() => selectResult(r)}
-                className="w-full px-3 py-2.5 text-left text-[12px] hover:bg-muted transition-colors border-b border-[hsl(var(--rule)/0.5)] last:border-0"
-              >
-                <p className="font-medium text-foreground truncate">{r.display_name.split(',').slice(0, 2).join(', ')}</p>
-                <p className="text-[10px] text-muted-foreground font-mono mt-0.5">{r.type}</p>
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Map */}
-      <div style={{ height: 260 }} className="border border-[hsl(var(--rule))] overflow-hidden">
-        <div ref={mapRef} style={{ width: '100%', height: '100%' }} />
-      </div>
-
+      <div ref={mapRef} style={{ height: 260 }} className="border border-[hsl(var(--rule))]" />
       <p className="text-[11px] text-muted-foreground flex items-center gap-1">
         <MapPin size={11} className="text-primary" />
         Click the map to place your device, or drag the pin to adjust
       </p>
-
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="eyebrow text-[9px] block mb-1.5">Latitude</label>
@@ -301,123 +365,58 @@ function LeafletLocationPicker({ lat, lng, onChange }: {
   );
 }
 
-/* ─── Step indicator ──────────────────────────────────────────────── */
-function Steps({ current }: { current: Step }) {
-  const STEPS: { n: Step; label: string }[] = [
-    { n: 1, label: 'Identity' },
-    { n: 2, label: 'Schema'   },
-    { n: 3, label: 'Preview'  },
-    { n: 4, label: 'Features' },
-  ];
-  return (
-    <div className="flex items-center gap-0 mb-8">
-      {STEPS.map(({ n, label }, i) => (
-        <div key={n} className="flex items-center flex-1">
-          <div className="flex flex-col items-center gap-1 flex-shrink-0">
-            <div className={`w-7 h-7 flex items-center justify-center text-[12px] font-semibold transition-all ${
-              current > n ? 'bg-primary text-white'
-              : current === n ? 'bg-primary text-white ring-4 ring-primary/15'
-              : 'bg-muted text-muted-foreground border border-[hsl(var(--rule))]'
-            }`}>
-              {current > n ? <Check size={12} strokeWidth={3} /> : n}
-            </div>
-            <span className={`text-[10px] whitespace-nowrap font-mono ${current >= n ? 'text-foreground' : 'text-muted-foreground'}`}>
-              {label}
-            </span>
-          </div>
-          {i < STEPS.length - 1 && (
-            <div className={`flex-1 h-px mx-2 mb-4 transition-colors ${current > n ? 'bg-primary' : 'bg-[hsl(var(--rule))]'}`} />
-          )}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-/* ─── Feature toggle ──────────────────────────────────────────────── */
-function FeatureToggle({ icon: Icon, title, desc, enabled, onToggle, children }: {
-  icon: React.FC<any>; title: string; desc: string;
-  enabled: boolean; onToggle: () => void; children?: React.ReactNode;
-}) {
-  return (
-    <div className={`border p-4 transition-all ${enabled ? 'border-primary/30 bg-primary/[0.025]' : 'border-[hsl(var(--rule))]'}`}>
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex items-start gap-3">
-          <div className={`w-8 h-8 flex items-center justify-center flex-shrink-0 ${enabled ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'}`}>
-            <Icon size={15} />
-          </div>
-          <div>
-            <p className="text-[13px] font-semibold text-foreground">{title}</p>
-            <p className="text-[11px] text-muted-foreground mt-0.5">{desc}</p>
-          </div>
-        </div>
-        <button
-          type="button" onClick={onToggle}
-          style={{ width: 40, height: 22 }}
-          className={`relative flex-shrink-0 mt-0.5 transition-colors ${enabled ? 'bg-primary' : 'bg-[hsl(var(--rule))]'}`}
-        >
-          <motion.div
-            animate={{ x: enabled ? 20 : 2 }}
-            transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-            className="absolute top-[2px] w-[18px] h-[18px] bg-white shadow-sm"
-          />
-        </button>
-      </div>
-      <AnimatePresence>
-        {enabled && children && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            className="overflow-hidden mt-4"
-          >
-            {children}
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-}
-
 /* ─── Main component ──────────────────────────────────────────────── */
 export function DeviceForm({ onClose }: { onClose: () => void }) {
   const queryClient = useQueryClient();
   const [step, setStep] = useState<Step>(1);
 
   // Step 1
-  const [name, setName]           = useState('');
-  const [description, setDesc]    = useState('');
-  const [category, setCategory]   = useState<DeviceCategory>('custom');
+  const [name, setName] = useState('');
+  const [description, setDesc] = useState('');
+  const [category, setCategory] = useState<DeviceCategory>('custom');
   const [serialNumber, setSerial] = useState('');
-  const [protocol, setProtocol]   = useState<DeviceProtocol>('http');
-  const [payloadFormat, setFormat]= useState<DevicePayloadFormat>('json');
-  const [tags, setTagsStr]        = useState('');
+  const [protocol, setProtocol] = useState<DeviceProtocol>('http');
+  const [payloadFormat, setFormat] = useState<DevicePayloadFormat>('json');
+  const [tags, setTagsStr] = useState('');
 
   // Step 2
-  const [fields, setFields]         = useState<DataField[]>([EMPTY_FIELD()]);
+  const [fields, setFields] = useState<DataField[]>([EMPTY_FIELD()]);
   const [selectedFieldIdx, setSelIdx] = useState<number | null>(null);
-  const [pasteOpen, setPasteOpen]   = useState(false);
-  const [pasteJson, setPasteJson]   = useState('');
+  const [pasteJson, setPasteJson] = useState('');
   const [pasteError, setPasteError] = useState('');
 
   // Step 3
-  const [previewTab, setPreviewTab] = useState('json');
+  const [commands, setCommands] = useState<Command[]>([]);
 
   // Step 4
-  const [locationEnabled, setLocation] = useState(false);
-  const [lat, setLat]                  = useState(0);
-  const [lng, setLng]                  = useState(0);
-  const [tracking, setTracking]        = useState(false);
-  const [geofence, setGeofence]        = useState(false);
+  const [lat, setLat] = useState(0);
+  const [lng, setLng] = useState(0);
 
   const updateField = useCallback((i: number, patch: Partial<DataField>) => {
     setFields(prev => prev.map((f, idx) => idx === i ? { ...f, ...patch } : f));
   }, []);
 
-  const addField = () => { setFields(prev => [...prev, EMPTY_FIELD()]); setSelIdx(fields.length); };
+  const addField = () => {
+    const newIdx = fields.length;
+    setFields(prev => [...prev, EMPTY_FIELD()]);
+    setSelIdx(newIdx);
+  };
+
   const removeField = (i: number) => {
     setFields(prev => prev.filter((_, idx) => idx !== i));
     if (selectedFieldIdx === i) setSelIdx(null);
+  };
+
+  const updateCommand = useCallback((i: number, patch: Partial<Command>) => {
+    setCommands(prev => prev.map((c, idx) => idx === i ? { ...c, ...patch } : c));
+  }, []);
+
+  const addCommand = () => {
+    setCommands(prev => [...prev, EMPTY_COMMAND()]);
+  };
+
+  const removeCommand = (i: number) => {
+    setCommands(prev => prev.filter((_, idx) => idx !== i));
   };
 
   function applyPaste() {
@@ -425,28 +424,14 @@ export function DeviceForm({ onClose }: { onClose: () => void }) {
     const result = parseJsonToFields(pasteJson);
     if (!result) { setPasteError('Invalid JSON or not a flat object'); return; }
     setFields(result.length > 0 ? result : [EMPTY_FIELD()]);
-    setPasteOpen(false); setPasteJson(''); setPasteError('');
+    setPasteJson('');
+    setPasteError('');
+    setSelIdx(0);
     toast.success(`Imported ${result.length} field${result.length !== 1 ? 's' : ''}`);
   }
 
   const validFields = fields.filter(f => f.key.trim());
-
-  const previewContent = useMemo(() => {
-    switch (previewTab) {
-      case 'json':  return genJsonPayload(validFields);
-      case 'csv':   return genCsvPayload(validFields);
-      case 'xml':   return genXmlPayload(validFields);
-      case 'mqtt':  return genMqttExample(validFields);
-      case 'http':  return genHttpExample(validFields);
-      case 'proto': return genProtoExample(validFields);
-      default:      return '';
-    }
-  }, [previewTab, validFields]);
-
-  // Live JSON for step 2
-  const liveJson = useMemo(() => genJsonPayload(fields.filter(f => f.key.trim())), [fields]);
-
-  const selectedField = selectedFieldIdx !== null ? fields[selectedFieldIdx] : null;
+  const payload = genPayload(validFields);
 
   const mutation = useMutation({
     mutationFn: (input: any) => devicesApi.create(input),
@@ -460,427 +445,509 @@ export function DeviceForm({ onClose }: { onClose: () => void }) {
 
   function handleSubmit() {
     if (!name.trim()) { toast.error('Device name is required'); return; }
-    const payload: any = {
-      name: name.trim(), description: description.trim() || undefined,
+    const devicePayload: any = {
+      name: name.trim(),
+      description: description.trim() || undefined,
       serialNumber: serialNumber.trim() || undefined,
       category, protocol, payloadFormat,
       tags: tags ? tags.split(',').map(t => t.trim()).filter(Boolean) : [],
-      meta: { dataSchema: { fields: validFields }, features: { locationEnabled, tracking, geofence } },
+      meta: {
+        dataSchema: { fields: validFields },
+        commands: commands.map(c => ({
+          name: c.name,
+          type: c.ctype,
+          label: c.label,
+          ...(c.ctype === 'number' ? { min: c.min, max: c.max, step: c.step, unit: c.unit, default: c.def } : {}),
+          ...(c.ctype === 'enum' ? { values: (c.values || '').split(',').map(s => s.trim()).filter(Boolean) } : {}),
+          ...(c.ctype === 'boolean' ? { default: c.def } : {}),
+        })),
+      },
     };
-    if (locationEnabled && lat && lng) {
-      payload.location = { lat, lng, timestamp: new Date().toISOString() };
+    if (lat && lng) {
+      devicePayload.location = { lat, lng, timestamp: new Date().toISOString() };
     }
-    mutation.mutate(payload);
+    mutation.mutate(devicePayload);
   }
 
+  const selectedField = selectedFieldIdx !== null ? fields[selectedFieldIdx] : null;
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <motion.div
-        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-        className="absolute inset-0 bg-foreground/30 backdrop-blur-[2px]"
-        onClick={onClose}
-      />
-      <motion.div
-        initial={{ opacity: 0, scale: 0.97, y: 12 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.97, y: 12 }}
-        transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
-        className="relative bg-background border border-[hsl(var(--rule))] shadow-2xl w-full max-w-4xl max-h-[92vh] overflow-hidden flex flex-col"
-        onClick={e => e.stopPropagation()}
-      >
+    <>
+      <div className="modal-backdrop" onClick={onClose} />
+      <div className="modal-sheet">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[hsl(var(--rule))] flex-shrink-0">
-          <div>
-            <p className="eyebrow text-[9px] mb-1">Device Registration</p>
-            <h2 className="text-[15px] font-semibold text-foreground tracking-tight">Add Device</h2>
+        <div className="flex-shrink-0 px-8 py-6 border-b border-[hsl(var(--rule))]">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <p className="eyebrow text-[9px] mb-1">Provisioning</p>
+              <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '32px', lineHeight: 1, marginTop: 4 }}>
+                New <em style={{ color: 'hsl(var(--primary))', fontStyle: 'italic' }}>device</em>.
+              </h2>
+            </div>
+            <button onClick={onClose} className="w-8 h-8 flex items-center justify-center text-muted-foreground hover:text-foreground">
+              <X size={16} />
+            </button>
           </div>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors">
-            <X size={16} />
-          </button>
+          <Steps current={step} />
         </div>
 
         {/* Body */}
-        <div className="flex-1 overflow-y-auto p-6">
-          <Steps current={step} />
-
-          {/* ── Step 1: Identity ── */}
-          {step === 1 && (
-            <motion.div key="s1" initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} className="space-y-5">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="col-span-2">
-                  <label className="eyebrow text-[9px] block mb-1.5">Device Name <span className="text-red-500">*</span></label>
-                  <input className="input" placeholder="e.g. Sensor Node #12" value={name} onChange={e => setName(e.target.value)} autoFocus />
-                </div>
-                <div className="col-span-2">
-                  <label className="eyebrow text-[9px] block mb-1.5">Description</label>
-                  <input className="input" placeholder="Optional description" value={description} onChange={e => setDesc(e.target.value)} />
-                </div>
-                <div>
-                  <label className="eyebrow text-[9px] block mb-1.5">Serial Number</label>
-                  <input className="input" placeholder="SN-0001" value={serialNumber} onChange={e => setSerial(e.target.value)} />
-                </div>
-                <div>
-                  <label className="eyebrow text-[9px] block mb-1.5">Tags</label>
-                  <input className="input" placeholder="prod, outdoor, zone-a" value={tags} onChange={e => setTagsStr(e.target.value)} />
-                  <p className="text-[10px] text-muted-foreground font-mono mt-1">Comma-separated</p>
-                </div>
-              </div>
-
-              <div>
-                <label className="eyebrow text-[9px] block mb-2">Category</label>
-                <div className="grid grid-cols-4 gap-2">
-                  {CATEGORIES.map(c => {
-                    const Icon = c.Icon;
-                    const active = category === c.value;
-                    return (
-                      <button
-                        key={c.value} type="button" onClick={() => setCategory(c.value)}
-                        className={`flex flex-col items-center gap-2 p-3 border text-[11px] font-medium transition-all ${
-                          active ? 'border-primary bg-primary/5 text-primary' : 'border-[hsl(var(--rule))] text-muted-foreground hover:text-foreground hover:border-foreground/20'
-                        }`}
-                      >
-                        <Icon size={16} style={{ color: active ? 'hsl(var(--primary))' : c.color }} />
-                        {c.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="eyebrow text-[9px] block mb-2">Protocol</label>
-                  <div className="flex flex-wrap gap-1.5">
-                    {PROTOCOLS.map(p => (
-                      <button key={p.value} type="button" onClick={() => setProtocol(p.value)}
-                        className={`px-3 py-1.5 border text-[11px] font-mono transition-all ${
-                          protocol === p.value ? 'border-primary bg-primary/5 text-primary' : 'border-[hsl(var(--rule))] text-muted-foreground hover:text-foreground'
-                        }`}
-                      >
-                        {p.label}
-                      </button>
-                    ))}
+        <div className="flex-1 overflow-hidden flex">
+          {/* Main form area */}
+          <div className="flex-1 overflow-y-auto px-8 py-6">
+            <AnimatePresence mode="wait">
+              {/* Step 1: Identity */}
+              {step === 1 && (
+                <motion.div key="s1" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-5">
+                  <div className="space-y-3">
+                    <div>
+                      <label className="eyebrow text-[9px] block mb-1.5">Device Name <span className="text-red-500">*</span></label>
+                      <input className="input" placeholder="e.g. Sensor Node #12" value={name} onChange={e => setName(e.target.value)} autoFocus />
+                    </div>
+                    <div>
+                      <label className="eyebrow text-[9px] block mb-1.5">Description</label>
+                      <input className="input" placeholder="Optional description" value={description} onChange={e => setDesc(e.target.value)} />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="eyebrow text-[9px] block mb-1.5">Serial Number</label>
+                        <input className="input" placeholder="SN-0001" value={serialNumber} onChange={e => setSerial(e.target.value)} />
+                      </div>
+                      <div>
+                        <label className="eyebrow text-[9px] block mb-1.5">Tags</label>
+                        <input className="input" placeholder="prod, outdoor" value={tags} onChange={e => setTagsStr(e.target.value)} />
+                      </div>
+                    </div>
                   </div>
-                </div>
-                <div>
-                  <label className="eyebrow text-[9px] block mb-2">Payload Format</label>
-                  <select value={payloadFormat} onChange={e => setFormat(e.target.value as DevicePayloadFormat)} className="select">
-                    {['json','csv','xml','raw','msgpack','cbor','protobuf','binary','custom'].map(f => (
-                      <option key={f} value={f}>{f.toUpperCase()}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-            </motion.div>
-          )}
 
-          {/* ── Step 2: Schema + JSON Preview ── */}
-          {step === 2 && (
-            <motion.div key="s2" initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-[13px] font-semibold text-foreground">Define your data fields</p>
-                  <p className="text-[11px] text-muted-foreground">Fields power dashboards, alerts, and auto-generated controls.</p>
-                </div>
-                <button type="button" onClick={() => { setPasteOpen(v => !v); setPasteError(''); }} className="btn btn-secondary btn-sm gap-1.5">
-                  <Code2 size={12} /> Paste JSON
-                </button>
-              </div>
+                  <div>
+                    <label className="eyebrow text-[9px] block mb-2">Category</label>
+                    <div className="grid grid-cols-4 gap-2">
+                      {CATEGORIES.map(c => (
+                        <button
+                          key={c.value} type="button" onClick={() => setCategory(c.value)}
+                          className={`py-2 border text-[10px] font-medium transition-all ${
+                            category === c.value ? 'border-primary bg-primary/5 text-primary' : 'border-[hsl(var(--rule))] text-muted-foreground hover:text-foreground'
+                          }`}
+                        >
+                          {c.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
 
-              <AnimatePresence>
-                {pasteOpen && (
-                  <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
-                    <div className="border border-[hsl(var(--rule))] bg-muted/30 p-4">
-                      <p className="text-[12px] font-medium text-foreground mb-2">Paste a sample JSON payload:</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="eyebrow text-[9px] block mb-2">Protocol</label>
+                      <div className="flex flex-wrap gap-1.5">
+                        {PROTOCOLS.map(p => (
+                          <button key={p.value} type="button" onClick={() => setProtocol(p.value)}
+                            className={`px-2.5 py-1.5 border text-[10px] font-mono transition-all ${
+                              protocol === p.value ? 'border-primary bg-primary/5 text-primary' : 'border-[hsl(var(--rule))] text-muted-foreground hover:text-foreground'
+                            }`}
+                          >
+                            {p.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <label className="eyebrow text-[9px] block mb-2">Payload Format</label>
+                      <select value={payloadFormat} onChange={e => setFormat(e.target.value as DevicePayloadFormat)} className="select">
+                        {['json','csv','xml','raw','msgpack','cbor','protobuf','binary','custom'].map(f => (
+                          <option key={f} value={f}>{f.toUpperCase()}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+
+              {/* Step 2: Data Fields */}
+              {step === 2 && (
+                <motion.div key="s2" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-5">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-[13px] font-semibold">Define your data fields</p>
+                      <p className="text-[11px] text-muted-foreground mt-1">Fields power dashboards, alerts, and controls.</p>
+                    </div>
+                    <button type="button" onClick={() => setPasteJson('')} className="btn btn-secondary btn-sm">
+                      Paste JSON
+                    </button>
+                  </div>
+
+                  {pasteJson === '' ? (
+                    <div className="space-y-3">
+                      {/* Fields list */}
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <p className="eyebrow text-[9px]">Fields ({validFields.length})</p>
+                          <button onClick={addField} className="text-[11px] text-primary hover:underline flex items-center gap-1">
+                            <Plus size={11} /> Add
+                          </button>
+                        </div>
+                        <div className="space-y-1.5 max-h-[200px] overflow-y-auto pr-1">
+                          {fields.map((field, i) => (
+                            <motion.div
+                              key={i}
+                              layout
+                              onClick={() => setSelIdx(i)}
+                              className={`border p-2.5 space-y-1.5 cursor-pointer transition-all ${
+                                selectedFieldIdx === i ? 'border-primary/40 bg-primary/[0.025]' : 'border-[hsl(var(--rule))] hover:border-foreground/20'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2">
+                                <input
+                                  className="input text-[11px] !h-7 flex-1 font-mono"
+                                  placeholder="field_key"
+                                  value={field.key}
+                                  onChange={e => updateField(i, { key: e.target.value })}
+                                  onClick={e => e.stopPropagation()}
+                                />
+                                <button
+                                  onClick={e => { e.stopPropagation(); removeField(i); }}
+                                  className="w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-red-500 flex-shrink-0"
+                                >
+                                  <Trash2 size={11} />
+                                </button>
+                              </div>
+                              <div className="grid grid-cols-3 gap-1">
+                                <input className="input text-[10px] !h-7" placeholder="Label"
+                                  value={field.label} onChange={e => updateField(i, { label: e.target.value })}
+                                  onClick={e => e.stopPropagation()} />
+                                <select className="select text-[10px] !h-7" value={field.type}
+                                  onChange={e => updateField(i, { type: e.target.value as DataField['type'] })}
+                                  onClick={e => e.stopPropagation()}>
+                                  <option value="number">Number</option>
+                                  <option value="string">Text</option>
+                                  <option value="boolean">Bool</option>
+                                </select>
+                                <input className="input text-[10px] !h-7" placeholder="Unit"
+                                  value={field.unit ?? ''} onChange={e => updateField(i, { unit: e.target.value })}
+                                  onClick={e => e.stopPropagation()} />
+                              </div>
+                            </motion.div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Visualization */}
+                      {selectedField && (
+                        <div className="border-t border-[hsl(var(--rule))] pt-4 mt-4 space-y-3">
+                          <p className="eyebrow text-[9px]">Visualization — {selectedField.label || selectedField.key}</p>
+                          {selectedField.type === 'number' ? (
+                            <>
+                              <div className="space-y-2">
+                                <div className="flex gap-1">
+                                  {CHART_TYPES.map(({ value, label, Icon }) => (
+                                    <button key={value} type="button"
+                                      onClick={() => updateField(selectedFieldIdx!, { chartType: value })}
+                                      className={`flex-1 flex flex-col items-center gap-1 py-1.5 border text-[10px] font-medium transition-all ${
+                                        selectedField.chartType === value
+                                          ? 'border-primary bg-primary/5 text-primary'
+                                          : 'border-[hsl(var(--rule))] text-muted-foreground hover:text-foreground'
+                                      }`}
+                                    >
+                                      <Icon size={12} />
+                                      {label}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+
+                              <div>
+                                <p className="eyebrow text-[9px] mb-2">Color</p>
+                                <div className="flex flex-wrap gap-1">
+                                  {CHART_COLORS.map(c => (
+                                    <button key={c} type="button"
+                                      onClick={() => updateField(selectedFieldIdx!, { chartColor: c })}
+                                      style={{ backgroundColor: c }}
+                                      className={`w-5 h-5 transition-all ${selectedField.chartColor === c ? 'ring-2 ring-offset-1 ring-foreground/50 scale-110' : 'hover:scale-105'}`}
+                                    />
+                                  ))}
+                                  <input
+                                    type="color"
+                                    value={selectedField.chartColor ?? '#FF6A30'}
+                                    onChange={e => updateField(selectedFieldIdx!, { chartColor: e.target.value })}
+                                    className="w-5 h-5 cursor-pointer border border-[hsl(var(--rule))]"
+                                  />
+                                </div>
+                              </div>
+
+                              <GraphPreview field={selectedField} />
+                            </>
+                          ) : (
+                            <div className="border border-[hsl(var(--rule))] p-4 text-center bg-muted/20">
+                              <p className="text-[11px] text-muted-foreground">
+                                Visualization available for <strong>number</strong> fields only.
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
                       <textarea
                         autoFocus value={pasteJson}
                         onChange={e => { setPasteJson(e.target.value); setPasteError(''); }}
-                        rows={4} className="textarea font-mono text-[12px]"
+                        rows={8} className="textarea font-mono text-[11px]"
                         placeholder={'{\n  "temperature": 23.5,\n  "humidity": 78\n}'}
                       />
                       {pasteError && (
-                        <p className="text-[11px] text-red-500 flex items-center gap-1 mt-1.5">
-                          <AlertTriangle size={11} /> {pasteError}
+                        <p className="text-[11px] text-red-500 flex items-center gap-1">
+                          ⚠ {pasteError}
                         </p>
                       )}
-                      <div className="flex gap-2 mt-3">
+                      <div className="flex gap-2">
                         <button onClick={applyPaste} className="btn btn-primary btn-sm">Import fields</button>
-                        <button onClick={() => setPasteOpen(false)} className="btn btn-secondary btn-sm">Cancel</button>
+                        <button onClick={() => setPasteJson('')} className="btn btn-secondary btn-sm">Cancel</button>
                       </div>
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-              <div className="grid grid-cols-2 gap-4">
-                {/* Left — Field builder */}
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <p className="eyebrow text-[9px]">Fields ({fields.filter(f => f.key).length})</p>
-                    <button onClick={addField} className="flex items-center gap-1 text-[11px] text-primary hover:underline">
-                      <Plus size={11} /> Add
-                    </button>
-                  </div>
-                  <div className="space-y-2 max-h-[260px] overflow-y-auto pr-1">
-                    {fields.map((field, i) => (
-                      <div
-                        key={i}
-                        onClick={() => setSelIdx(i)}
-                        className={`border p-3 space-y-2 cursor-pointer transition-all ${selectedFieldIdx === i ? 'border-primary/40 bg-primary/[0.025]' : 'border-[hsl(var(--rule))] hover:border-foreground/20'}`}
-                      >
-                        <div className="flex items-center gap-2">
-                          <input
-                            className="input text-[12px] !h-7 flex-1 font-mono"
-                            placeholder="field_key"
-                            value={field.key}
-                            onChange={e => updateField(i, { key: e.target.value })}
-                            onClick={e => e.stopPropagation()}
-                          />
-                          <button
-                            onClick={e => { e.stopPropagation(); removeField(i); }}
-                            className="w-7 h-7 flex items-center justify-center text-muted-foreground hover:text-red-500 flex-shrink-0"
-                          >
-                            <Trash2 size={11} />
-                          </button>
-                        </div>
-                        <div className="grid grid-cols-3 gap-1.5">
-                          <input className="input text-[11px] !h-7" placeholder="Label"
-                            value={field.label} onChange={e => updateField(i, { label: e.target.value })}
-                            onClick={e => e.stopPropagation()} />
-                          <select className="select text-[11px] !h-7" value={field.type}
-                            onChange={e => updateField(i, { type: e.target.value as DataField['type'] })}
-                            onClick={e => e.stopPropagation()}>
-                            <option value="number">Number</option>
-                            <option value="string">Text</option>
-                            <option value="boolean">Bool</option>
-                            <option value="location">Location</option>
-                            <option value="timestamp">Timestamp</option>
-                          </select>
-                          <input className="input text-[11px] !h-7" placeholder="Unit"
-                            value={field.unit ?? ''} onChange={e => updateField(i, { unit: e.target.value })}
-                            onClick={e => e.stopPropagation()} />
-                        </div>
-                        {field.chartColor && (
-                          <div className="flex items-center gap-1.5">
-                            <div className="w-2 h-2" style={{ backgroundColor: field.chartColor }} />
-                            <span className="text-[9px] text-muted-foreground font-mono capitalize">{field.chartType}</span>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Live JSON preview */}
-                  <div className="border border-[hsl(var(--rule))] bg-muted/20">
-                    <div className="flex items-center justify-between px-3 py-2 border-b border-[hsl(var(--rule)/0.5)]">
-                      <p className="eyebrow text-[9px]">Live JSON Preview</p>
-                      <button
-                        onClick={() => { navigator.clipboard.writeText(liveJson); toast.success('Copied!'); }}
-                        className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground"
-                      >
-                        <Copy size={9} /> Copy
-                      </button>
-                    </div>
-                    <pre className="p-3 text-[11px] font-mono text-foreground/80 overflow-x-auto max-h-[120px] leading-relaxed">
-                      {validFields.length > 0 ? liveJson : '// Add fields above'}
-                    </pre>
-                  </div>
-                </div>
-
-                {/* Right — Visualization */}
-                <div className="space-y-3">
-                  {selectedField ? (
-                    <>
-                      <p className="eyebrow text-[9px]">
-                        Visualization — {selectedField.label || selectedField.key || 'field'}
-                      </p>
-                      {selectedField.type === 'number' ? (
-                        <>
-                          <div className="flex gap-1.5">
-                            {CHART_TYPES.map(({ value, label, Icon }) => (
-                              <button key={value} type="button"
-                                onClick={() => updateField(selectedFieldIdx!, { chartType: value })}
-                                className={`flex-1 flex flex-col items-center gap-1 py-2 border text-[10px] font-medium transition-all ${
-                                  selectedField.chartType === value
-                                    ? 'border-primary bg-primary/5 text-primary'
-                                    : 'border-[hsl(var(--rule))] text-muted-foreground hover:text-foreground'
-                                }`}
-                              >
-                                <Icon size={13} />
-                                {label}
-                              </button>
-                            ))}
-                          </div>
-                          <div>
-                            <p className="eyebrow text-[9px] mb-2">Color</p>
-                            <div className="flex flex-wrap gap-1.5">
-                              {CHART_COLORS.map(c => (
-                                <button key={c} type="button"
-                                  onClick={() => updateField(selectedFieldIdx!, { chartColor: c })}
-                                  style={{ backgroundColor: c }}
-                                  className={`w-6 h-6 transition-all ${selectedField.chartColor === c ? 'ring-2 ring-offset-2 ring-foreground/20 scale-110' : 'hover:scale-105'}`}
-                                />
-                              ))}
-                              <input
-                                type="color"
-                                value={selectedField.chartColor ?? '#FF6A30'}
-                                onChange={e => updateField(selectedFieldIdx!, { chartColor: e.target.value })}
-                                className="w-6 h-6 cursor-pointer border border-[hsl(var(--rule))]"
-                                title="Custom color"
-                              />
-                            </div>
-                          </div>
-                          {/* Simple sparkline preview */}
-                          <div className="border border-[hsl(var(--rule))] p-3 bg-muted/20">
-                            <p className="eyebrow text-[9px] mb-2">Preview</p>
-                            <svg width="100%" height="60" style={{ overflow: 'hidden' }}>
-                              {(() => {
-                                const pts = Array.from({ length: 20 }, (_, i) => ({
-                                  x: (i / 19) * 100 + '%',
-                                  y: 50 - (Math.sin(i / 3) * 18 + Math.random() * 8),
-                                }));
-                                const path = pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
-                                const color = selectedField.chartColor ?? '#FF6A30';
-                                return (
-                                  <>
-                                    <path d={`${path} L 100% 60 L 0 60 Z`} fill={color} opacity="0.15" />
-                                    <path d={path} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" />
-                                  </>
-                                );
-                              })()}
-                            </svg>
-                          </div>
-                        </>
-                      ) : (
-                        <div className="border border-[hsl(var(--rule))] p-6 text-center">
-                          <p className="text-[12px] text-muted-foreground">
-                            Visualization available for <strong className="text-foreground">number</strong> fields only.
-                          </p>
-                        </div>
-                      )}
-                    </>
-                  ) : (
-                    <div className="border border-dashed border-[hsl(var(--rule))] p-8 text-center">
-                      <Activity size={18} className="text-muted-foreground/30 mx-auto mb-2" />
-                      <p className="text-[12px] text-muted-foreground">Select a field to configure visualization</p>
                     </div>
                   )}
-                </div>
-              </div>
-            </motion.div>
-          )}
 
-          {/* ── Step 3: Payload Preview ── */}
-          {step === 3 && (
-            <motion.div key="s3" initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} className="space-y-4">
-              <div>
-                <p className="text-[13px] font-semibold text-foreground">Device payload reference</p>
-                <p className="text-[11px] text-muted-foreground">How your firmware should format and send data.</p>
-              </div>
-
-              <div className="flex gap-px border border-[hsl(var(--rule))] overflow-x-auto no-scrollbar">
-                {FORMAT_TABS.map(({ key, label }) => (
-                  <button key={key} onClick={() => setPreviewTab(key)}
-                    className={`px-3 py-2 text-[11px] font-mono whitespace-nowrap transition-colors ${
-                      previewTab === key ? 'bg-primary text-white' : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-                    }`}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-
-              <div className="relative border border-[hsl(var(--rule))] bg-muted/20">
-                <button
-                  onClick={() => { navigator.clipboard.writeText(previewContent); toast.success('Copied!'); }}
-                  className="absolute top-3 right-3 btn btn-secondary btn-sm gap-1.5 z-10"
-                >
-                  <Copy size={11} /> Copy
-                </button>
-                <pre className="p-4 text-[12px] font-mono text-foreground/80 overflow-x-auto max-h-72 whitespace-pre leading-relaxed">
-                  {validFields.length > 0 ? previewContent : '// Define fields in the previous step'}
-                </pre>
-              </div>
-
-              {validFields.length > 0 && (
-                <div className="bg-primary/5 border border-primary/15 p-4">
-                  <p className="eyebrow text-[9px] mb-1">Ingestion endpoint</p>
-                  <code className="font-mono text-[12px] text-foreground/80">
-                    POST https://orion.vortan.io/api/v1/telemetry/ingest
-                  </code>
-                  <p className="text-[11px] text-muted-foreground font-mono mt-1">
-                    Get your device API key from the device detail page after creation.
-                  </p>
-                </div>
+                  {/* JSON Payload - BELOW */}
+                  <div className="border-t border-[hsl(var(--rule))] pt-4 mt-6">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="eyebrow text-[9px]">Payload to be sent</p>
+                      <button
+                        onClick={() => { navigator.clipboard.writeText(JSON.stringify(payload, null, 2)); toast.success('Copied!'); }}
+                        className="text-[10px] text-primary hover:underline flex items-center gap-1"
+                      >
+                        Copy
+                      </button>
+                    </div>
+                    <pre className="p-3 bg-muted/30 border border-[hsl(var(--rule))] text-[11px] font-mono text-foreground/80 overflow-x-auto max-h-[140px] leading-relaxed">
+                      {validFields.length > 0 ? JSON.stringify(payload, null, 2) : '// Add fields above'}
+                    </pre>
+                  </div>
+                </motion.div>
               )}
-            </motion.div>
-          )}
 
-          {/* ── Step 4: Features ── */}
-          {step === 4 && (
-            <motion.div key="s4" initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} className="space-y-4">
-              <div>
-                <p className="text-[13px] font-semibold text-foreground">Optional features</p>
-                <p className="text-[11px] text-muted-foreground">Enable capabilities relevant to this device.</p>
-              </div>
+              {/* Step 3: Commands */}
+              {step === 3 && (
+                <motion.div key="s3" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-5">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-[13px] font-semibold">Device controls</p>
+                      <p className="text-[11px] text-muted-foreground mt-1">Define commands and controls for remote device operation.</p>
+                    </div>
+                    <button onClick={addCommand} className="btn btn-primary btn-sm gap-1">
+                      <Plus size={12} /> Add
+                    </button>
+                  </div>
 
-              <FeatureToggle
-                icon={MapPin} title="Location" desc="Pin this device on the map"
-                enabled={locationEnabled} onToggle={() => setLocation(v => !v)}
-              >
-                <LeafletLocationPicker
-                  lat={lat} lng={lng}
-                  onChange={(la, ln) => { setLat(la); setLng(ln); }}
-                />
-              </FeatureToggle>
+                  <AnimatePresence mode="popLayout">
+                    <div className="space-y-4">
+                      {commands.map((cmd, i) => (
+                        <motion.div
+                          key={i}
+                          layout
+                          initial={{ opacity: 0, y: 20 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -20 }}
+                          className="border border-[hsl(var(--rule))] p-4 space-y-3"
+                        >
+                          <div className="flex items-start gap-2">
+                            <input className="input text-[11px] flex-1 font-mono" placeholder="command_name"
+                              value={cmd.name} onChange={e => updateCommand(i, { name: e.target.value })} />
+                            <select className="select text-[11px] w-32" value={cmd.ctype}
+                              onChange={e => updateCommand(i, { ctype: e.target.value as Command['ctype'] })}>
+                              <option value="boolean">Toggle</option>
+                              <option value="number">Slider</option>
+                              <option value="enum">Dropdown</option>
+                              <option value="action">Button</option>
+                            </select>
+                            <button onClick={() => removeCommand(i)} className="w-8 h-8 flex items-center justify-center text-muted-foreground hover:text-red-500">
+                              <Trash2 size={12} />
+                            </button>
+                          </div>
 
-              <FeatureToggle
-                icon={Activity} title="Live Tracking" desc="Stream location updates in real time"
-                enabled={tracking && locationEnabled}
-                onToggle={() => { if (!locationEnabled) { toast.error('Enable Location first'); return; } setTracking(v => !v); }}
-              />
+                          <input className="input text-[11px]" placeholder="Display label"
+                            value={cmd.label} onChange={e => updateCommand(i, { label: e.target.value })} />
 
-              <FeatureToggle
-                icon={AlertTriangle} title="Geo-fencing" desc="Alert when device enters or leaves a zone"
-                enabled={geofence && locationEnabled}
-                onToggle={() => { if (!locationEnabled) { toast.error('Enable Location first'); return; } setGeofence(v => !v); }}
-              />
-            </motion.div>
-          )}
+                          {cmd.ctype === 'number' && (
+                            <div className="grid grid-cols-5 gap-2">
+                              <div>
+                                <label className="eyebrow text-[8px] block mb-1">Min</label>
+                                <input className="input text-[11px] !h-7" type="number" value={cmd.min ?? 0}
+                                  onChange={e => updateCommand(i, { min: +e.target.value })} />
+                              </div>
+                              <div>
+                                <label className="eyebrow text-[8px] block mb-1">Max</label>
+                                <input className="input text-[11px] !h-7" type="number" value={cmd.max ?? 100}
+                                  onChange={e => updateCommand(i, { max: +e.target.value })} />
+                              </div>
+                              <div>
+                                <label className="eyebrow text-[8px] block mb-1">Step</label>
+                                <input className="input text-[11px] !h-7" type="number" step="0.1" value={cmd.step ?? 1}
+                                  onChange={e => updateCommand(i, { step: +e.target.value })} />
+                              </div>
+                              <div>
+                                <label className="eyebrow text-[8px] block mb-1">Unit</label>
+                                <input className="input text-[11px] !h-7" value={cmd.unit ?? ''}
+                                  onChange={e => updateCommand(i, { unit: e.target.value })} />
+                              </div>
+                              <div>
+                                <label className="eyebrow text-[8px] block mb-1">Default</label>
+                                <input className="input text-[11px] !h-7" type="number" value={cmd.def ?? 0}
+                                  onChange={e => updateCommand(i, { def: +e.target.value })} />
+                              </div>
+                            </div>
+                          )}
+
+                          {cmd.ctype === 'enum' && (
+                            <input className="input text-[11px]" placeholder="low, medium, high"
+                              value={cmd.values ?? ''} onChange={e => updateCommand(i, { values: e.target.value })} />
+                          )}
+
+                          {cmd.ctype === 'boolean' && (
+                            <div>
+                              <label className="eyebrow text-[9px] block mb-2">Default state</label>
+                              <label className="switch">
+                                <input type="checkbox" checked={cmd.def as boolean ?? false}
+                                  onChange={e => updateCommand(i, { def: e.target.checked })} />
+                                <span />
+                              </label>
+                            </div>
+                          )}
+
+                          {/* Preview */}
+                          <div className="bg-muted/30 border border-dashed border-[hsl(var(--rule))] p-3 mt-3">
+                            <p className="eyebrow text-[8px] mb-3">Preview</p>
+                            <CommandPreview cmd={cmd} />
+                          </div>
+                        </motion.div>
+                      ))}
+                    </div>
+                  </AnimatePresence>
+
+                  {commands.length === 0 && (
+                    <div className="border-2 border-dashed border-[hsl(var(--rule))] p-8 text-center">
+                      <p className="text-[12px] text-muted-foreground">No commands defined yet</p>
+                      <p className="text-[11px] text-muted-foreground mt-1">Add commands to enable remote device control</p>
+                    </div>
+                  )}
+                </motion.div>
+              )}
+
+              {/* Step 4: Location */}
+              {step === 4 && (
+                <motion.div key="s4" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-4">
+                  <div>
+                    <p className="text-[13px] font-semibold">Device location</p>
+                    <p className="text-[11px] text-muted-foreground mt-1">Pin your device on a satellite map.</p>
+                  </div>
+                  <LocationPicker lat={lat} lng={lng} onChange={(la, ln) => { setLat(la); setLng(ln); }} />
+                </motion.div>
+              )}
+
+              {/* Step 5: Review */}
+              {step === 5 && (
+                <motion.div key="s5" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-5">
+                  <div>
+                    <p className="text-[13px] font-semibold">Review & provision</p>
+                    <p className="text-[11px] text-muted-foreground mt-1">Everything looks good?</p>
+                  </div>
+
+                  {/* Identity */}
+                  <div className="border border-[hsl(var(--rule))] p-4">
+                    <p className="eyebrow text-[9px] mb-2">Identity</p>
+                    <div className="space-y-1 text-[12px]">
+                      <div className="flex justify-between"><span className="text-muted-foreground">Name</span><span className="font-mono">{name}</span></div>
+                      <div className="flex justify-between"><span className="text-muted-foreground">Category</span><span className="capitalize">{category}</span></div>
+                      <div className="flex justify-between"><span className="text-muted-foreground">Protocol</span><span className="font-mono">{protocol}</span></div>
+                    </div>
+                  </div>
+
+                  {/* Fields */}
+                  {validFields.length > 0 && (
+                    <div className="border border-[hsl(var(--rule))] p-4">
+                      <p className="eyebrow text-[9px] mb-2">Data fields · {validFields.length}</p>
+                      <div className="space-y-1.5">
+                        {validFields.map(f => (
+                          <div key={f.key} className="flex items-center justify-between text-[12px]">
+                            <div className="flex items-center gap-2 flex-1 min-w-0">
+                              <div className="w-2 h-2 flex-shrink-0" style={{ backgroundColor: f.chartColor }} />
+                              <span className="font-mono">{f.key}</span>
+                            </div>
+                            <span className="text-muted-foreground text-[10px] ml-2">{f.type}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Commands */}
+                  {commands.length > 0 && (
+                    <div className="border border-[hsl(var(--rule))] p-4">
+                      <p className="eyebrow text-[9px] mb-2">Commands · {commands.length}</p>
+                      <div className="space-y-1.5">
+                        {commands.map(c => (
+                          <div key={c.name} className="flex items-center justify-between text-[12px]">
+                            <span className="font-mono">{c.name}</span>
+                            <span className="tag tag-accent text-[9px]">{c.ctype}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          {/* Right JSON rail */}
+          <div className="w-96 flex-shrink-0 border-l border-[hsl(var(--rule))] bg-[#0b0b0b] text-[#F3EFE6] overflow-y-auto p-6 hidden lg:block">
+            <p className="eyebrow text-[9px] text-[#9A968C] mb-2">Live JSON</p>
+            <p style={{ fontFamily: 'var(--font-display)', fontSize: '20px', color: '#fff', marginBottom: '16px' }}>
+              Payload <em style={{ fontStyle: 'italic', color: 'hsl(var(--primary))' }}>builder</em>
+            </p>
+            <pre style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: '11px',
+              color: '#E5E0D5',
+              whiteSpace: 'pre-wrap',
+              lineHeight: 1.5,
+              margin: 0,
+            }}>
+              {JSON.stringify({
+                device: {
+                  name: name || '(untitled)',
+                  category, protocol, payloadFormat,
+                  serialNumber: serialNumber || null,
+                },
+                schema: { fields: validFields },
+                commands: commands.map(c => ({ name: c.name, type: c.ctype })),
+                sample_payload: payload,
+              }, null, 2)}
+            </pre>
+          </div>
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-6 py-4 border-t border-[hsl(var(--rule))] flex-shrink-0">
-          <div>
-            {step > 1 && (
-              <button onClick={() => setStep(s => (s - 1) as Step)} className="btn btn-secondary gap-1.5">
-                <ChevronLeft size={14} /> Back
-              </button>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            <button onClick={onClose} className="btn btn-ghost text-muted-foreground">Cancel</button>
-            {step < 4 ? (
-              <button
-                onClick={() => {
-                  if (step === 1 && !name.trim()) { toast.error('Enter a device name'); return; }
-                  setStep(s => (s + 1) as Step);
-                }}
-                className="btn btn-primary gap-1.5"
-              >
-                Continue <ChevronRight size={14} />
-              </button>
+        <div className="flex-shrink-0 px-8 py-4 border-t border-[hsl(var(--rule))] flex items-center justify-between">
+          <p className="text-[11px] text-muted-foreground font-mono">
+            {validFields.length} field{validFields.length !== 1 ? 's' : ''} · {commands.length} command{commands.length !== 1 ? 's' : ''}
+          </p>
+          <div className="flex gap-2">
+            <button onClick={onClose} className="btn btn-secondary btn-sm">Cancel</button>
+            {step > 1 && <button onClick={() => setStep((s) => (s - 1) as Step)} className="btn btn-secondary btn-sm">Back</button>}
+            {step < 5 ? (
+              <button onClick={() => setStep((s) => (s + 1) as Step)} className="btn btn-primary btn-sm">Continue</button>
             ) : (
-              <button onClick={handleSubmit} disabled={mutation.isPending} className="btn btn-primary gap-1.5">
-                {mutation.isPending
-                  ? <><Loader2 size={13} className="animate-spin" /> Creating…</>
-                  : <><Check size={13} /> Create Device</>
-                }
+              <button
+                onClick={handleSubmit}
+                disabled={mutation.isPending}
+                className="btn btn-primary btn-sm gap-1.5"
+              >
+                {mutation.isPending ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+                {mutation.isPending ? 'Creating...' : 'Create device'}
               </button>
             )}
           </div>
         </div>
-      </motion.div>
-    </div>
+      </div>
+    </>
   );
 }

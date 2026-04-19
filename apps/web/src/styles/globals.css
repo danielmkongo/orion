@@ -51,19 +51,19 @@
     --border-strong: 0 0% 20%;       /* #333333 */
     --muted:         0 0% 6%;        /* #0F0F0F */
     --muted-fg:      43 5% 58%;      /* #9A968C */
-    --primary:       18 100% 59%;    /* #FF6A30 */
+    --primary:       18 100% 65%;    /* Brighter orange for dark mode */
     --primary-fg:    0 0% 100%;
-    --primary-hover: 18 100% 65%;
-    --primary-subtle:18 60% 15%;
+    --primary-hover: 18 100% 72%;
+    --primary-subtle:18 70% 20%;
 
     --ink-2:         43 16% 90%;
     --ink-faint:     43 5% 37%;
     --rule:          43 16% 90%;
     --rule-ghost:    50 2% 10%;
-    --good:          145 60% 42%;    /* #34D17A */
-    --warn:          38 77% 56%;     /* #E4A03A */
-    --bad:           0 100% 72%;     /* #FF6B6B */
-    --info:          220 100% 70%;   /* #6DA0FF */
+    --good:          145 70% 50%;    /* Brighter green */
+    --warn:          38 85% 60%;     /* Brighter amber */
+    --bad:           0 100% 75%;     /* Brighter red */
+    --info:          220 100% 75%;   /* Brighter blue */
 
     --shadow-1:      0 1px 0 rgba(0,0,0,.6);
     --shadow-2:      0 1px 2px rgba(0,0,0,.6), 0 18px 48px -24px rgba(0,0,0,.8);

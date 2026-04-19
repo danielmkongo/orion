@@ -1,244 +1,374 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Download, RefreshCw } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { Download, TrendingUp, TrendingDown } from 'lucide-react';
 import { devicesApi } from '@/api/devices';
-import apiClient from '@/api/client';
-import { LineChart, BarChart, Donut } from '@/components/charts/Charts';
-import { downloadCSV } from '@/lib/utils';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { Donut, BarChart } from '@/components/charts/Charts';
+import toast from 'react-hot-toast';
 
-const PERIODS = ['24h', '7d', '30d', '90d'];
-
-function buildMockIngestion(period: string) {
-  const now = Date.now();
-  const count = period === '24h' ? 24 : period === '7d' ? 7 : period === '30d' ? 30 : 12;
-  const step  = period === '24h' ? 3600_000 : period === '7d' ? 86400_000 : period === '30d' ? 86400_000 : 7 * 86400_000;
-  return Array.from({ length: count }, (_, i) => ({
-    ts: now - (count - i) * step,
-    value: Math.round(800 + Math.sin(i / 3) * 400 + Math.random() * 200),
-  }));
+interface Report {
+  period: '24h' | '7d' | '30d';
+  label: string;
 }
 
-const MOCK_UPTIME = [
-  { label: 'Alpha-01',   value: 98.3, color: '#22C55E' },
-  { label: 'Env B1',     value: 99.7, color: '#22C55E' },
-  { label: 'Energy C1',  value: 95.1, color: '#F59E0B' },
-  { label: 'Water D1',   value: 91.4, color: '#F59E0B' },
-  { label: 'Pump E1',    value: 88.2, color: '#EF4444' },
+const PERIODS: Report[] = [
+  { period: '24h', label: '24h' },
+  { period: '7d', label: '7d' },
+  { period: '30d', label: '30d' },
 ];
 
-const ALERT_TREND = [
-  { label: 'Mon', value: 4 },
-  { label: 'Tue', value: 5 },
-  { label: 'Wed', value: 9 },
-  { label: 'Thu', value: 4 },
-  { label: 'Fri', value: 5 },
-  { label: 'Sat', value: 1 },
-  { label: 'Sun', value: 2 },
-];
+function StatTile({ label, value, unit, trend, color }: {
+  label: string; value: string | number; unit?: string; trend?: number; color?: string;
+}) {
+  return (
+    <motion.div
+      layout
+      className="col p-4 border border-[hsl(var(--rule))]"
+      style={{ background: color ? `${color}11` : undefined }}
+    >
+      <p className="eyebrow text-[9px]">{label}</p>
+      <div className="flex items-end gap-2 mt-3">
+        <span style={{ fontFamily: 'var(--font-display)', fontSize: '32px', lineHeight: 1 }}>
+          {value}
+        </span>
+        {unit && <span className="text-[13px] text-muted-foreground mb-1">{unit}</span>}
+      </div>
+      {trend !== undefined && (
+        <div className="flex items-center gap-1 mt-2">
+          {trend > 0 ? (
+            <TrendingUp size={12} className="text-green-500" />
+          ) : (
+            <TrendingDown size={12} className="text-red-500" />
+          )}
+          <span className={`text-[11px] font-mono ${trend > 0 ? 'text-green-500' : 'text-red-500'}`}>
+            {Math.abs(trend)}%
+          </span>
+        </div>
+      )}
+    </motion.div>
+  );
+}
 
 export function ReportsPage() {
-  const [period, setPeriod] = useState('7d');
-  const ingestionData = buildMockIngestion(period);
+  const [selectedPeriod, setSelectedPeriod] = useState<Report['period']>('7d');
 
-  const { data: stats } = useQuery({
-    queryKey: ['devices', 'stats'],
-    queryFn: devicesApi.stats,
+  // Fetch devices
+  const { data: devices = [] } = useQuery({
+    queryKey: ['devices'],
+    queryFn: () => devicesApi.list(),
   });
 
-  const { data: alertsData } = useQuery({
-    queryKey: ['alerts', 'count'],
-    queryFn: () => apiClient.get('/alerts', { params: { limit: 1 } }).then(r => r.data),
-  });
+  // Calculate fleet stats
+  const fleetStats = useMemo(() => {
+    const total = devices.length;
+    const online = devices.filter(d => d.status === 'online').length;
+    const offline = devices.filter(d => d.status === 'offline').length;
+    const idle = devices.filter(d => d.status === 'idle').length;
+    const error = devices.filter(d => d.status === 'error').length;
+    const onlineRate = total > 0 ? Math.round((online / total) * 100) : 0;
+    const errorRate = total > 0 ? Math.round((error / total) * 100) : 0;
 
-  const total   = stats?.total   ?? 0;
-  const online  = stats?.online  ?? 0;
-  const offline = stats?.offline ?? 0;
-  const byCategory = stats?.byCategory ?? [];
-  const alertCount = alertsData?.total ?? 0;
-  const onlineRate = total > 0 ? ((online / total) * 100).toFixed(1) : '0';
+    return { total, online, offline, idle, error, onlineRate, errorRate };
+  }, [devices]);
 
-  const kpis = [
-    { label: 'Avg Uptime',    value: `${onlineRate}%`, sub: 'Fleet average'  },
-    { label: 'Online Now',    value: String(online),   sub: `of ${total} devices` },
-    { label: 'Active Alerts', value: String(alertCount), sub: 'Require action' },
-    { label: 'Ingested',      value: '142K',           sub: `in last ${period}` },
-    { label: 'Commands',      value: '38',             sub: '35 successful'   },
-    { label: 'OTA Updates',   value: '6',              sub: '5 successful'    },
+  // Mock device uptime data
+  const uptimeData = useMemo(() => {
+    return devices.map(d => ({
+      name: d.name,
+      category: d.category,
+      protocol: d.protocol || 'http',
+      uptime24h: 95 + Math.random() * 5,
+      uptime7d: 92 + Math.random() * 6,
+      uptime30d: 88 + Math.random() * 8,
+      mtbf: 720 + Math.random() * 480,
+    })).sort((a, b) => b.uptime7d - a.uptime7d);
+  }, [devices]);
+
+  // Mock alert data
+  const alertStats = useMemo(() => {
+    const alerts24h = 12 + Math.floor(Math.random() * 20);
+    const alerts7d = 89 + Math.floor(Math.random() * 30);
+    const alerts30d = 350 + Math.floor(Math.random() * 100);
+
+    const topAlerts = [
+      { type: 'High Temperature', count: 15, trend: 8 },
+      { type: 'Connection Lost', count: 12, trend: -5 },
+      { type: 'Battery Low', count: 8, trend: 3 },
+      { type: 'Data Invalid', count: 5, trend: 0 },
+    ];
+
+    return { alerts24h, alerts7d, alerts30d, topAlerts };
+  }, []);
+
+  // Export reports
+  const handleExportCSV = () => {
+    const headers = ['Device', 'Category', 'Protocol', 'Uptime 24h', 'Uptime 7d', 'Uptime 30d', 'MTBF (hours)'];
+    const rows = uptimeData.map(d => [
+      d.name, d.category, d.protocol,
+      d.uptime24h.toFixed(1) + '%',
+      d.uptime7d.toFixed(1) + '%',
+      d.uptime30d.toFixed(1) + '%',
+      d.mtbf.toFixed(0),
+    ]);
+
+    const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `orion-reports-${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success('Report exported');
+  };
+
+  const devicesByStatus = useMemo(() => [
+    { v: fleetStats.online, color: 'hsl(var(--good))' },
+    { v: fleetStats.idle, color: 'hsl(var(--warn))' },
+    { v: fleetStats.error, color: 'hsl(var(--bad))' },
+    { v: fleetStats.offline, color: 'hsl(var(--muted-fg))' },
+  ], [fleetStats]);
+
+  const alertTrendData = [
+    { label: 'Mon', value: 4 },
+    { label: 'Tue', value: 5 },
+    { label: 'Wed', value: 9 },
+    { label: 'Thu', value: 4 },
+    { label: 'Fri', value: 5 },
+    { label: 'Sat', value: 1 },
+    { label: 'Sun', value: 2 },
   ];
 
-  function exportReport() {
-    downloadCSV(`orion-report-${period}.csv`, [
-      ...kpis.map(k => ({ metric: k.label, value: k.value, note: k.sub })),
-    ]);
-  }
-
-  const categoryDonut = byCategory.slice(0, 6).map((c: any, i: number) => ({
-    name: c._id,
-    value: c.count,
-    color: ['#FF6A30','#5B8DEF','#22C55E','#F59E0B','#8B5CF6','#06B6D4'][i % 6],
-  }));
-
   return (
-    <div className="space-y-8">
-
-      {/* ── Header ────────────────────────────────────────────────── */}
-      <div className="flex items-end justify-between gap-4 pt-1 flex-wrap">
-        <div>
-          <p className="eyebrow text-[9px] mb-2">Platform Analytics</p>
-          <h1 className="text-[26px] leading-none tracking-tight text-foreground" style={{ fontFamily: 'var(--font-display)' }}>
-            <em>Reports</em>
-          </h1>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-px border border-[hsl(var(--rule))]">
-            {PERIODS.map(p => (
-              <button
-                key={p}
-                onClick={() => setPeriod(p)}
-                className={`px-3 py-1.5 text-[11px] font-mono transition-colors ${period === p ? 'bg-primary text-white' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}
-              >
-                {p}
-              </button>
-            ))}
-          </div>
-          <button onClick={exportReport} className="btn btn-secondary btn-sm gap-1.5">
-            <Download size={12} /> Export
+    <div className="page">
+      <PageHeader
+        eyebrow="Analysis"
+        title={<><em>Reports</em> & analytics.</>}
+        lede="Comprehensive device fleet analytics, uptime tracking, and performance metrics."
+        actions={
+          <button onClick={handleExportCSV} className="btn btn-primary btn-sm gap-1.5">
+            <Download size={13} /> Export CSV
           </button>
-        </div>
-      </div>
+        }
+      />
 
-      {/* ── Section I — KPI Strip ────────────────────────────────── */}
-      <div>
-        <div className="flex items-center gap-2 pb-3 mb-4 border-b border-[hsl(var(--rule))]">
-          <span className="serif-i text-muted-foreground mr-2">№ I</span>
-          <span className="eyebrow">Summary — {period}</span>
-        </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-px bg-[hsl(var(--rule))] border border-[hsl(var(--rule))]">
-          {kpis.map(({ label, value, sub }) => (
-            <div key={label} className="bg-[hsl(var(--surface))] p-5">
-              <p className="eyebrow text-[9px] mb-2">{label}</p>
-              <p className="text-[1.6rem] font-semibold text-foreground leading-none">{value}</p>
-              <p className="text-[10px] text-muted-foreground font-mono mt-1.5">{sub}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* ── Section II — Charts ──────────────────────────────────── */}
-      <div>
-        <div className="flex items-center gap-2 pb-3 mb-4 border-b border-[hsl(var(--rule))]">
-          <span className="serif-i text-muted-foreground mr-2">№ II</span>
-          <span className="eyebrow">Trends</span>
-        </div>
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-px bg-[hsl(var(--rule))] border border-[hsl(var(--rule))]">
-
-          {/* Ingestion chart */}
-          <div className="bg-[hsl(var(--surface))] p-5">
-            <p className="eyebrow text-[9px] mb-4">Data Ingestion — {period}</p>
-            <LineChart
-              series={[{ name: 'data points', data: ingestionData, color: '#FF6A30' }]}
-              height={200}
-              showArea
-            />
-          </div>
-
-          {/* Alert trend */}
-          <div className="bg-[hsl(var(--surface))] p-5">
-            <p className="eyebrow text-[9px] mb-4">Alert Volume — Last 7 Days</p>
-            <BarChart
-              data={ALERT_TREND}
-              height={200}
-              color='#F59E0B'
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* ── Section III — Device Breakdown ──────────────────────── */}
-      <div>
-        <div className="flex items-center gap-2 pb-3 mb-4 border-b border-[hsl(var(--rule))]">
-          <span className="serif-i text-muted-foreground mr-2">№ III</span>
-          <span className="eyebrow">Fleet Breakdown</span>
-        </div>
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-px bg-[hsl(var(--rule))] border border-[hsl(var(--rule))]">
-
-          {/* Category donut */}
-          <div className="bg-[hsl(var(--surface))] p-5 flex flex-col items-center justify-center gap-4">
-            <p className="eyebrow text-[9px] self-start">By Category</p>
-            {categoryDonut.length > 0 ? (
-              <>
-                <Donut
-                  segments={categoryDonut}
-                  size={160}
-                  thickness={18}
-                  centerText={
-                    <div className="text-center">
-                      <p className="text-[22px] font-semibold text-foreground leading-none">{total}</p>
-                      <p className="text-[10px] text-muted-foreground mt-1 font-mono">devices</p>
-                    </div>
-                  }
-                />
-                <div className="w-full space-y-1.5">
-                  {categoryDonut.map(seg => (
-                    <div key={seg.name} className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="w-2 h-2" style={{ backgroundColor: seg.color }} />
-                        <span className="text-[11px] text-muted-foreground capitalize">{seg.name}</span>
-                      </div>
-                      <span className="font-mono text-[11px] text-foreground">{seg.value}</span>
-                    </div>
-                  ))}
-                </div>
-              </>
-            ) : (
-              <p className="text-[12px] text-muted-foreground">No device data</p>
-            )}
-          </div>
-
-          {/* Device uptime */}
-          <div className="xl:col-span-2 bg-[hsl(var(--surface))] p-5">
-            <p className="eyebrow text-[9px] mb-4">Device Uptime</p>
-            <BarChart
-              data={MOCK_UPTIME}
-              height={220}
-              horizontal
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* ── Section IV — Saved Reports ───────────────────────────── */}
-      <div>
-        <div className="flex items-center gap-2 pb-3 mb-4 border-b border-[hsl(var(--rule))]">
-          <span className="serif-i text-muted-foreground mr-2">№ IV</span>
-          <span className="eyebrow">Scheduled Reports</span>
-        </div>
-        <div className="border border-[hsl(var(--rule))] bg-[hsl(var(--surface))]">
-          {[
-            { name: 'Weekly Fleet Health', freq: 'Every Monday', format: 'CSV', last: '2026-04-14' },
-            { name: 'Monthly Uptime Summary', freq: '1st of month', format: 'CSV', last: '2026-04-01' },
-            { name: 'Daily Alert Digest', freq: 'Daily 08:00', format: 'CSV', last: '2026-04-18' },
-          ].map((rep, i) => (
-            <div
-              key={i}
-              className="flex items-center justify-between px-5 py-3.5 border-b border-[hsl(var(--rule)/0.5)] last:border-0"
+      {/* Period selector */}
+      <div className="mb-8 flex items-center gap-4">
+        <span className="eyebrow text-[9px]">Time period</span>
+        <div className="seg">
+          {PERIODS.map(p => (
+            <button
+              key={p.period}
+              onClick={() => setSelectedPeriod(p.period)}
+              className={selectedPeriod === p.period ? 'on' : ''}
             >
-              <div>
-                <p className="text-[13px] font-medium text-foreground">{rep.name}</p>
-                <p className="text-[11px] text-muted-foreground font-mono mt-0.5">{rep.freq} · Last generated {rep.last}</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="font-mono text-[10px] border border-[hsl(var(--rule))] px-2 py-0.5 text-muted-foreground">
-                  {rep.format}
-                </span>
-                <button className="btn btn-secondary btn-sm gap-1.5">
-                  <Download size={11} /> Download
-                </button>
-              </div>
-            </div>
+              {p.label}
+            </button>
           ))}
         </div>
       </div>
+
+      {/* Fleet Health Dashboard */}
+      <section className="mb-12">
+        <div className="mb-6">
+          <div className="no" style={{ fontFamily: 'var(--font-mono)', fontSize: '9.5px', letterSpacing: '.22em', textTransform: 'uppercase', color: 'hsl(var(--muted-fg))', marginBottom: 10 }}>№ I</div>
+          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '28px', lineHeight: 1 }}>Fleet health</h2>
+        </div>
+
+        <div className="ticker grid-cols-4 gap-px mb-8">
+          <StatTile label="Total devices" value={fleetStats.total} />
+          <StatTile label="Online now" value={fleetStats.online} unit={`/ ${fleetStats.total}`} trend={5} color="#10b981" />
+          <StatTile label="Error rate" value={fleetStats.errorRate} unit="%" color="#FF6A30" />
+          <StatTile label="Idle" value={fleetStats.idle} unit="devices" color="#F59E0B" />
+        </div>
+
+        <div className="grid grid-cols-3 gap-6">
+          {/* Online % chart */}
+          <div className="col">
+            <div className="panel p-6">
+              <div className="mb-6">
+                <p className="eyebrow text-[9px] mb-1">Fleet status</p>
+                <p style={{ fontFamily: 'var(--font-display)', fontSize: '18px', fontWeight: 500, marginTop: 4 }}>
+                  {fleetStats.onlineRate}% online
+                </p>
+              </div>
+              <Donut
+                segments={devicesByStatus}
+                size={140}
+                thickness={12}
+                centerText={
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontFamily: 'var(--font-display)', fontSize: '24px', lineHeight: 1 }}>
+                      {fleetStats.online}
+                    </div>
+                    <div style={{ fontSize: '10px', marginTop: 4, color: 'hsl(var(--muted-fg))' }}>
+                      online
+                    </div>
+                  </div>
+                }
+              />
+            </div>
+          </div>
+
+          {/* Status breakdown */}
+          <div className="col">
+            <div className="panel p-6">
+              <p className="eyebrow text-[9px] mb-4">Status breakdown</p>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between text-[13px]">
+                  <span className="flex items-center gap-2">
+                    <span className="dot dot-online" />
+                    Online
+                  </span>
+                  <span className="font-mono font-semibold">{fleetStats.online}</span>
+                </div>
+                <div className="flex items-center justify-between text-[13px]">
+                  <span className="flex items-center gap-2">
+                    <span className="dot dot-warn" />
+                    Idle
+                  </span>
+                  <span className="font-mono font-semibold">{fleetStats.idle}</span>
+                </div>
+                <div className="flex items-center justify-between text-[13px]">
+                  <span className="flex items-center gap-2">
+                    <span className="dot dot-error" />
+                    Error
+                  </span>
+                  <span className="font-mono font-semibold">{fleetStats.error}</span>
+                </div>
+                <div className="flex items-center justify-between text-[13px]">
+                  <span className="flex items-center gap-2">
+                    <span className="dot dot-offline" />
+                    Offline
+                  </span>
+                  <span className="font-mono font-semibold">{fleetStats.offline}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Alert summary */}
+          <div className="col">
+            <div className="panel p-6">
+              <p className="eyebrow text-[9px] mb-4">Alert frequency</p>
+              <div className="space-y-3">
+                <div>
+                  <p className="text-[12px] text-muted-foreground">Last 24h</p>
+                  <p style={{ fontFamily: 'var(--font-display)', fontSize: '22px', fontWeight: 500, marginTop: 2 }}>
+                    {alertStats.alerts24h}
+                  </p>
+                </div>
+                <div className="pt-3 border-t border-[hsl(var(--rule))]">
+                  <p className="text-[12px] text-muted-foreground">Last 7d</p>
+                  <p style={{ fontFamily: 'var(--font-display)', fontSize: '22px', fontWeight: 500, marginTop: 2 }}>
+                    {alertStats.alerts7d}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Device Uptime Report */}
+      <section className="mb-12">
+        <div className="mb-6">
+          <div className="no" style={{ fontFamily: 'var(--font-mono)', fontSize: '9.5px', letterSpacing: '.22em', textTransform: 'uppercase', color: 'hsl(var(--muted-fg))', marginBottom: 10 }}>№ II</div>
+          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '28px', lineHeight: 1 }}>Device uptime</h2>
+          <p className="text-[13px] text-muted-foreground mt-2">Availability metrics across your fleet</p>
+        </div>
+
+        <div className="panel">
+          <table className="data-table w-full">
+            <thead>
+              <tr>
+                <th>Device</th>
+                <th>Category</th>
+                <th>Protocol</th>
+                <th className="text-right">24h</th>
+                <th className="text-right">7d</th>
+                <th className="text-right">30d</th>
+                <th className="text-right">MTBF</th>
+              </tr>
+            </thead>
+            <tbody>
+              {uptimeData.map(d => (
+                <tr key={d.name}>
+                  <td className="font-medium">{d.name}</td>
+                  <td className="capitalize text-[12px] text-muted-foreground">{d.category}</td>
+                  <td className="font-mono text-[11px]">{d.protocol}</td>
+                  <td className="text-right">
+                    <span className={d.uptime24h > 95 ? 'text-green-500' : d.uptime24h > 85 ? 'text-yellow-500' : 'text-red-500'}>
+                      {d.uptime24h.toFixed(1)}%
+                    </span>
+                  </td>
+                  <td className="text-right">
+                    <span className={d.uptime7d > 95 ? 'text-green-500' : d.uptime7d > 85 ? 'text-yellow-500' : 'text-red-500'}>
+                      {d.uptime7d.toFixed(1)}%
+                    </span>
+                  </td>
+                  <td className="text-right">
+                    <span className={d.uptime30d > 95 ? 'text-green-500' : d.uptime30d > 85 ? 'text-yellow-500' : 'text-red-500'}>
+                      {d.uptime30d.toFixed(1)}%
+                    </span>
+                  </td>
+                  <td className="text-right font-mono text-[11px] text-muted-foreground">
+                    {d.mtbf.toFixed(0)}h
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      {/* Top Alerts */}
+      <section className="mb-12">
+        <div className="mb-6">
+          <div className="no" style={{ fontFamily: 'var(--font-mono)', fontSize: '9.5px', letterSpacing: '.22em', textTransform: 'uppercase', color: 'hsl(var(--muted-fg))', marginBottom: 10 }}>№ III</div>
+          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '28px', lineHeight: 1 }}>Top alerts</h2>
+          <p className="text-[13px] text-muted-foreground mt-2">Most frequently triggered alert types</p>
+        </div>
+
+        <div className="grid grid-cols-4 gap-4">
+          {alertStats.topAlerts.map(alert => (
+            <motion.div key={alert.type} className="panel p-4">
+              <p className="text-[12px] font-medium mb-3">{alert.type}</p>
+              <div className="flex items-baseline gap-2">
+                <span style={{ fontFamily: 'var(--font-display)', fontSize: '28px', lineHeight: 1 }}>
+                  {alert.count}
+                </span>
+                <div className="flex items-center gap-1">
+                  {alert.trend > 0 ? (
+                    <TrendingUp size={12} className="text-red-500" />
+                  ) : alert.trend < 0 ? (
+                    <TrendingDown size={12} className="text-green-500" />
+                  ) : (
+                    <span className="text-[11px] text-muted-foreground">—</span>
+                  )}
+                  <span className={`text-[11px] font-mono ${alert.trend > 0 ? 'text-red-500' : alert.trend < 0 ? 'text-green-500' : 'text-muted-foreground'}`}>
+                    {alert.trend > 0 ? '+' : ''}{alert.trend}%
+                  </span>
+                </div>
+              </div>
+            </motion.div>
+          ))}
+        </div>
+      </section>
+
+      {/* Alert Trend Chart */}
+      <section>
+        <div className="mb-6">
+          <div className="no" style={{ fontFamily: 'var(--font-mono)', fontSize: '9.5px', letterSpacing: '.22em', textTransform: 'uppercase', color: 'hsl(var(--muted-fg))', marginBottom: 10 }}>№ IV</div>
+          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '28px', lineHeight: 1 }}>Alert volume</h2>
+          <p className="text-[13px] text-muted-foreground mt-2">7-day alert trend</p>
+        </div>
+
+        <div className="panel p-6">
+          <BarChart data={alertTrendData} height={240} color="#F59E0B" />
+        </div>
+      </section>
     </div>
   );
 }

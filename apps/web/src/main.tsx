@@ -28,18 +28,18 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
             position="top-right"
             toastOptions={{
               style: {
-                background: 'hsl(0 0% 100%)',
-                color: 'hsl(20 14% 10%)',
-                border: '1px solid hsl(30 12% 88%)',
-                borderRadius: '10px',
+                background: 'hsl(var(--surface))',
+                color: 'hsl(var(--fg))',
+                border: '1px solid hsl(var(--rule))',
+                borderRadius: '0',
                 fontSize: '14px',
                 boxShadow: '0 4px 16px rgb(0 0 0/0.08)',
               },
               success: {
-                iconTheme: { primary: '#22c55e', secondary: '#fff' },
+                iconTheme: { primary: 'hsl(var(--good))', secondary: 'hsl(var(--fg))' },
               },
               error: {
-                iconTheme: { primary: '#ef4444', secondary: '#fff' },
+                iconTheme: { primary: 'hsl(var(--bad))', secondary: 'hsl(var(--fg))' },
               },
             }}
           />
