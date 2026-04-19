@@ -4,9 +4,9 @@ import { devicesApi } from '@/api/devices';
 import { telemetryApi } from '@/api/telemetry';
 import { getCategoryIconInfo, downloadCSV, formatDate } from '@/lib/utils';
 import { LineChart } from '@/components/charts/Charts';
-import { Download, RefreshCw } from 'lucide-react';
+import { Download } from 'lucide-react';
 
-const SERIES_COLORS = ['#FF6A30', '#5B8DEF', '#22C55E', '#F59E0B', '#8B5CF6', '#06B6D4', '#F43F5E'];
+const COLORS = ['hsl(var(--primary))', 'hsl(var(--fg))', 'hsl(var(--info))', 'hsl(var(--good))', 'hsl(var(--warn))', '#A06CD5'];
 const RANGES = [{ label: '1h', h: 1 }, { label: '6h', h: 6 }, { label: '24h', h: 24 }, { label: '7d', h: 168 }];
 
 export function TelemetryPage() {
@@ -23,61 +23,51 @@ export function TelemetryPage() {
 
   const devices = devicesData?.devices ?? [];
   const deviceId = selectedDeviceId || (devices[0] as any)?._id;
+  const selectedDevice = devices.find((d: any) => (d._id ?? d.id) === deviceId) as any;
 
-  const { data: latestData, refetch: refetchLatest } = useQuery({
+  const { data: latestData } = useQuery({
     queryKey: ['telemetry', 'latest', deviceId],
     queryFn: () => telemetryApi.latest(deviceId),
     enabled: !!deviceId,
     refetchInterval: 15_000,
   });
 
-  const latest       = latestData?.fields ?? {};
+  const latest = latestData?.fields ?? {};
   const numericFields = Object.entries(latest)
     .filter(([, v]) => typeof v === 'number')
     .map(([k, v]) => ({ key: k, value: v as number }));
 
-  // Auto-select first field when device changes
+  useEffect(() => { setSelectedFields([]); }, [deviceId]);
   useEffect(() => {
-    setSelectedFields([]);
-  }, [deviceId]);
-
-  useEffect(() => {
-    if (selectedFields.length === 0 && numericFields.length > 0) {
-      setSelectedFields([numericFields[0].key]);
-    }
+    if (selectedFields.length === 0 && numericFields.length > 0)
+      setSelectedFields(numericFields.slice(0, 2).map(f => f.key));
   }, [numericFields.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const from = new Date(Date.now() - range.h * 3600_000).toISOString();
   const to   = new Date().toISOString();
 
-  // Fetch series for all selected fields
-  const seriesQueries = useQuery({
+  const { data: seriesData, isLoading } = useQuery({
     queryKey: ['series-multi', deviceId, selectedFields.join(','), range.label],
     queryFn: async () => {
       if (!deviceId || selectedFields.length === 0) return [];
-      const results = await Promise.all(
+      return Promise.all(
         selectedFields.map(field =>
           telemetryApi.series(deviceId, field, from, to, 500).catch(() => null)
         )
       );
-      return results;
     },
     enabled: !!deviceId && selectedFields.length > 0,
     refetchInterval: 60_000,
   });
 
-  const seriesData = seriesQueries.data ?? [];
-  const isLoading  = seriesQueries.isLoading;
-
-  const chartSeries = selectedFields.map((field, i) => {
-    const data = (seriesData[i]?.data ?? []).map((p: any) => ({
+  const chartSeries = selectedFields.map((field, i) => ({
+    name: field,
+    data: ((seriesData?.[i] as any)?.data ?? []).map((p: any) => ({
       ts: typeof p.ts === 'string' ? new Date(p.ts).getTime() : p.ts,
       value: typeof p.value === 'number' ? p.value : 0,
-    }));
-    return { name: field, data, color: SERIES_COLORS[i % SERIES_COLORS.length] };
-  });
-
-  const totalPoints = chartSeries.reduce((sum, s) => sum + s.data.length, 0);
+    })),
+    color: COLORS[i % COLORS.length],
+  }));
 
   function toggleField(key: string) {
     setSelectedFields(prev =>
@@ -86,259 +76,214 @@ export function TelemetryPage() {
   }
 
   function exportCSV() {
-    if (chartSeries.length === 0) return;
-    // Wide-format: timestamp | field1 | field2 | ...
-    const allTs = [...new Set(chartSeries.flatMap(s => s.data.map(p => p.ts)))].sort();
+    if (!chartSeries.length) return;
+    const allTs = [...new Set(chartSeries.flatMap(s => s.data.map((p: any) => p.ts)))].sort();
     const rows = allTs.map(ts => {
       const row: Record<string, unknown> = { timestamp: new Date(ts).toISOString() };
-      chartSeries.forEach(s => {
-        const pt = s.data.find(p => p.ts === ts);
-        row[s.name] = pt?.value ?? '';
-      });
+      chartSeries.forEach(s => { row[s.name] = s.data.find((p: any) => p.ts === ts)?.value ?? ''; });
       return row;
     });
-    const deviceName = devices.find((d: any) => (d._id ?? d.id) === deviceId)?.name ?? 'device';
-    downloadCSV(`${deviceName}-telemetry-${range.label}.csv`, rows);
+    downloadCSV(`${selectedDevice?.name ?? 'device'}-telemetry-${range.label}.csv`, rows);
   }
-
-  function exportAllRaw() {
-    if (chartSeries.length === 0) return;
-    const rows = chartSeries.flatMap(s =>
-      s.data.map(p => ({ timestamp: new Date(p.ts).toISOString(), field: s.name, value: p.value }))
-    );
-    const deviceName = devices.find((d: any) => (d._id ?? d.id) === deviceId)?.name ?? 'device';
-    downloadCSV(`${deviceName}-telemetry-raw.csv`, rows);
-  }
-
-  const selectedDevice = devices.find((d: any) => (d._id ?? d.id) === deviceId);
-  const { Icon: SelIcon, color: selColor } = getCategoryIconInfo((selectedDevice as any)?.category ?? '');
 
   return (
-    <div className="space-y-7">
-
-      {/* ── Section header ────────────────────────────────────────── */}
-      <div className="flex items-end justify-between gap-4 pt-1 flex-wrap">
+    <div className="page">
+      {/* ── Page header ── */}
+      <div className="ph">
         <div>
-          <p className="eyebrow text-[9px] mb-2">Signal Analysis</p>
-          <h1 className="text-[26px] leading-none tracking-tight text-foreground" style={{ fontFamily: 'var(--font-display)' }}>
-            <em>Telemetry</em>
-          </h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 6 }}>
+            <span className="eyebrow">Live data · time series</span>
+          </div>
+          <h1><em>Telemetry</em>.</h1>
+          <p className="lede">Pick a device, stack any number of parameters on one chart, and export. No typing, no guessing.</p>
         </div>
-        <div className="flex items-center gap-2">
-          <button onClick={() => { refetchLatest(); seriesQueries.refetch(); }} className="btn btn-secondary btn-sm gap-1.5">
-            <RefreshCw size={12} /> Refresh
+        <div style={{ gridColumn: 3, display: 'flex', alignItems: 'flex-end', gap: 8, paddingBottom: 20 }}>
+          <button className="btn btn-sm" style={{ gap: 6 }} onClick={exportCSV} disabled={!chartSeries.length}>
+            <Download size={13} /> Export CSV
           </button>
-          <div className="relative group">
-            <button disabled={totalPoints === 0} onClick={exportCSV} className="btn btn-secondary btn-sm gap-1.5">
-              <Download size={12} /> Export CSV
-            </button>
-          </div>
         </div>
       </div>
 
-      {/* ── Device strip ─────────────────────────────────────────── */}
-      <div>
-        <p className="eyebrow text-[9px] mb-2">Select Device</p>
-        <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar flex-wrap">
-          {devices.length === 0 ? (
-            <p className="text-[12px] text-muted-foreground">No devices registered</p>
-          ) : (
-            devices.map((d: any) => {
-              const id = d._id ?? d.id;
-              const isSelected = id === deviceId;
-              const { Icon, color } = getCategoryIconInfo(d.category);
-              return (
-                <button
-                  key={id}
-                  onClick={() => setSelectedDeviceId(id)}
-                  className={[
-                    'flex items-center gap-2 px-3 py-2 border text-[12px] font-medium transition-colors flex-shrink-0',
-                    isSelected
-                      ? 'border-primary bg-primary/[0.07] text-primary'
-                      : 'border-[hsl(var(--rule))] text-muted-foreground hover:text-foreground hover:bg-muted',
-                  ].join(' ')}
-                >
-                  <span style={{ color: isSelected ? undefined : color }}>
-                    <Icon size={12} />
-                  </span>
-                  {d.name}
-                  <span className={`w-1.5 h-1.5 flex-shrink-0 ${d.status === 'online' ? 'bg-emerald-500' : 'bg-muted-foreground/30'}`} />
-                </button>
-              );
-            })
-          )}
-        </div>
-      </div>
-
-      {/* ── KPI strip ────────────────────────────────────────────── */}
-      {numericFields.length > 0 && (
-        <div>
-          <p className="eyebrow text-[9px] mb-2">Latest Values — {selectedDevice?.name}</p>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-px bg-[hsl(var(--rule))] border border-[hsl(var(--rule))]">
-            {numericFields.map(({ key, value }, i) => {
-              const col = SERIES_COLORS[i % SERIES_COLORS.length];
-              const isSelected = selectedFields.includes(key);
-              return (
-                <button
-                  key={key}
-                  onClick={() => toggleField(key)}
-                  className={[
-                    'bg-[hsl(var(--surface))] p-4 text-left transition-colors hover:bg-muted',
-                    isSelected ? 'ring-1 ring-inset ring-primary/30' : '',
-                  ].join(' ')}
-                >
-                  <div className="flex items-center justify-between mb-1">
-                    <p className="eyebrow text-[9px] capitalize truncate">{key}</p>
-                    {isSelected && (
-                      <span className="w-2 h-2 flex-shrink-0" style={{ backgroundColor: col }} />
-                    )}
-                  </div>
-                  <p className="text-[1.3rem] font-semibold leading-none" style={{ color: isSelected ? col : undefined }}>
-                    {value.toFixed(2)}
-                  </p>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* ── Controls ─────────────────────────────────────────────── */}
-      <div className="flex items-center gap-3 flex-wrap">
-        {/* Field chips */}
-        <div className="flex-1 min-w-0">
-          <p className="eyebrow text-[9px] mb-1.5">Active Series</p>
-          <div className="flex gap-1.5 flex-wrap">
-            {numericFields.map(({ key }, i) => {
-              const col = SERIES_COLORS[i % SERIES_COLORS.length];
-              const active = selectedFields.includes(key);
-              return (
-                <button
-                  key={key}
-                  onClick={() => toggleField(key)}
-                  className={[
-                    'flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-mono border transition-colors',
-                    active ? 'border-current' : 'border-[hsl(var(--rule))] text-muted-foreground hover:text-foreground',
-                  ].join(' ')}
-                  style={active ? { color: col, borderColor: col, backgroundColor: `${col}10` } : {}}
-                >
-                  {active && <span className="w-1.5 h-1.5 flex-shrink-0" style={{ backgroundColor: col }} />}
-                  {key}
-                </button>
-              );
-            })}
-            {numericFields.length === 0 && <span className="text-[12px] text-muted-foreground">No numeric fields available</span>}
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
-          {/* Range */}
-          <div className="flex items-center gap-px border border-[hsl(var(--rule))]">
-            {RANGES.map(r => (
-              <button
-                key={r.label}
-                onClick={() => setRange(r)}
-                className={`px-3 py-1.5 text-[11px] font-mono transition-colors ${range.label === r.label ? 'bg-primary text-white' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}
-              >
-                {r.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Display toggles */}
-          <div className="flex items-center gap-px border border-[hsl(var(--rule))]">
-            <button
-              onClick={() => setShowArea(v => !v)}
-              className={`px-3 py-1.5 text-[11px] font-mono transition-colors ${showArea ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
-            >
-              Area
-            </button>
-            <button
-              onClick={() => setNormalize(v => !v)}
-              className={`px-3 py-1.5 text-[11px] font-mono transition-colors ${normalize ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
-            >
-              Normalize
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* ── Chart ────────────────────────────────────────────────── */}
-      <div className="border border-[hsl(var(--rule))] bg-[hsl(var(--surface))] p-5">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-3">
-            {selectedFields.map((f, i) => (
-              <span key={f} className="flex items-center gap-1.5 text-[11px] font-mono">
-                <span className="w-3 h-px inline-block" style={{ backgroundColor: SERIES_COLORS[i % SERIES_COLORS.length] }} />
-                {f}
-              </span>
-            ))}
-          </div>
-          <span className="font-mono text-[10px] text-muted-foreground">{totalPoints.toLocaleString()} pts</span>
-        </div>
-        {!deviceId ? (
-          <div className="h-[320px] flex items-center justify-center text-[13px] text-muted-foreground">
-            Select a device above
-          </div>
-        ) : isLoading ? (
-          <div className="h-[320px] bg-muted animate-pulse" />
-        ) : chartSeries.every(s => s.data.length === 0) ? (
-          <div className="h-[320px] flex items-center justify-center text-[13px] text-muted-foreground">
-            No data for selected fields in {range.label}
-          </div>
+      {/* ── Device selector strip ── */}
+      <div className="eyebrow" style={{ marginBottom: 8 }}>Device</div>
+      <div style={{ display: 'flex', gap: 0, overflowX: 'auto', borderTop: '1px solid hsl(var(--fg))', borderBottom: '1px solid hsl(var(--border))', marginBottom: 24 }}>
+        {devices.length === 0 ? (
+          <p className="dim" style={{ padding: '16px 0', fontSize: 13 }}>No devices registered</p>
         ) : (
-          <LineChart series={chartSeries} height={320} showArea={showArea} normalize={normalize} />
+          (devices as any[]).map(d => {
+            const id = d._id ?? d.id;
+            const isSelected = id === deviceId;
+            const { Icon, color } = getCategoryIconInfo(d.category);
+            return (
+              <button
+                key={id}
+                onClick={() => setSelectedDeviceId(id)}
+                style={{
+                  flex: '1 0 auto', minWidth: 180, textAlign: 'left',
+                  padding: '14px 16px',
+                  background: isSelected ? 'hsl(var(--surface-raised))' : 'transparent',
+                  border: 0,
+                  borderRight: '1px solid hsl(var(--border))',
+                  borderTop: isSelected ? '2px solid hsl(var(--primary))' : '2px solid transparent',
+                  marginTop: -1,
+                  cursor: 'pointer',
+                  transition: 'background 0.1s',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span className={`dot dot-${d.status === 'online' ? 'online' : d.status === 'error' ? 'error' : 'offline'}`} />
+                  <span style={{ fontSize: 12.5, fontWeight: isSelected ? 500 : 400 }}>{d.name}</span>
+                  <Icon size={11} style={{ color, marginLeft: 2, opacity: 0.7 }} />
+                </div>
+                <div className="mono faint" style={{ fontSize: 10.5, marginTop: 4 }}>{d.category?.toUpperCase()}</div>
+              </button>
+            );
+          })
         )}
       </div>
 
-      {/* ── Legend ───────────────────────────────────────────────── */}
-      {chartSeries.length > 1 && (
-        <div className="flex items-center gap-4 flex-wrap">
-          {chartSeries.map((s, i) => (
-            <div key={s.name} className="flex items-center gap-2">
-              <span className="w-4 h-0.5 inline-block" style={{ backgroundColor: SERIES_COLORS[i % SERIES_COLORS.length] }} />
-              <span className="text-[11px] font-mono text-muted-foreground">{s.name}</span>
-              <span className="font-mono text-[10px] text-muted-foreground/60">{s.data.length} pts</span>
-            </div>
-          ))}
-        </div>
+      {/* ── Latest KPI strip ── */}
+      {numericFields.length > 0 && (
+        <>
+          <div className="eyebrow" style={{ marginBottom: 4 }}>Latest values — {selectedDevice?.name}</div>
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: `repeat(${Math.min(6, numericFields.length)}, 1fr)`,
+            borderTop: '1px solid hsl(var(--border))',
+            marginBottom: 24,
+          }}>
+            {numericFields.slice(0, 6).map(({ key, value }, i) => {
+              const col = COLORS[i % COLORS.length];
+              const on = selectedFields.includes(key);
+              return (
+                <button
+                  key={key}
+                  onClick={() => toggleField(key)}
+                  style={{
+                    padding: `14px 18px 14px ${i === 0 ? 0 : 18}px`,
+                    borderRight: i < Math.min(6, numericFields.length) - 1 ? '1px solid hsl(var(--border))' : 'none',
+                    textAlign: 'left',
+                    background: 'transparent',
+                    cursor: 'pointer',
+                    outline: on ? `1px solid ${col}` : 'none',
+                    outlineOffset: -1,
+                    transition: 'outline 0.1s',
+                  }}
+                >
+                  <div className="eyebrow" style={{ fontSize: 9.5 }}>{key.replace(/_/g, ' ')}</div>
+                  <div style={{ fontFamily: 'var(--font-display)', fontSize: 26, lineHeight: 1, marginTop: 4, color: on ? col : 'hsl(var(--fg))' }} className="num">
+                    {value.toFixed(2)}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </>
       )}
 
-      {/* ── Data table ───────────────────────────────────────────── */}
-      {chartSeries.length > 0 && chartSeries[0]?.data.length > 0 && (
-        <div className="border border-[hsl(var(--rule))]">
-          <div className="flex items-center justify-between px-5 py-3 border-b border-[hsl(var(--rule))]">
-            <p className="eyebrow text-[9px]">Recent Data Points</p>
-            <button onClick={exportAllRaw} className="flex items-center gap-1 text-[11px] text-primary hover:underline">
-              <Download size={10} /> Export raw
-            </button>
+      {/* ── Parameter chips + controls ── */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16, gap: 16, flexWrap: 'wrap' }}>
+        <div>
+          <span className="eyebrow" style={{ marginRight: 8 }}>Parameters</span>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+            {numericFields.map(({ key }, i) => {
+              const col = COLORS[i % COLORS.length];
+              const on = selectedFields.includes(key);
+              return (
+                <button
+                  key={key}
+                  onClick={() => toggleField(key)}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                    padding: '5px 10px',
+                    fontFamily: 'var(--font-mono)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em',
+                    border: '1px solid', borderColor: on ? col : 'hsl(var(--border))',
+                    background: on ? `color-mix(in oklab, ${col} 12%, hsl(var(--surface)))` : 'hsl(var(--surface))',
+                    color: on ? col : 'hsl(var(--muted-fg))',
+                    cursor: 'pointer',
+                    transition: 'all 0.12s',
+                  }}
+                >
+                  <span style={{ width: 7, height: 7, background: on ? col : 'transparent', border: '1px solid currentColor', display: 'inline-block' }} />
+                  {key.replace(/_/g, ' ')}
+                </button>
+              );
+            })}
+            {numericFields.length === 0 && <span className="dim" style={{ fontSize: 12 }}>No numeric fields available</span>}
           </div>
-          <div className="overflow-x-auto">
-            <table className="data-table">
+        </div>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+          <div className="seg">
+            {RANGES.map(r => (
+              <button key={r.label} className={range.label === r.label ? 'on' : ''} onClick={() => setRange(r)}>{r.label.toUpperCase()}</button>
+            ))}
+          </div>
+          <div className="seg">
+            <button className={showArea ? 'on' : ''} onClick={() => setShowArea(true)}>Area</button>
+            <button className={!showArea ? 'on' : ''} onClick={() => setShowArea(false)}>Line</button>
+          </div>
+          <div className="seg">
+            <button className={!normalize ? 'on' : ''} onClick={() => setNormalize(false)}>Raw</button>
+            <button className={normalize ? 'on' : ''} onClick={() => setNormalize(true)}>Norm</button>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Chart ── */}
+      <div className="panel" style={{ padding: '22px 18px 14px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+            {chartSeries.map((s, i) => (
+              <span key={s.name} style={{ display: 'flex', alignItems: 'center', gap: 6, fontFamily: 'var(--font-mono)', fontSize: 11 }}>
+                <span style={{ width: 12, height: 2, background: COLORS[i % COLORS.length], display: 'inline-block' }} />
+                {s.name}
+              </span>
+            ))}
+          </div>
+          <span className="mono faint" style={{ fontSize: 10 }}>{chartSeries.reduce((s, c) => s + c.data.length, 0).toLocaleString()} pts</span>
+        </div>
+        {!deviceId ? (
+          <div style={{ height: 360, display: 'flex', alignItems: 'center', justifyContent: 'center' }} className="dim">Select a device above</div>
+        ) : isLoading ? (
+          <div className="skeleton" style={{ height: 360 }} />
+        ) : chartSeries.every(s => s.data.length === 0) ? (
+          <div style={{ height: 360, display: 'flex', alignItems: 'center', justifyContent: 'center' }} className="dim">No data for selected fields in {range.label}</div>
+        ) : (
+          <LineChart series={chartSeries} height={360} showArea={showArea} normalize={normalize} />
+        )}
+      </div>
+
+      {/* ── Recent data table ── */}
+      {chartSeries.length > 0 && chartSeries[0]?.data.length > 0 && (
+        <div className="section">
+          <div>
+            <div className="ssh"><span className="no">№ I</span>Recent readings</div>
+            <p className="dim" style={{ fontSize: 13, marginTop: 8, maxWidth: '28ch' }}>
+              Latest 20 data points for the selected parameters.
+            </p>
+          </div>
+          <div className="table-responsive">
+            <table className="table">
               <thead>
                 <tr>
                   <th>Timestamp</th>
-                  {selectedFields.map(f => <th key={f} className="font-mono">{f}</th>)}
+                  {chartSeries.map(s => <th key={s.name} style={{ textTransform: 'capitalize' }}>{s.name.replace(/_/g, ' ')}</th>)}
                 </tr>
               </thead>
               <tbody>
-                {(() => {
-                  // Build combined rows from first series timestamps
-                  const pivotData = chartSeries[0].data.slice(-25).reverse();
-                  return pivotData.map((pt, ri) => (
-                    <tr key={ri}>
-                      <td className="font-mono text-[11px]">{formatDate(new Date(pt.ts).toISOString())}</td>
-                      {chartSeries.map((s, si) => {
-                        const match = s.data.find(p => p.ts === pt.ts);
-                        return (
-                          <td key={si} className="font-mono text-[11px]" style={{ color: SERIES_COLORS[si % SERIES_COLORS.length] }}>
-                            {match ? match.value.toFixed(3) : '—'}
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  ));
-                })()}
+                {chartSeries[0].data.slice(-20).reverse().map((pt: any, ri: number) => (
+                  <tr key={ri}>
+                    <td className="mono" style={{ fontSize: 11.5 }}>{formatDate(new Date(pt.ts).toISOString())}</td>
+                    {chartSeries.map((s, si) => {
+                      const match = s.data.find((p: any) => p.ts === pt.ts);
+                      return (
+                        <td key={si} className="mono num" style={{ fontSize: 12, color: COLORS[si % COLORS.length] }}>
+                          {match ? (match as any).value.toFixed(3) : '—'}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>

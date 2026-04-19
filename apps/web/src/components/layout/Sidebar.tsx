@@ -6,7 +6,6 @@ import {
 } from 'lucide-react';
 import { useUIStore } from '@/store/ui.store';
 import { useAuthStore } from '@/store/auth.store';
-import { OrionMark } from '@/components/ui/OrionLogo';
 
 const NAV: Array<{
   num: string; href: string; label: string; icon: LucideIcon; group?: string;
@@ -41,30 +40,16 @@ export function Sidebar() {
 
       <aside
         className={[
-          'fixed left-0 top-0 h-full z-30 flex flex-col',
+          'fixed left-0 z-30 flex flex-col',
           'border-r border-[hsl(var(--border))] bg-[hsl(var(--bg))]',
           'transition-transform duration-200',
           'w-[248px]',
+          // starts below full-width header
+          'top-[58px] h-[calc(100vh-58px)]',
           // mobile: slide in/out; desktop: always visible
           sidebarCollapsed ? '-translate-x-full md:translate-x-0' : 'translate-x-0',
         ].join(' ')}
       >
-        {/* Brand */}
-        <div className="flex items-center gap-3 px-5 h-[58px] border-b border-[hsl(var(--border))] flex-shrink-0">
-          <OrionMark size={22} className="text-primary flex-shrink-0" />
-          <div>
-            <span
-              className="text-[15px] font-semibold tracking-tight text-foreground"
-              style={{ fontFamily: 'var(--font-display)' }}
-            >
-              <em>Orion</em>
-            </span>
-            <span className="text-[10px] text-muted-foreground ml-2 font-mono uppercase tracking-widest opacity-60">
-              by Vortan
-            </span>
-          </div>
-        </div>
-
         {/* Nav */}
         <nav className="flex-1 overflow-y-auto py-3 px-3 no-scrollbar space-y-px">
           {NAV.map(({ num, href, label, icon: Icon, group }, i) => {

@@ -54,74 +54,62 @@ function RuleCard({ rule, onToggle, onDelete }: {
   const ActionIcon = actionIcon;
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      className={`card p-5 transition-all ${!rule.isEnabled ? 'opacity-55' : ''}`}
+    <div
+      className="panel"
+      style={{
+        padding: '16px 20px',
+        borderBottom: '1px solid hsl(var(--border))',
+        opacity: rule.isEnabled ? 1 : 0.55,
+        transition: 'opacity 0.15s',
+      }}
     >
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex items-start gap-3 flex-1 min-w-0">
-          <div className={`p-2 rounded-xl flex-shrink-0 ${rule.isEnabled ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'}`}>
-            <Zap size={15} />
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 14, fontWeight: 500 }}>{rule.name}</span>
+            <span className={`tag ${PRIORITY_BADGE[rule.priority as Priority] ?? 'tag-offline'}`} style={{ textTransform: 'capitalize' }}>{rule.priority}</span>
+            {!rule.isEnabled && <span className="tag tag-offline">disabled</span>}
           </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap mb-1.5">
-              <h3 className="text-[14px] font-semibold text-foreground">{rule.name}</h3>
-              <span className={`badge ${PRIORITY_BADGE[rule.priority as Priority] ?? 'badge-offline'} capitalize`}>
-                {rule.priority}
-              </span>
-              {!rule.isEnabled && <span className="badge badge-offline">disabled</span>}
-            </div>
-            {rule.description && (
-              <p className="text-[12px] text-muted-foreground mb-2">{rule.description}</p>
-            )}
-            <div className="flex flex-wrap items-center gap-2">
-              {rule.conditions?.map((cond: any, ci: number) => {
-                const op = OPERATORS.find(o => o.value === cond.operator);
-                return (
-                  <span key={ci} className="inline-flex items-center gap-1 bg-muted border border-border rounded-lg px-2.5 py-1 text-[12px] font-mono">
-                    <span className="text-foreground">{cond.field}</span>
-                    <span className="text-primary font-semibold">{op?.symbol ?? cond.operator}</span>
-                    <span className="text-foreground">{String(cond.value)}</span>
-                  </span>
-                );
-              })}
-              {rule.conditions?.length > 0 && <span className="text-muted-foreground text-[12px]">→</span>}
-              {rule.actions?.map((action: any, ai: number) => (
-                <span key={ai} className="inline-flex items-center gap-1 bg-primary/8 border border-primary/15 rounded-lg px-2.5 py-1 text-[12px] text-primary">
-                  <ActionIcon size={11} /> {action.type}
+          {rule.description && (
+            <p className="dim" style={{ fontSize: 12, marginBottom: 8 }}>{rule.description}</p>
+          )}
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6 }}>
+            {rule.conditions?.map((cond: any, ci: number) => {
+              const op = OPERATORS.find(o => o.value === cond.operator);
+              return (
+                <span key={ci} className="mono" style={{ fontSize: 11, padding: '3px 8px', border: '1px solid hsl(var(--border))', background: 'hsl(var(--surface-raised))' }}>
+                  {cond.field} <span className="acc">{op?.symbol ?? cond.operator}</span> {String(cond.value)}
                 </span>
-              ))}
-            </div>
-            <p className="text-[11px] text-muted-foreground mt-2">
-              {rule.fireCount > 0 ? `Fired ${rule.fireCount}×` : 'Never fired'}
-              {rule.lastFiredAt ? ` · Last: ${timeAgo(rule.lastFiredAt)}` : ''}
-            </p>
+              );
+            })}
+            {rule.conditions?.length > 0 && <span className="mono faint" style={{ fontSize: 11 }}>→</span>}
+            {rule.actions?.map((action: any, ai: number) => (
+              <span key={ai} className="tag tag-accent" style={{ gap: 4 }}>
+                <ActionIcon size={9} /> {action.type}
+              </span>
+            ))}
           </div>
+          <p className="mono faint" style={{ fontSize: 10.5, marginTop: 8 }}>
+            {rule.fireCount > 0 ? `Fired ${rule.fireCount}×` : 'Never fired'}
+            {rule.lastFiredAt ? ` · Last: ${timeAgo(rule.lastFiredAt)}` : ''}
+          </p>
         </div>
 
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <button
-            onClick={() => onToggle(rule._id)}
-            style={{ width: 40, height: 22 }}
-            className={`relative rounded-full transition-colors flex-shrink-0 ${rule.isEnabled ? 'bg-primary' : 'bg-muted-foreground/30'}`}
-            title={rule.isEnabled ? 'Disable' : 'Enable'}
-          >
-            <motion.div
-              animate={{ x: rule.isEnabled ? 20 : 2 }}
-              transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-              className="absolute top-[2px] w-[18px] h-[18px] rounded-full bg-white shadow-sm"
-            />
-          </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+          <label className="switch" title={rule.isEnabled ? 'Disable' : 'Enable'}>
+            <input type="checkbox" checked={rule.isEnabled} onChange={() => onToggle(rule._id)} />
+            <span />
+          </label>
           <button
             onClick={() => { if (confirm('Delete this rule?')) onDelete(rule._id); }}
-            className="p-1.5 text-muted-foreground hover:text-red-500 rounded-lg hover:bg-red-500/10 transition-colors"
+            className="btn btn-ghost btn-sm btn-icon"
+            style={{ color: 'hsl(var(--muted-fg))' }}
           >
-            <Trash2 size={14} />
+            <Trash2 size={13} />
           </button>
         </div>
       </div>
-    </motion.div>
+    </div>
   );
 }
 
@@ -657,49 +645,50 @@ export function RulesPage() {
   const rules = data?.data ?? [];
 
   return (
-    <div className="space-y-5">
-      <div className="flex items-center justify-between">
+    <div className="page">
+      {/* ── Page header ── */}
+      <div className="ph">
         <div>
-          <h2 className="text-[22px] font-semibold text-foreground tracking-tight">Rules Engine</h2>
-          <p className="text-[14px] text-muted-foreground mt-0.5">Automate actions based on device conditions</p>
+          <div style={{ marginBottom: 6 }}>
+            <span className="eyebrow">Intelligence · Automation rules</span>
+          </div>
+          <h1>Rules <em>Engine</em>.</h1>
+          <p className="lede">
+            {rules.length > 0 ? `${rules.length} rule${rules.length !== 1 ? 's' : ''} configured.` : 'No rules yet.'} Automate alerts, emails, commands, and webhooks when device conditions are met.
+          </p>
         </div>
-        <button onClick={() => setShowModal(true)} className="btn btn-primary">
-          <Plus size={14} /> New Rule
-        </button>
+        <div style={{ gridColumn: 3, display: 'flex', alignItems: 'flex-end', gap: 8, paddingBottom: 20 }}>
+          <button onClick={() => setShowModal(true)} className="btn btn-primary btn-sm" style={{ gap: 6 }}>
+            <Plus size={13} /> New rule
+          </button>
+        </div>
       </div>
 
       {isLoading ? (
-        <div className="space-y-3">
-          {Array.from({ length: 3 }).map((_, i) => <div key={i} className="skeleton h-28 rounded-xl" />)}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {[1, 2, 3].map(i => <div key={i} className="skeleton" style={{ height: 100 }} />)}
         </div>
       ) : rules.length === 0 ? (
-        <div className="card p-16 text-center">
-          <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
-            <Zap size={22} className="text-primary" />
+        <div className="panel" style={{ padding: '64px 16px', textAlign: 'center' }}>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: 28, lineHeight: 1, marginBottom: 8 }}>
+            No <em style={{ color: 'hsl(var(--primary))' }}>rules</em> configured
           </div>
-          <p className="text-[15px] font-semibold text-foreground">No rules configured</p>
-          <p className="text-[13px] text-muted-foreground mt-1 max-w-sm mx-auto">
+          <p className="dim" style={{ fontSize: 13, marginBottom: 20, maxWidth: '40ch', margin: '0 auto 20px' }}>
             Create automation rules to trigger alerts, emails, commands, or webhooks when device conditions are met.
           </p>
-          <button onClick={() => setShowModal(true)} className="btn btn-primary mt-5">
-            <Plus size={14} /> Create First Rule
+          <button onClick={() => setShowModal(true)} className="btn btn-primary" style={{ gap: 6 }}>
+            <Plus size={13} /> Create first rule
           </button>
         </div>
       ) : (
-        <div className="space-y-3">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
           {rules.map((rule: any, i: number) => (
-            <motion.div
+            <RuleCard
               key={rule._id}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.04 }}
-            >
-              <RuleCard
-                rule={rule}
-                onToggle={id => toggleMutation.mutate(id)}
-                onDelete={id => deleteMutation.mutate(id)}
-              />
-            </motion.div>
+              rule={rule}
+              onToggle={id => toggleMutation.mutate(id)}
+              onDelete={id => deleteMutation.mutate(id)}
+            />
           ))}
         </div>
       )}

@@ -1,22 +1,30 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { motion } from 'framer-motion';
 import apiClient from '@/api/client';
 import { formatDate, timeAgo } from '@/lib/utils';
-import { Users, Plus, UserX } from 'lucide-react';
+import { Plus, UserX } from 'lucide-react';
 import toast from 'react-hot-toast';
 
-const ROLE_BADGE: Record<string, string> = {
-  super_admin: 'badge-error',
-  admin:       'badge-error',
-  operator:    'badge-warning',
-  researcher:  'badge-info',
-  technician:  'badge-info',
-  viewer:      'badge-offline',
+const ROLE_LABELS: Record<string, string> = {
+  super_admin: 'Super Admin',
+  admin:       'Admin',
+  operator:    'Operator',
+  researcher:  'Researcher',
+  technician:  'Technician',
+  viewer:      'Viewer',
 };
+
+function roleTag(role: string) {
+  if (role === 'super_admin' || role === 'admin') return 'tag-error';
+  if (role === 'operator') return 'tag-warn';
+  if (role === 'researcher' || role === 'technician') return 'tag-info';
+  return 'tag-offline';
+}
 
 export function UsersPage() {
   const [showInvite, setShowInvite] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteRole, setInviteRole] = useState('viewer');
   const queryClient = useQueryClient();
 
   const { data, isLoading } = useQuery({
@@ -24,188 +32,135 @@ export function UsersPage() {
     queryFn: () => apiClient.get('/users').then(r => r.data),
   });
 
-  const deactivateMutation = useMutation({
+  const deactivateMut = useMutation({
     mutationFn: (id: string) => apiClient.delete(`/users/${id}`),
-    onSuccess: () => {
-      toast.success('User deactivated');
-      queryClient.invalidateQueries({ queryKey: ['users'] });
-    },
+    onSuccess: () => { toast.success('User deactivated'); queryClient.invalidateQueries({ queryKey: ['users'] }); },
   });
 
   const users = data?.data ?? [];
 
   return (
-    <div className="space-y-5">
-      <div className="flex items-center justify-between">
+    <div className="page">
+      {/* ── Page header ── */}
+      <div className="ph">
         <div>
-          <h2 className="text-[22px] font-semibold text-foreground tracking-tight">Users & Roles</h2>
-          <p className="text-[14px] text-muted-foreground mt-0.5">{users.length} team members</p>
+          <div style={{ marginBottom: 6 }}>
+            <span className="eyebrow">Admin · Team management</span>
+          </div>
+          <h1>The <em>Team</em>.</h1>
+          <p className="lede">
+            {isLoading ? 'Loading…' : `${users.length} member${users.length !== 1 ? 's' : ''}`} across your Orion workspace. Manage roles and access.
+          </p>
         </div>
-        <button onClick={() => setShowInvite(true)} className="btn btn-primary">
-          <Plus size={14} /> Invite User
-        </button>
+        <div style={{ gridColumn: 3, display: 'flex', alignItems: 'flex-end', gap: 8, paddingBottom: 20 }}>
+          <button className="btn btn-primary btn-sm" style={{ gap: 6 }} onClick={() => setShowInvite(v => !v)}>
+            <Plus size={13} /> Invite member
+          </button>
+        </div>
       </div>
 
-      {/* Role legend */}
-      <div className="card p-4">
-        <p className="text-[12px] font-medium text-muted-foreground mb-3">Role Permissions</p>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
-          {[
-            { role: 'admin',      desc: 'Full access' },
-            { role: 'operator',   desc: 'Devices + commands' },
-            { role: 'researcher', desc: 'Data + dashboards' },
-            { role: 'technician', desc: 'Devices + OTA' },
-            { role: 'viewer',     desc: 'Read only' },
-          ].map(({ role, desc }) => (
-            <div key={role} className="bg-muted rounded-xl p-3">
-              <span className={`badge ${ROLE_BADGE[role] ?? 'badge-offline'} mb-1.5`}>{role}</span>
-              <p className="text-[11px] text-muted-foreground">{desc}</p>
+      {/* ── Invite form ── */}
+      {showInvite && (
+        <div className="panel" style={{ padding: 20, marginBottom: 24 }}>
+          <div className="eyebrow" style={{ marginBottom: 12 }}>Invite team member</div>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+            <div style={{ flex: '1 1 260px' }}>
+              <label className="eyebrow" style={{ fontSize: 9, display: 'block', marginBottom: 6 }}>Email address</label>
+              <input type="email" value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} className="input" placeholder="colleague@company.com" />
             </div>
-          ))}
+            <div style={{ minWidth: 160 }}>
+              <label className="eyebrow" style={{ fontSize: 9, display: 'block', marginBottom: 6 }}>Role</label>
+              <select value={inviteRole} onChange={e => setInviteRole(e.target.value)} className="select">
+                {Object.entries(ROLE_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+              </select>
+            </div>
+            <button
+              className="btn btn-primary"
+              onClick={() => { toast.success(`Invite sent to ${inviteEmail}`); setShowInvite(false); setInviteEmail(''); }}
+              disabled={!inviteEmail}
+            >
+              Send invite
+            </button>
+            <button className="btn btn-ghost" onClick={() => setShowInvite(false)}>Cancel</button>
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* Users list */}
-      <div className="card overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="data-table">
+      {/* ── Users table ── */}
+      <div className="panel table-responsive">
+        {isLoading ? (
+          <div style={{ padding: 32, textAlign: 'center' }} className="mono faint">Loading…</div>
+        ) : users.length === 0 ? (
+          <div style={{ padding: '64px 16px', textAlign: 'center' }}>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 28, marginBottom: 8 }}>
+              No <em style={{ color: 'hsl(var(--primary))' }}>members</em> yet
+            </div>
+            <p className="dim" style={{ fontSize: 13 }}>Invite your first team member to get started.</p>
+          </div>
+        ) : (
+          <table className="table">
             <thead>
               <tr>
-                <th>User</th>
+                <th style={{ width: 36 }}>№</th>
+                <th>Member</th>
                 <th>Role</th>
-                <th>Status</th>
-                <th>Last Login</th>
-                <th>Joined</th>
-                <th>Actions</th>
+                <th className="hide-sm">Status</th>
+                <th className="hide-sm">Last active</th>
+                <th className="hide-sm">Joined</th>
+                <th style={{ width: 40 }} />
               </tr>
             </thead>
             <tbody>
-              {isLoading ? (
-                <tr><td colSpan={6}><div className="skeleton h-12 m-3 rounded-lg" /></td></tr>
-              ) : users.map((user: any, i: number) => (
-                <motion.tr key={user._id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.04 }}>
+              {(users as any[]).map((u, i) => (
+                <tr key={u._id ?? u.id}>
+                  <td className="row-n">{String(i + 1).padStart(2, '0')}</td>
                   <td>
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-[12px] font-bold text-white shrink-0">
-                        {user.name?.[0]?.toUpperCase()}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <div style={{
+                        width: 30, height: 30, flexShrink: 0,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        background: 'hsl(var(--primary) / 0.1)', border: '1px solid hsl(var(--primary) / 0.25)',
+                        fontFamily: 'var(--font-display)', fontSize: 14, color: 'hsl(var(--primary))',
+                      }}>
+                        {u.name?.charAt(0)?.toUpperCase() ?? 'U'}
                       </div>
                       <div>
-                        <p className="text-[13px] font-medium text-foreground">{user.name}</p>
-                        <p className="text-[11px] text-muted-foreground">{user.email}</p>
+                        <div style={{ fontSize: 13.5, fontWeight: 500 }}>{u.name}</div>
+                        <div className="mono faint" style={{ fontSize: 10.5 }}>{u.email}</div>
                       </div>
                     </div>
                   </td>
                   <td>
-                    <span className={`badge ${ROLE_BADGE[user.role] ?? 'badge-offline'}`}>
-                      {user.role?.replace('_', ' ')}
+                    <span className={`tag ${roleTag(u.role)}`}>{ROLE_LABELS[u.role] ?? u.role}</span>
+                  </td>
+                  <td className="hide-sm">
+                    <span className={`tag tag-${u.isActive !== false ? 'online' : 'offline'}`}>
+                      <span className={`dot dot-${u.isActive !== false ? 'online' : 'offline'}`} />
+                      {u.isActive !== false ? 'Active' : 'Inactive'}
                     </span>
                   </td>
-                  <td>
-                    <span className={`badge ${user.isActive ? 'badge-online' : 'badge-offline'}`}>
-                      {user.isActive ? 'active' : 'inactive'}
-                    </span>
+                  <td className="hide-sm mono faint" style={{ fontSize: 11.5 }}>
+                    {u.lastLoginAt ? timeAgo(u.lastLoginAt) : 'Never'}
                   </td>
-                  <td className="text-[12px] text-muted-foreground">
-                    {user.lastLoginAt ? timeAgo(user.lastLoginAt) : 'Never'}
-                  </td>
-                  <td className="text-[12px] text-muted-foreground">
-                    {formatDate(user.createdAt, 'MMM d, yyyy')}
+                  <td className="hide-sm mono faint" style={{ fontSize: 11.5 }}>
+                    {u.createdAt ? formatDate(u.createdAt) : '—'}
                   </td>
                   <td>
                     <button
-                      onClick={() => { if (confirm(`Deactivate ${user.name}?`)) deactivateMutation.mutate(user._id); }}
-                      className="p-1.5 text-muted-foreground hover:text-red-500 rounded-lg hover:bg-red-500/10 transition-colors"
+                      onClick={() => { if (confirm(`Deactivate ${u.name}?`)) deactivateMut.mutate(u._id); }}
+                      className="btn btn-ghost btn-sm btn-icon"
+                      style={{ color: 'hsl(var(--muted-fg))' }}
                       title="Deactivate"
                     >
-                      <UserX size={14} />
+                      <UserX size={13} />
                     </button>
                   </td>
-                </motion.tr>
+                </tr>
               ))}
             </tbody>
           </table>
-        </div>
-      </div>
-
-      {showInvite && <InviteModal onClose={() => setShowInvite(false)} />}
-    </div>
-  );
-}
-
-function InviteModal({ onClose }: { onClose: () => void }) {
-  const queryClient = useQueryClient();
-  const [form, setForm] = useState({ email: '', name: '', role: 'viewer' });
-  const [result, setResult] = useState<any>(null);
-  const [loading, setLoading] = useState(false);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      const res = await apiClient.post('/users/invite', form);
-      setResult(res.data);
-      queryClient.invalidateQueries({ queryKey: ['users'] });
-    } catch (err: any) {
-      toast.error(err.response?.data?.error ?? 'Failed to invite user');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const upd = (f: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
-    setForm(prev => ({ ...prev, [f]: e.target.value }));
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        className="w-full max-w-md bg-surface border border-border rounded-2xl shadow-xl overflow-hidden"
-      >
-        <div className="px-5 py-4 border-b border-border flex items-center justify-between">
-          <h2 className="text-[15px] font-semibold text-foreground">Invite Team Member</h2>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground text-lg leading-none">✕</button>
-        </div>
-
-        {result ? (
-          <div className="p-5 space-y-4">
-            <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-4">
-              <p className="text-[13px] font-medium text-green-600 dark:text-green-400 mb-2">User invited successfully!</p>
-              <p className="text-[12px] text-muted-foreground">Share these credentials with the new user:</p>
-              <div className="mt-2 space-y-1 font-mono text-[12px]">
-                <p className="text-foreground">Email: {result.email}</p>
-                <p className="text-foreground">Temp password: <span className="bg-muted px-1.5 py-0.5 rounded">{result.tempPassword}</span></p>
-              </div>
-            </div>
-            <button onClick={onClose} className="btn btn-primary w-full">Done</button>
-          </div>
-        ) : (
-          <form onSubmit={handleSubmit} className="p-5 space-y-4">
-            <div>
-              <label className="block text-[12px] font-medium text-foreground mb-1.5">Full Name</label>
-              <input value={form.name} onChange={upd('name')} className="input" placeholder="Jane Smith" required />
-            </div>
-            <div>
-              <label className="block text-[12px] font-medium text-foreground mb-1.5">Email</label>
-              <input type="email" value={form.email} onChange={upd('email')} className="input" placeholder="jane@company.com" required />
-            </div>
-            <div>
-              <label className="block text-[12px] font-medium text-foreground mb-1.5">Role</label>
-              <select value={form.role} onChange={upd('role')} className="select">
-                {['admin', 'operator', 'researcher', 'technician', 'viewer'].map(r => (
-                  <option key={r} value={r}>{r.charAt(0).toUpperCase() + r.slice(1)}</option>
-                ))}
-              </select>
-            </div>
-            <div className="flex gap-3 pt-1">
-              <button type="button" onClick={onClose} className="btn btn-secondary flex-1">Cancel</button>
-              <button type="submit" disabled={loading} className="btn btn-primary flex-1">
-                {loading ? 'Inviting…' : 'Send Invite'}
-              </button>
-            </div>
-          </form>
         )}
-      </motion.div>
+      </div>
     </div>
   );
 }

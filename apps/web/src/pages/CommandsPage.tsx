@@ -1,27 +1,16 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { motion } from 'framer-motion';
 import apiClient from '@/api/client';
 import { devicesApi } from '@/api/devices';
 import { timeAgo } from '@/lib/utils';
-import { Terminal, Send, X, Check, Clock, AlertCircle, Loader2 } from 'lucide-react';
+import { Terminal, Send, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
-const STATUS_CONFIG: Record<string, { badge: string; icon: any }> = {
-  pending:      { badge: 'badge-warning',  icon: Clock        },
-  sent:         { badge: 'badge-info',     icon: Send         },
-  acknowledged: { badge: 'badge-info',     icon: Check        },
-  executed:     { badge: 'badge-online',   icon: Check        },
-  failed:       { badge: 'badge-error',    icon: AlertCircle  },
-  timeout:      { badge: 'badge-error',    icon: Clock        },
-  cancelled:    { badge: 'badge-offline',  icon: X            },
-};
-
 export function CommandsPage() {
-  const [deviceId, setDeviceId]   = useState('');
-  const [cmdName, setCmdName]     = useState('');
-  const [payload, setPayload]     = useState('{}');
-  const [sending, setSending]     = useState(false);
+  const [deviceId, setDeviceId] = useState('');
+  const [cmdName, setCmdName]   = useState('');
+  const [payload, setPayload]   = useState('{}');
+  const [sending, setSending]   = useState(false);
   const queryClient = useQueryClient();
 
   const { data: devicesData } = useQuery({
@@ -35,7 +24,7 @@ export function CommandsPage() {
     refetchInterval: 10_000,
   });
 
-  const cancelMutation = useMutation({
+  const cancelMut = useMutation({
     mutationFn: (id: string) => apiClient.post(`/commands/${id}/cancel`),
     onSuccess: () => { toast.success('Cancelled'); queryClient.invalidateQueries({ queryKey: ['commands'] }); },
   });
@@ -55,90 +44,133 @@ export function CommandsPage() {
       setCmdName(''); setPayload('{}');
       queryClient.invalidateQueries({ queryKey: ['commands'] });
     } catch { toast.error('Failed to send command'); }
-    finally  { setSending(false); }
+    finally { setSending(false); }
   };
 
   return (
-    <div className="space-y-5">
-      <div>
-        <h2 className="text-[22px] font-semibold text-foreground tracking-tight">Commands</h2>
-        <p className="text-[14px] text-muted-foreground mt-0.5">Send and track remote device commands</p>
+    <div className="page">
+      {/* ── Page header ── */}
+      <div className="ph">
+        <div>
+          <div style={{ marginBottom: 6 }}>
+            <span className="eyebrow">Operate · Remote control</span>
+          </div>
+          <h1><em>Commands</em>.</h1>
+          <p className="lede">Send and track remote device commands. Each payload is delivered over MQTT or HTTP depending on device protocol.</p>
+        </div>
       </div>
 
-      {/* Send form */}
-      <div className="card p-5">
-        <h3 className="text-[14px] font-semibold text-foreground mb-4 flex items-center gap-2">
-          <Terminal size={15} className="text-primary" /> Send Command
-        </h3>
-        <form onSubmit={handleSend} className="flex flex-wrap items-end gap-3">
-          <div className="min-w-[200px]">
-            <label className="block text-[12px] font-medium text-foreground mb-1.5">Target Device</label>
-            <select value={deviceId} onChange={e => setDeviceId(e.target.value)} className="select" required>
-              <option value="">Select device…</option>
-              {devices.map((d: any) => <option key={d._id} value={d._id}>{d.name}</option>)}
-            </select>
+      {/* ── Send form ── */}
+      <div className="panel" style={{ padding: 24, marginBottom: 32 }}>
+        <div className="eyebrow" style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Terminal size={13} /> Send command
+        </div>
+        <form onSubmit={handleSend}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'flex-end' }}>
+            <div style={{ minWidth: 200 }}>
+              <label className="eyebrow" style={{ fontSize: 9, display: 'block', marginBottom: 6 }}>Target device</label>
+              <select value={deviceId} onChange={e => setDeviceId(e.target.value)} className="select" required>
+                <option value="">Select device…</option>
+                {(devices as any[]).map(d => (
+                  <option key={d._id} value={d._id}>{d.name}</option>
+                ))}
+              </select>
+            </div>
+            <div style={{ minWidth: 180 }}>
+              <label className="eyebrow" style={{ fontSize: 9, display: 'block', marginBottom: 6 }}>Command</label>
+              <input
+                value={cmdName}
+                onChange={e => setCmdName(e.target.value)}
+                className="input mono"
+                placeholder="reboot, get_status…"
+                required
+              />
+            </div>
+            <div style={{ minWidth: 240, flex: 1 }}>
+              <label className="eyebrow" style={{ fontSize: 9, display: 'block', marginBottom: 6 }}>Payload (JSON)</label>
+              <input
+                value={payload}
+                onChange={e => setPayload(e.target.value)}
+                className="input mono"
+                style={{ fontSize: 12 }}
+                placeholder="{}"
+              />
+            </div>
+            <button type="submit" disabled={sending} className="btn btn-primary" style={{ gap: 6 }}>
+              {sending ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
+              {sending ? 'Sending…' : 'Send'}
+            </button>
           </div>
-          <div className="min-w-[180px]">
-            <label className="block text-[12px] font-medium text-foreground mb-1.5">Command</label>
-            <input value={cmdName} onChange={e => setCmdName(e.target.value)} className="input font-mono" placeholder="reboot, get_status…" required />
-          </div>
-          <div className="min-w-[240px] flex-1">
-            <label className="block text-[12px] font-medium text-foreground mb-1.5">Payload (JSON)</label>
-            <input value={payload} onChange={e => setPayload(e.target.value)} className="input font-mono text-[12px]" placeholder="{}" />
-          </div>
-          <button type="submit" disabled={sending} className="btn btn-primary self-end">
-            {sending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
-            {sending ? 'Sending…' : 'Send'}
-          </button>
         </form>
       </div>
 
-      {/* Command history */}
-      <div className="card overflow-hidden">
-        <div className="px-4 py-3 border-b border-border flex items-center justify-between">
-          <span className="text-[13px] font-semibold text-foreground">Command History</span>
-          <span className="text-[12px] text-muted-foreground">{commands.length} commands</span>
+      {/* ── History ── */}
+      <div className="section">
+        <div>
+          <div className="ssh"><span className="no">№ I</span>Command<br />history</div>
+          <p className="dim" style={{ fontSize: 13, marginTop: 8, maxWidth: '28ch' }}>
+            {commands.length} command{commands.length !== 1 ? 's' : ''} dispatched.
+          </p>
         </div>
-        {isLoading ? (
-          <div className="p-6 space-y-2">
-            {Array.from({ length: 5 }).map((_, i) => <div key={i} className="skeleton h-12 rounded-lg" />)}
-          </div>
-        ) : commands.length === 0 ? (
-          <div className="p-12 text-center text-[13px] text-muted-foreground">No commands sent yet</div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="data-table">
+        <div className="table-responsive">
+          {isLoading ? (
+            <div className="skeleton" style={{ height: 200 }} />
+          ) : commands.length === 0 ? (
+            <div className="panel" style={{ padding: '48px 16px', textAlign: 'center' }}>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, marginBottom: 8 }}>No commands sent yet</div>
+              <p className="dim" style={{ fontSize: 13 }}>Use the form above to dispatch your first command.</p>
+            </div>
+          ) : (
+            <table className="table">
               <thead>
                 <tr>
-                  <th>Device</th><th>Command</th><th>Status</th>
-                  <th>Sent</th><th>Response</th><th>Actions</th>
+                  <th style={{ width: 36 }}>№</th>
+                  <th>Device</th>
+                  <th>Command</th>
+                  <th>Status</th>
+                  <th className="hide-sm">Sent</th>
+                  <th className="hide-sm">Response</th>
+                  <th style={{ width: 60 }} />
                 </tr>
               </thead>
               <tbody>
-                {commands.map((cmd: any, i: number) => {
-                  const sc = STATUS_CONFIG[cmd.status] ?? { badge: 'badge-offline', icon: Clock };
-                  const Icon = sc.icon;
-                  return (
-                    <motion.tr key={cmd._id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.02 }}>
-                      <td><span className="text-[13px] text-foreground">{devices.find((d: any) => d._id === cmd.deviceId)?.name ?? cmd.deviceId?.slice(-8)}</span></td>
-                      <td><code className="text-[12px] font-mono text-primary bg-primary/8 px-2 py-0.5 rounded">{cmd.name}</code></td>
-                      <td><span className={`badge ${sc.badge} gap-1`}><Icon size={10} /> {cmd.status}</span></td>
-                      <td className="text-[12px] text-muted-foreground">{timeAgo(cmd.createdAt)}</td>
-                      <td className="text-[12px] text-muted-foreground font-mono max-w-[200px] truncate">
-                        {cmd.errorMessage ?? (cmd.response ? JSON.stringify(cmd.response).slice(0, 60) : '—')}
-                      </td>
-                      <td>
-                        {['pending', 'sent'].includes(cmd.status) && (
-                          <button onClick={() => cancelMutation.mutate(cmd._id)} className="text-[12px] text-red-600 dark:text-red-400 hover:underline">Cancel</button>
-                        )}
-                      </td>
-                    </motion.tr>
-                  );
-                })}
+                {(commands as any[]).map((cmd, i) => (
+                  <tr key={cmd._id}>
+                    <td className="row-n">{String(i + 1).padStart(2, '0')}</td>
+                    <td style={{ fontSize: 13 }}>
+                      {(devices as any[]).find(d => d._id === cmd.deviceId)?.name ?? (
+                        <span className="mono faint">{cmd.deviceId?.slice(-8)}</span>
+                      )}
+                    </td>
+                    <td>
+                      <code className="acc mono" style={{ fontSize: 12 }}>{cmd.name}</code>
+                    </td>
+                    <td>
+                      <span className={`tag tag-${cmd.status === 'executed' ? 'online' : cmd.status === 'failed' || cmd.status === 'timeout' ? 'error' : cmd.status === 'pending' || cmd.status === 'sent' ? 'warn' : 'offline'}`}>
+                        {cmd.status}
+                      </span>
+                    </td>
+                    <td className="hide-sm mono faint" style={{ fontSize: 11 }}>{timeAgo(cmd.createdAt)}</td>
+                    <td className="hide-sm mono faint" style={{ fontSize: 11, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {cmd.errorMessage ?? (cmd.response ? JSON.stringify(cmd.response).slice(0, 60) : '—')}
+                    </td>
+                    <td>
+                      {['pending', 'sent'].includes(cmd.status) && (
+                        <button
+                          onClick={() => cancelMut.mutate(cmd._id)}
+                          className="btn btn-sm btn-ghost"
+                          style={{ color: 'hsl(var(--bad))', fontSize: 11 }}
+                        >
+                          Cancel
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );

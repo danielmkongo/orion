@@ -1,11 +1,10 @@
 import { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import {
   Upload, Package, CheckCircle2, Clock, AlertCircle, Trash2, Archive,
-  RotateCcw, Star, AlertTriangle, X, ChevronDown, ChevronUp, Plus,
+  RotateCcw, Star, AlertTriangle, X,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { cn } from '@/lib/utils';
 
 type FirmwareStatus = 'active' | 'deprecated' | 'archived' | 'ready';
 type JobStatus = 'in_progress' | 'completed' | 'failed' | 'pending';
@@ -47,82 +46,64 @@ const INITIAL_JOBS: Job[] = [
   { id: '3', name: 'Gateway Update',       firmware: 'v3.1.2', firmwareId: '4', status: 'failed',      progress: 1,  total: 2,  started: '2024-03-01T11:00:00Z' },
 ];
 
-const STATUS_CONFIG: Record<FirmwareStatus, { badge: string; label: string; icon: any }> = {
-  active:     { badge: 'badge-online',   label: 'Active',     icon: CheckCircle2  },
-  ready:      { badge: 'badge-info',     label: 'Ready',      icon: Package       },
-  deprecated: { badge: 'badge-warning',  label: 'Deprecated', icon: AlertTriangle },
-  archived:   { badge: 'badge-offline',  label: 'Archived',   icon: Archive       },
+const STATUS_CFG: Record<FirmwareStatus, { tag: string; label: string }> = {
+  active:     { tag: 'tag-online',  label: 'Active'     },
+  ready:      { tag: 'tag-info',    label: 'Ready'      },
+  deprecated: { tag: 'tag-warn',    label: 'Deprecated' },
+  archived:   { tag: 'tag-offline', label: 'Archived'   },
 };
 
-const JOB_CONFIG: Record<JobStatus, { badge: string; icon: any }> = {
-  in_progress: { badge: 'badge-warning', icon: Clock       },
-  completed:   { badge: 'badge-online',  icon: CheckCircle2 },
-  failed:      { badge: 'badge-error',   icon: AlertCircle },
-  pending:     { badge: 'badge-info',    icon: Clock       },
+const JOB_CFG: Record<JobStatus, { tag: string; color: string; label: string }> = {
+  in_progress: { tag: 'tag-warn',   color: 'hsl(var(--warn))',    label: 'In Progress' },
+  completed:   { tag: 'tag-online', color: 'hsl(var(--good))',    label: 'Completed'   },
+  failed:      { tag: 'tag-error',  color: 'hsl(var(--bad))',     label: 'Failed'      },
+  pending:     { tag: 'tag-info',   color: 'hsl(var(--primary))', label: 'Pending'     },
 };
 
-/* ── Upload Modal ────────────────────────────────────────────────── */
+/* ── Upload Modal ──────────────────────────────────────────────────── */
 function UploadModal({ onClose, onUpload }: { onClose: () => void; onUpload: (fw: Firmware) => void }) {
-  const [name, setName]     = useState('');
-  const [version, setVersion] = useState('');
-  const [category, setCat]  = useState('tracker');
-  const [file, setFile]     = useState<File | null>(null);
-  const [notes, setNotes]   = useState('');
+  const [name, setName]         = useState('');
+  const [version, setVersion]   = useState('');
+  const [category, setCat]      = useState('tracker');
+  const [file, setFile]         = useState<File | null>(null);
+  const [notes, setNotes]       = useState('');
 
   const submit = () => {
     if (!name || !version || !file) { toast.error('Fill all required fields'); return; }
     const fw: Firmware = {
-      id: Date.now().toString(),
-      name, version, category,
+      id: Date.now().toString(), name, version, category,
       size: file.size > 1_000_000 ? `${(file.size / 1_048_576).toFixed(1)} MB` : `${Math.round(file.size / 1024)} KB`,
-      status: 'ready',
-      uploadedAt: new Date().toISOString().split('T')[0],
-      devices: 0,
-      changelog: notes,
+      status: 'ready', uploadedAt: new Date().toISOString().split('T')[0], devices: 0, changelog: notes,
     };
     onUpload(fw);
-    toast.success('Firmware uploaded successfully');
+    toast.success('Firmware uploaded');
     onClose();
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <motion.div
-        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-        onClick={onClose}
-      />
-      <motion.div
-        initial={{ opacity: 0, scale: 0.96, y: 12 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.96, y: 12 }}
-        transition={{ type: 'spring', stiffness: 380, damping: 30 }}
-        className="relative bg-surface rounded-2xl border border-border shadow-2xl w-full max-w-md overflow-hidden"
-        onClick={e => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center">
-              <Upload size={15} className="text-primary" />
-            </div>
-            <h2 className="text-[15px] font-semibold text-foreground">Upload Firmware</h2>
-          </div>
-          <button onClick={onClose} className="btn btn-ghost btn-sm !px-2"><X size={16} /></button>
+    <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+        style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.55)' }} onClick={onClose} />
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }}
+        className="panel" onClick={e => e.stopPropagation()}
+        style={{ position: 'relative', width: '100%', maxWidth: 480, background: 'hsl(var(--surface))', borderTop: '3px solid hsl(var(--primary))' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px', borderBottom: '1px solid hsl(var(--border))' }}>
+          <span className="eyebrow" style={{ fontSize: 10 }}>Upload firmware</span>
+          <button onClick={onClose} className="btn btn-ghost btn-sm btn-icon"><X size={14} /></button>
         </div>
-
-        <div className="p-5 space-y-4">
-          <div className="grid grid-cols-2 gap-3">
+        <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div>
-              <label className="block text-[12px] font-medium text-muted-foreground mb-1.5">Name *</label>
-              <input className="input" value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Tracker Firmware" />
+              <label className="eyebrow" style={{ fontSize: 9, display: 'block', marginBottom: 6 }}>Name *</label>
+              <input className="input" value={name} onChange={e => setName(e.target.value)} placeholder="Tracker Firmware" />
             </div>
             <div>
-              <label className="block text-[12px] font-medium text-muted-foreground mb-1.5">Version *</label>
-              <input className="input" value={version} onChange={e => setVersion(e.target.value)} placeholder="e.g. 2.5.0" />
+              <label className="eyebrow" style={{ fontSize: 9, display: 'block', marginBottom: 6 }}>Version *</label>
+              <input className="input" value={version} onChange={e => setVersion(e.target.value)} placeholder="2.5.0" />
             </div>
           </div>
           <div>
-            <label className="block text-[12px] font-medium text-muted-foreground mb-1.5">Category</label>
+            <label className="eyebrow" style={{ fontSize: 9, display: 'block', marginBottom: 6 }}>Category</label>
             <select className="select" value={category} onChange={e => setCat(e.target.value)}>
               {['tracker','environmental','industrial','energy','water','gateway','custom'].map(c => (
                 <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
@@ -130,378 +111,322 @@ function UploadModal({ onClose, onUpload }: { onClose: () => void; onUpload: (fw
             </select>
           </div>
           <div>
-            <label className="block text-[12px] font-medium text-muted-foreground mb-1.5">Firmware File *</label>
-            <label className={cn(
-              'flex flex-col items-center justify-center gap-2 border-2 border-dashed rounded-xl p-6 cursor-pointer transition-colors',
-              file ? 'border-primary/40 bg-primary/5' : 'border-border hover:border-border-strong'
-            )}>
-              <input type="file" className="hidden" onChange={e => setFile(e.target.files?.[0] ?? null)} accept=".bin,.hex,.elf,.fw" />
+            <label className="eyebrow" style={{ fontSize: 9, display: 'block', marginBottom: 6 }}>Firmware file *</label>
+            <label style={{
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+              gap: 8, border: `2px dashed ${file ? 'hsl(var(--primary) / 0.5)' : 'hsl(var(--border))'}`,
+              padding: '24px 16px', cursor: 'pointer',
+              background: file ? 'hsl(var(--primary) / 0.04)' : 'transparent',
+              transition: 'all 0.15s',
+            }}>
+              <input type="file" style={{ display: 'none' }} onChange={e => setFile(e.target.files?.[0] ?? null)} accept=".bin,.hex,.elf,.fw" />
               {file ? (
                 <>
-                  <CheckCircle2 size={20} className="text-primary" />
-                  <span className="text-[13px] font-medium text-foreground">{file.name}</span>
-                  <span className="text-[11px] text-muted-foreground">{(file.size / 1024).toFixed(0)} KB</span>
+                  <CheckCircle2 size={18} style={{ color: 'hsl(var(--primary))' }} />
+                  <span style={{ fontSize: 13, fontWeight: 500 }}>{file.name}</span>
+                  <span className="mono faint" style={{ fontSize: 11 }}>{(file.size / 1024).toFixed(0)} KB</span>
                 </>
               ) : (
                 <>
-                  <Upload size={20} className="text-muted-foreground" />
-                  <span className="text-[13px] text-muted-foreground">Drop file or click to browse</span>
-                  <span className="text-[11px] text-muted-foreground">.bin · .hex · .elf · .fw</span>
+                  <Upload size={18} className="faint" />
+                  <span className="dim" style={{ fontSize: 13 }}>Drop file or click to browse</span>
+                  <span className="mono faint" style={{ fontSize: 11 }}>.bin · .hex · .elf · .fw</span>
                 </>
               )}
             </label>
           </div>
           <div>
-            <label className="block text-[12px] font-medium text-muted-foreground mb-1.5">Changelog / Notes</label>
-            <textarea
-              className="textarea"
-              rows={3}
-              value={notes}
-              onChange={e => setNotes(e.target.value)}
-              placeholder="What changed in this release?"
-            />
+            <label className="eyebrow" style={{ fontSize: 9, display: 'block', marginBottom: 6 }}>Changelog / Notes</label>
+            <textarea className="textarea" rows={3} value={notes} onChange={e => setNotes(e.target.value)} placeholder="What changed in this release?" />
           </div>
         </div>
-
-        <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-border bg-surface-raised">
-          <button onClick={onClose} className="btn btn-secondary">Cancel</button>
-          <button onClick={submit} className="btn btn-primary">
-            <Upload size={14} /> Upload
-          </button>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '14px 20px', borderTop: '1px solid hsl(var(--border))' }}>
+          <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
+          <button className="btn btn-primary" onClick={submit} style={{ gap: 6 }}><Upload size={13} /> Upload</button>
         </div>
       </motion.div>
     </div>
   );
 }
 
-/* ── Deploy Modal ────────────────────────────────────────────────── */
+/* ── Deploy Modal ──────────────────────────────────────────────────── */
 function DeployModal({ fw, onClose, onDeploy }: { fw: Firmware; onClose: () => void; onDeploy: (jobName: string) => void }) {
   const [jobName, setJobName] = useState(`${fw.name} v${fw.version} Rollout`);
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-      <motion.div
-        initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.96 }}
-        transition={{ type: 'spring', stiffness: 380, damping: 30 }}
-        className="relative bg-surface rounded-2xl border border-border shadow-2xl w-full max-w-sm overflow-hidden"
-        onClick={e => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-          <h2 className="text-[15px] font-semibold text-foreground">Deploy Firmware</h2>
-          <button onClick={onClose} className="btn btn-ghost btn-sm !px-2"><X size={16} /></button>
+    <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+        style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.55)' }} onClick={onClose} />
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }}
+        className="panel" onClick={e => e.stopPropagation()}
+        style={{ position: 'relative', width: '100%', maxWidth: 400, background: 'hsl(var(--surface))', borderTop: '3px solid hsl(var(--primary))' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px', borderBottom: '1px solid hsl(var(--border))' }}>
+          <span className="eyebrow" style={{ fontSize: 10 }}>Deploy firmware</span>
+          <button onClick={onClose} className="btn btn-ghost btn-sm btn-icon"><X size={14} /></button>
         </div>
-        <div className="p-5 space-y-4">
-          <div className="bg-muted rounded-xl p-3 text-[13px] text-foreground">
-            <span className="text-muted-foreground">Deploying</span> {fw.name} <strong>v{fw.version}</strong>
-            {' '}to <strong>{fw.devices}</strong> device{fw.devices !== 1 ? 's' : ''}
+        <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ padding: '10px 14px', background: 'hsl(var(--bg))', border: '1px solid hsl(var(--border))' }}>
+            <p style={{ fontSize: 13 }}>
+              <span className="dim">Deploying</span> {fw.name} <strong>v{fw.version}</strong>{' '}
+              to <strong>{fw.devices}</strong> device{fw.devices !== 1 ? 's' : ''}
+            </p>
           </div>
           <div>
-            <label className="block text-[12px] font-medium text-muted-foreground mb-1.5">Job Name</label>
+            <label className="eyebrow" style={{ fontSize: 9, display: 'block', marginBottom: 6 }}>Job name</label>
             <input className="input" value={jobName} onChange={e => setJobName(e.target.value)} />
           </div>
         </div>
-        <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-border bg-surface-raised">
-          <button onClick={onClose} className="btn btn-secondary">Cancel</button>
-          <button onClick={() => { onDeploy(jobName); onClose(); }} className="btn btn-primary">Start Rollout</button>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '14px 20px', borderTop: '1px solid hsl(var(--border))' }}>
+          <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
+          <button className="btn btn-primary" onClick={() => { onDeploy(jobName); onClose(); }}>Start rollout</button>
         </div>
       </motion.div>
     </div>
   );
 }
 
-/* ── Firmware Card ───────────────────────────────────────────────── */
-function FirmwareCard({
+/* ── Firmware table row ────────────────────────────────────────────── */
+function FirmwareRow({
   fw, onStatusChange, onDelete, onDeploy,
 }: {
   fw: Firmware;
-  onStatusChange: (id: string, status: FirmwareStatus) => void;
+  onStatusChange: (id: string, s: FirmwareStatus) => void;
   onDelete: (id: string) => void;
   onDeploy: (fw: Firmware) => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
-  const cfg = STATUS_CONFIG[fw.status];
-  const StatusIcon = cfg.icon;
-
+  const cfg = STATUS_CFG[fw.status];
   return (
-    <motion.div
-      layout
-      initial={{ opacity: 0, y: 6 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, height: 0, overflow: 'hidden' }}
-      className="border border-border rounded-xl overflow-hidden"
-    >
-      <div className="flex items-start gap-3 p-4">
-        <div className="w-9 h-9 bg-primary/10 rounded-xl flex items-center justify-center flex-shrink-0">
-          <Package size={16} className="text-primary" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <p className="text-[13px] font-semibold text-foreground">{fw.name}</p>
-                <span className="text-[12px] font-mono text-muted-foreground">v{fw.version}</span>
-                <span className={`badge ${cfg.badge} gap-1`}><StatusIcon size={9} /> {cfg.label}</span>
-              </div>
-              <p className="text-[11px] text-muted-foreground mt-0.5">
-                {fw.size} · {fw.category} · {fw.uploadedAt} · {fw.devices} device{fw.devices !== 1 ? 's' : ''}
-              </p>
-            </div>
-            <button
-              onClick={() => setExpanded(v => !v)}
-              className="btn btn-ghost btn-sm !px-1.5 flex-shrink-0 text-muted-foreground"
-            >
-              {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-            </button>
+    <tr>
+      <td>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Package size={13} style={{ color: 'hsl(var(--primary))', flexShrink: 0 }} />
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 500 }}>{fw.name}</div>
+            {fw.changelog && <div className="dim" style={{ fontSize: 11, marginTop: 1 }}>{fw.changelog}</div>}
           </div>
         </div>
-      </div>
-
-      <AnimatePresence>
-        {expanded && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            className="overflow-hidden"
+      </td>
+      <td><code className="acc mono" style={{ fontSize: 12 }}>v{fw.version}</code></td>
+      <td className="mono faint" style={{ fontSize: 11.5 }}>{fw.category}</td>
+      <td className="mono faint" style={{ fontSize: 11.5 }}>{fw.size}</td>
+      <td className="mono faint" style={{ fontSize: 11.5 }}>{fw.devices}</td>
+      <td><span className={`tag ${cfg.tag}`}>{cfg.label}</span></td>
+      <td className="mono faint" style={{ fontSize: 11.5 }}>{fw.uploadedAt}</td>
+      <td>
+        <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
+          {fw.status !== 'archived' && fw.status !== 'deprecated' && (
+            <button onClick={() => onDeploy(fw)} className="btn btn-ghost btn-sm" style={{ fontSize: 11, gap: 4 }}>
+              <Upload size={11} /> Deploy
+            </button>
+          )}
+          {fw.status === 'active' && (
+            <button onClick={() => { onStatusChange(fw.id, 'deprecated'); toast.success('Marked deprecated'); }}
+              className="btn btn-ghost btn-sm" style={{ fontSize: 11 }}>
+              <AlertTriangle size={11} />
+            </button>
+          )}
+          {fw.status === 'deprecated' && (
+            <button onClick={() => { onStatusChange(fw.id, 'active'); toast.success('Marked active'); }}
+              className="btn btn-ghost btn-sm" style={{ fontSize: 11 }}>
+              <Star size={11} />
+            </button>
+          )}
+          {fw.status !== 'archived' && (
+            <button onClick={() => { onStatusChange(fw.id, 'archived'); toast.success('Archived'); }}
+              className="btn btn-ghost btn-sm" style={{ fontSize: 11 }}>
+              <Archive size={11} />
+            </button>
+          )}
+          {fw.status === 'archived' && (
+            <button onClick={() => { onStatusChange(fw.id, 'ready'); toast.success('Restored'); }}
+              className="btn btn-ghost btn-sm" style={{ fontSize: 11 }}>
+              <RotateCcw size={11} />
+            </button>
+          )}
+          <button
+            onClick={() => { if (!confirm(`Delete ${fw.name} v${fw.version}?`)) return; onDelete(fw.id); toast.success('Deleted'); }}
+            className="btn btn-ghost btn-sm btn-icon" style={{ color: 'hsl(var(--bad))' }}
           >
-            <div className="px-4 pb-4 space-y-3">
-              {fw.changelog && (
-                <div className="bg-muted rounded-xl p-3 text-[12px] text-muted-foreground leading-relaxed">
-                  {fw.changelog}
-                </div>
-              )}
-              <div className="flex items-center gap-2 flex-wrap">
-                {fw.status !== 'archived' && fw.status !== 'deprecated' && (
-                  <button onClick={() => onDeploy(fw)} className="btn btn-primary btn-sm">
-                    <Upload size={12} /> Deploy
-                  </button>
-                )}
-                {fw.status === 'active' && (
-                  <button
-                    onClick={() => { onStatusChange(fw.id, 'deprecated'); toast.success('Marked as deprecated'); }}
-                    className="btn btn-secondary btn-sm"
-                  >
-                    <AlertTriangle size={12} /> Mark Deprecated
-                  </button>
-                )}
-                {fw.status === 'deprecated' && (
-                  <button
-                    onClick={() => { onStatusChange(fw.id, 'active'); toast.success('Marked as active'); }}
-                    className="btn btn-secondary btn-sm"
-                  >
-                    <Star size={12} /> Mark Active
-                  </button>
-                )}
-                {fw.status !== 'archived' && (
-                  <button
-                    onClick={() => { onStatusChange(fw.id, 'archived'); toast.success('Firmware archived'); }}
-                    className="btn btn-secondary btn-sm"
-                  >
-                    <Archive size={12} /> Archive
-                  </button>
-                )}
-                {fw.status === 'archived' && (
-                  <button
-                    onClick={() => { onStatusChange(fw.id, 'ready'); toast.success('Firmware restored'); }}
-                    className="btn btn-secondary btn-sm"
-                  >
-                    <RotateCcw size={12} /> Restore
-                  </button>
-                )}
-                <button
-                  onClick={() => {
-                    if (!confirm(`Delete ${fw.name} v${fw.version}? This cannot be undone.`)) return;
-                    onDelete(fw.id);
-                    toast.success('Firmware deleted');
-                  }}
-                  className="btn btn-sm bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 dark:bg-red-900/20 dark:border-red-900/40 dark:text-red-400 dark:hover:bg-red-900/30"
-                >
-                  <Trash2 size={12} /> Delete
-                </button>
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </motion.div>
+            <Trash2 size={11} />
+          </button>
+        </div>
+      </td>
+    </tr>
   );
 }
 
-/* ── Main Page ───────────────────────────────────────────────────── */
+/* ── Main Page ─────────────────────────────────────────────────────── */
 export function OtaPage() {
-  const [firmware, setFirmware] = useState<Firmware[]>(INITIAL_FIRMWARE);
-  const [jobs, setJobs]         = useState<Job[]>(INITIAL_JOBS);
+  const [firmware, setFirmware]     = useState<Firmware[]>(INITIAL_FIRMWARE);
+  const [jobs, setJobs]             = useState<Job[]>(INITIAL_JOBS);
   const [showUpload, setShowUpload] = useState(false);
   const [deployTarget, setDeployTarget] = useState<Firmware | null>(null);
-  const [filter, setFilter] = useState<FirmwareStatus | 'all'>('all');
+  const [filter, setFilter]         = useState<FirmwareStatus | 'all'>('all');
 
   const handleStatusChange = (id: string, status: FirmwareStatus) =>
     setFirmware(f => f.map(fw => fw.id === id ? { ...fw, status } : fw));
 
-  const handleDelete = (id: string) =>
-    setFirmware(f => f.filter(fw => fw.id !== id));
-
-  const handleUpload = (fw: Firmware) =>
-    setFirmware(f => [fw, ...f]);
-
-  const handleDeploy = (jobName: string) => {
+  const handleDelete  = (id: string)      => setFirmware(f => f.filter(fw => fw.id !== id));
+  const handleUpload  = (fw: Firmware)    => setFirmware(f => [fw, ...f]);
+  const handleDeploy  = (jobName: string) => {
     if (!deployTarget) return;
     const newJob: Job = {
-      id: Date.now().toString(),
-      name: jobName,
-      firmware: `v${deployTarget.version}`,
-      firmwareId: deployTarget.id,
-      status: 'pending',
-      progress: 0,
-      total: deployTarget.devices || 1,
+      id: Date.now().toString(), name: jobName,
+      firmware: `v${deployTarget.version}`, firmwareId: deployTarget.id,
+      status: 'pending', progress: 0, total: deployTarget.devices || 1,
       started: new Date().toISOString(),
     };
     setJobs(j => [newJob, ...j]);
     toast.success('Rollout job created');
   };
+  const handleRollback = (job: Job) => toast.success(`Rollback initiated for ${job.name}`);
 
-  const handleRollback = (job: Job) => {
-    toast.success(`Rollback initiated for ${job.name}`);
-  };
-
-  const filtered = firmware.filter(fw => filter === 'all' || fw.status === filter);
-
+  const filtered        = firmware.filter(fw => filter === 'all' || fw.status === filter);
   const activeCount     = firmware.filter(f => f.status === 'active').length;
   const inProgressCount = jobs.filter(j => j.status === 'in_progress' || j.status === 'pending').length;
   const completedCount  = jobs.filter(j => j.status === 'completed').length;
 
   return (
-    <div className="space-y-5">
-      <div className="flex items-center justify-between">
+    <div className="page">
+      {/* ── Page header ── */}
+      <div className="ph">
         <div>
-          <h2 className="text-[22px] font-semibold text-foreground tracking-tight">Firmware</h2>
-          <p className="text-[14px] text-muted-foreground mt-0.5">Manage firmware versions and OTA update rollouts</p>
+          <div style={{ marginBottom: 6 }}><span className="eyebrow">Maintain · Firmware management</span></div>
+          <h1>OTA <em>Updates</em>.</h1>
+          <p className="lede">Manage firmware versions and orchestrate over-the-air update rollouts across your fleet.</p>
         </div>
-        <button onClick={() => setShowUpload(true)} className="btn btn-primary">
-          <Upload size={14} /> Upload Firmware
-        </button>
+        <div style={{ gridColumn: 3, display: 'flex', alignItems: 'flex-end', gap: 8, paddingBottom: 20 }}>
+          <button className="btn btn-primary btn-sm" style={{ gap: 6 }} onClick={() => setShowUpload(true)}>
+            <Upload size={13} /> Upload firmware
+          </button>
+        </div>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-3 gap-4">
+      {/* ── KPI ticker ── */}
+      <div className="ticker">
         {[
-          { icon: Package,      label: 'Firmware Versions', value: firmware.length,  accent: 'bg-primary/10 text-primary' },
-          { icon: Clock,        label: 'Active Jobs',        value: inProgressCount,  accent: 'bg-amber-500/10 text-amber-600 dark:text-amber-400' },
-          { icon: CheckCircle2, label: 'Completed Jobs',     value: completedCount,   accent: 'bg-green-500/10 text-green-600 dark:text-green-400' },
-        ].map(({ icon: Icon, label, value, accent }) => (
-          <div key={label} className="card p-5">
-            <div className={`w-9 h-9 rounded-xl flex items-center justify-center mb-3 ${accent}`}><Icon size={17} /></div>
-            <p className="text-[1.5rem] font-semibold text-foreground tracking-tight">{value}</p>
-            <p className="text-[13px] text-muted-foreground mt-0.5">{label}</p>
+          { n: '01', v: firmware.length,  l: 'Total versions',  c: undefined },
+          { n: '02', v: activeCount,      l: 'Active firmware', c: 'hsl(var(--good))' },
+          { n: '03', v: inProgressCount,  l: 'Jobs in progress',c: 'hsl(var(--warn))' },
+          { n: '04', v: completedCount,   l: 'Jobs completed',  c: 'hsl(var(--primary))' },
+        ].map(({ n, v, l, c }) => (
+          <div key={n} className="tick">
+            <span className="tick-n">{n}</span>
+            <span className="tick-v" style={{ fontFamily: 'var(--font-display)', fontSize: 32, color: c }}>{v}</span>
+            <span className="tick-l">{l}</span>
           </div>
         ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_400px] gap-5">
-        {/* Firmware library */}
-        <div className="card overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-            <span className="text-[13px] font-semibold text-foreground">Firmware Library</span>
-            <div className="flex gap-1">
-              {(['all', 'active', 'ready', 'deprecated', 'archived'] as const).map(f => (
-                <button
-                  key={f}
-                  onClick={() => setFilter(f)}
-                  className={cn(
-                    'text-[11px] px-2.5 py-1 rounded-lg capitalize transition-all',
-                    filter === f ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:text-foreground'
-                  )}
-                >
-                  {f}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="p-3 space-y-2">
-            <AnimatePresence mode="popLayout">
-              {filtered.length === 0 ? (
-                <div className="py-10 text-center text-[13px] text-muted-foreground">
-                  No firmware in this category
-                </div>
-              ) : (
-                filtered.map(fw => (
-                  <FirmwareCard
-                    key={fw.id}
-                    fw={fw}
-                    onStatusChange={handleStatusChange}
-                    onDelete={handleDelete}
-                    onDeploy={setDeployTarget}
-                  />
-                ))
-              )}
-            </AnimatePresence>
+      {/* ── Section I: Firmware Library ── */}
+      <div className="section">
+        <div>
+          <div className="ssh"><span className="no">№ I</span>Firmware<br />Library</div>
+          <p className="dim" style={{ fontSize: 13, marginTop: 8, maxWidth: '22ch' }}>
+            {filtered.length} version{filtered.length !== 1 ? 's' : ''} shown.
+          </p>
+          <div className="seg" style={{ marginTop: 16 }}>
+            {(['all', 'active', 'ready', 'deprecated', 'archived'] as const).map(f => (
+              <button key={f} className={filter === f ? 'on' : ''} onClick={() => setFilter(f)}>
+                {f === 'all' ? 'All' : f.charAt(0).toUpperCase() + f.slice(1)}
+              </button>
+            ))}
           </div>
         </div>
-
-        {/* Update jobs */}
-        <div className="card overflow-hidden">
-          <div className="px-4 py-3 border-b border-border">
-            <span className="text-[13px] font-semibold text-foreground">Update Jobs</span>
-          </div>
-          <div className="divide-y divide-border/50">
-            {jobs.map((job) => {
-              const cfg = JOB_CONFIG[job.status] ?? JOB_CONFIG.pending;
-              const Icon = cfg.icon;
-              const pct = Math.round((job.progress / job.total) * 100);
-              return (
-                <motion.div
-                  key={job.id}
-                  layout
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="p-4"
-                >
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[13px] font-medium text-foreground truncate">{job.name}</p>
-                      <p className="text-[11px] text-muted-foreground mt-0.5">
-                        {job.firmware} · {job.progress}/{job.total} devices
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-1.5 flex-shrink-0 ml-2">
-                      <span className={`badge ${cfg.badge} gap-1`}><Icon size={9} /> {job.status.replace('_', ' ')}</span>
-                    </div>
-                  </div>
-                  <div className="h-1.5 bg-muted rounded-full overflow-hidden mb-1">
-                    <motion.div
-                      initial={{ width: 0 }}
-                      animate={{ width: `${pct}%` }}
-                      transition={{ duration: 0.6, ease: 'easeOut' }}
-                      className={cn(
-                        'h-full rounded-full',
-                        job.status === 'failed'      ? 'bg-red-500' :
-                        job.status === 'completed'   ? 'bg-green-500' :
-                        job.status === 'in_progress' ? 'bg-primary' : 'bg-border-strong'
-                      )}
+        <div className="panel table-responsive">
+          {filtered.length === 0 ? (
+            <div style={{ padding: '48px 16px', textAlign: 'center' }}>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, marginBottom: 8 }}>
+                No <em style={{ color: 'hsl(var(--primary))' }}>firmware</em> here
+              </div>
+              <p className="dim" style={{ fontSize: 13 }}>Try a different filter or upload a new version.</p>
+            </div>
+          ) : (
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Firmware</th>
+                  <th>Version</th>
+                  <th className="hide-sm">Category</th>
+                  <th className="hide-sm">Size</th>
+                  <th className="hide-sm">Devices</th>
+                  <th>Status</th>
+                  <th className="hide-sm">Uploaded</th>
+                  <th style={{ width: 140 }} />
+                </tr>
+              </thead>
+              <tbody>
+                <AnimatePresence mode="popLayout">
+                  {filtered.map(fw => (
+                    <FirmwareRow
+                      key={fw.id} fw={fw}
+                      onStatusChange={handleStatusChange}
+                      onDelete={handleDelete}
+                      onDeploy={setDeployTarget}
                     />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <p className="text-[11px] text-muted-foreground">{pct}% complete</p>
-                    {(job.status === 'failed' || job.status === 'completed') && (
-                      <button
-                        onClick={() => handleRollback(job)}
-                        className="text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
-                      >
-                        <RotateCcw size={10} /> Rollback
-                      </button>
-                    )}
-                  </div>
-                </motion.div>
-              );
-            })}
-            {jobs.length === 0 && (
-              <div className="py-10 text-center text-[13px] text-muted-foreground">No jobs yet</div>
-            )}
-          </div>
+                  ))}
+                </AnimatePresence>
+              </tbody>
+            </table>
+          )}
         </div>
       </div>
 
-      {/* Modals */}
+      {/* ── Section II: Update Jobs ── */}
+      <div className="section">
+        <div>
+          <div className="ssh"><span className="no">№ II</span>Update<br />Jobs</div>
+          <p className="dim" style={{ fontSize: 13, marginTop: 8, maxWidth: '22ch' }}>
+            {jobs.length} job{jobs.length !== 1 ? 's' : ''} dispatched.
+          </p>
+        </div>
+        <div>
+          {jobs.length === 0 ? (
+            <div className="panel" style={{ padding: '48px 16px', textAlign: 'center' }}>
+              <p className="dim" style={{ fontSize: 13 }}>No rollout jobs yet. Deploy a firmware version to create one.</p>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {jobs.map(job => {
+                const cfg = JOB_CFG[job.status] ?? JOB_CFG.pending;
+                const pct = Math.round((job.progress / job.total) * 100);
+                return (
+                  <div key={job.id} className="panel" style={{ padding: '16px 20px' }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 12 }}>
+                      <div>
+                        <div style={{ fontSize: 13.5, fontWeight: 500, marginBottom: 2 }}>{job.name}</div>
+                        <div className="mono faint" style={{ fontSize: 11 }}>
+                          {job.firmware} · {job.progress}/{job.total} devices
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span className={`tag ${cfg.tag}`}>{cfg.label}</span>
+                        {(job.status === 'failed' || job.status === 'completed') && (
+                          <button onClick={() => handleRollback(job)} className="btn btn-ghost btn-sm" style={{ gap: 4, fontSize: 11 }}>
+                            <RotateCcw size={11} /> Rollback
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    <div style={{ height: 3, background: 'hsl(var(--border))', overflow: 'hidden' }}>
+                      <motion.div
+                        initial={{ width: 0 }} animate={{ width: `${pct}%` }}
+                        transition={{ duration: 0.6, ease: 'easeOut' }}
+                        style={{ height: '100%', background: cfg.color }}
+                      />
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}>
+                      <span className="mono faint" style={{ fontSize: 11 }}>{pct}% complete</span>
+                      <span className="mono faint" style={{ fontSize: 11 }}>{job.progress} / {job.total}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── Modals ── */}
       <AnimatePresence>
         {showUpload && <UploadModal onClose={() => setShowUpload(false)} onUpload={handleUpload} />}
       </AnimatePresence>

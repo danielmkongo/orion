@@ -1,24 +1,21 @@
 import { useParams, Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, useEffect, useRef } from 'react';
-import { motion } from 'framer-motion';
 import { devicesApi } from '@/api/devices';
 import { telemetryApi } from '@/api/telemetry';
 import apiClient from '@/api/client';
 import { timeAgo, formatDate as fmtDate, getCategoryIconInfo } from '@/lib/utils';
 import { useSocket } from '@/hooks/useSocket';
 import { LineChart } from '@/components/charts/Charts';
-import {
-  ArrowLeft, Eye, EyeOff, Copy, RefreshCw, Terminal, ChevronDown,
-} from 'lucide-react';
+import { ArrowLeft, Eye, EyeOff, Copy, RefreshCw, Terminal } from 'lucide-react';
 import toast from 'react-hot-toast';
 import L from 'leaflet';
 
-/* ── Leaflet satellite map ──────────────────────────────────────── */
+const COLORS = ['hsl(var(--primary))', 'hsl(var(--info))', 'hsl(var(--good))', 'hsl(var(--warn))', '#A06CD5', '#06B6D4'];
+
 function SatelliteMap({ lat, lng }: { lat: number; lng: number }) {
   const mapRef = useRef<HTMLDivElement | null>(null);
   const leafletRef = useRef<L.Map | null>(null);
-
   useEffect(() => {
     if (!mapRef.current || leafletRef.current) return;
     const map = L.map(mapRef.current, { zoomControl: true, scrollWheelZoom: false });
@@ -28,26 +25,22 @@ function SatelliteMap({ lat, lng }: { lat: number; lng: number }) {
     ).addTo(map);
     const icon = L.divIcon({
       className: '',
-      html: `<div style="width:14px;height:14px;background:#FF6A30;border:2px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.5)"></div>`,
-      iconSize: [14, 14],
-      iconAnchor: [7, 7],
+      html: `<div style="width:22px;height:22px;border-radius:99px;background:hsl(var(--primary));box-shadow:0 0 0 4px rgba(255,91,31,.25),0 0 0 1px #fff;position:relative"><div style="position:absolute;inset:6px;background:#fff;border-radius:99px"></div></div>`,
+      iconSize: [22, 22], iconAnchor: [11, 11],
     });
     L.marker([lat, lng], { icon }).addTo(map);
     map.setView([lat, lng], 13);
     leafletRef.current = map;
     return () => { map.remove(); leafletRef.current = null; };
   }, [lat, lng]);
-
-  return <div ref={mapRef} style={{ width: '100%', height: 280 }} />;
+  return <div ref={mapRef} style={{ width: '100%', height: 320, border: '1px solid hsl(var(--border))' }} />;
 }
 
-/* ── main page ───────────────────────────────────────────────────── */
 export function DeviceDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [liveFields, setLiveFields] = useState<Record<string, any>>({});
   const [chartField, setChartField] = useState('');
   const [chartRange, setChartRange] = useState('24h');
-  const [fieldDropdown, setFieldDropdown] = useState(false);
   const [apiKeyVisible, setApiKeyVisible] = useState(false);
   const [currentKey, setCurrentKey] = useState('');
   const [cmdName, setCmdName] = useState('');
@@ -87,17 +80,16 @@ export function DeviceDetailPage() {
     refetchInterval: 60_000,
   });
 
-  // Subscribe to live telemetry
   useEffect(() => {
     if (!id) return;
-    const unsub = subscribeDevice(id);
-    const unsubTelemetry = on('telemetry.update', (event: any) => {
+    const unsub  = subscribeDevice(id);
+    const unsubT = on('telemetry.update', (event: any) => {
       if (event.deviceId === id || event.data?.deviceId === id) {
         setLiveFields(event.data?.fields ?? {});
         queryClient.invalidateQueries({ queryKey: ['telemetry', 'latest', id] });
       }
     });
-    return () => { unsub(); unsubTelemetry(); };
+    return () => { unsub(); unsubT(); };
   }, [id, on, subscribeDevice, queryClient]);
 
   const d = device as any;
@@ -105,21 +97,18 @@ export function DeviceDetailPage() {
   const numericFields = Object.entries(fields).filter(([, v]) => typeof v === 'number') as [string, number][];
   const allFields     = Object.entries(fields) as [string, any][];
 
-  // Auto-set chart field
   useEffect(() => {
     if (!chartField && numericFields.length > 0) setChartField(numericFields[0][0]);
-  }, [numericFields.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [numericFields.length]); // eslint-disable-line
 
-  useEffect(() => {
-    if (d?.apiKey) setCurrentKey(d.apiKey);
-  }, [d?.apiKey]);
+  useEffect(() => { if (d?.apiKey) setCurrentKey(d.apiKey); }, [d?.apiKey]);
 
-  const seriesPoints = (seriesData?.data ?? []).map(p => ({
+  const seriesPoints = (seriesData?.data ?? []).map((p: any) => ({
     ts: typeof p.ts === 'string' ? new Date(p.ts).getTime() : p.ts,
     value: typeof p.value === 'number' ? p.value : 0,
   }));
 
-  const { Icon: CatIcon, color: catColor } = d ? getCategoryIconInfo(d.category) : { Icon: () => null, color: '#ea580c' };
+  const { Icon: CatIcon } = d ? getCategoryIconInfo(d.category) : { Icon: () => null };
 
   const sendCommand = async () => {
     if (!cmdName.trim()) return;
@@ -146,331 +135,304 @@ export function DeviceDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="space-y-4">
-        <div className="h-6 w-36 bg-muted animate-pulse" />
-        <div className="h-40 w-full bg-muted animate-pulse" />
+      <div className="page">
+        <div className="skeleton" style={{ height: 200 }} />
       </div>
     );
   }
-
   if (!d) {
     return (
-      <div className="text-center py-16">
-        <p className="text-muted-foreground mb-4">Device not found</p>
-        <Link to="/devices" className="btn btn-primary">Back to devices</Link>
+      <div className="page">
+        <p className="dim" style={{ textAlign: 'center', padding: '64px 0' }}>Device not found</p>
       </div>
     );
   }
 
-  const statusColor = d.status === 'online' ? '#22C55E' : d.status === 'error' ? '#EF4444' : '#6B7280';
-
   return (
-    <div className="space-y-8 max-w-[1400px]">
-
-      {/* ── Breadcrumb + heading ──────────────────────────────────── */}
-      <div className="flex items-start gap-4 pt-1">
-        <Link to="/devices" className="mt-1 w-7 h-7 flex items-center justify-center border border-[hsl(var(--rule))] hover:bg-muted transition-colors text-muted-foreground hover:text-foreground flex-shrink-0">
-          <ArrowLeft size={13} />
+    <div className="page">
+      {/* ── Breadcrumb ── */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
+        <Link to="/devices" className="btn btn-ghost btn-sm" style={{ gap: 6 }}>
+          <ArrowLeft size={13} /> Devices
         </Link>
-        <div className="min-w-0">
-          <p className="eyebrow text-[9px] mb-1">Devices / {d.category}</p>
-          <div className="flex items-center gap-3 flex-wrap">
-            <h1 className="text-[26px] leading-none tracking-tight text-foreground" style={{ fontFamily: 'var(--font-display)' }}>
-              <em>{d.name}</em>
-            </h1>
-            <span className="flex items-center gap-1.5 font-mono text-[10px] border border-current px-2 py-0.5" style={{ color: statusColor }}>
-              <span className="w-1.5 h-1.5" style={{ backgroundColor: statusColor }} />
+        <span className="mono faint" style={{ fontSize: 10.5 }}>/</span>
+        <span className="mono faint" style={{ fontSize: 10.5 }}>{d.category}</span>
+      </div>
+
+      {/* ── Page header ── */}
+      <div className="ph">
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+            <span className="eyebrow">{d.category} · {d.protocol?.toUpperCase()}</span>
+            <span className={`tag tag-${d.status === 'online' ? 'online' : d.status === 'error' ? 'error' : d.status === 'idle' ? 'warn' : 'offline'}`}>
+              <span className={`dot dot-${d.status === 'idle' ? 'warn' : d.status}`} />
               {d.status}
             </span>
+            {latestTelemetry?.timestamp && (
+              <span className="mono faint" style={{ fontSize: 11 }}>Last seen {timeAgo(latestTelemetry.timestamp)}</span>
+            )}
           </div>
-          <p className="text-[12px] text-muted-foreground mt-1.5 font-mono">
-            {d.category} · {d.protocol?.toUpperCase()} · {d.lastSeenAt ? `Last seen ${timeAgo(d.lastSeenAt)}` : 'Never connected'}
+          <h1>
+            {d.name.split(' ').slice(0, -1).join(' ')} <em>{d.name.split(' ').slice(-1)[0]}</em>
+          </h1>
+          <p className="lede">
+            {d.description || `${d.category} · Firmware ${d.firmwareVersion ?? '—'} · ${d.lastSeenAt ? `Last seen ${timeAgo(d.lastSeenAt)}` : 'Never connected'}`}
           </p>
         </div>
+        <div style={{ gridColumn: 3, display: 'flex', alignItems: 'flex-end', gap: 8, paddingBottom: 20 }}>
+          <button className="btn btn-sm" style={{ gap: 6 }} onClick={() => { setCmdName('get_status'); }}>
+            <Terminal size={13} /> Send command
+          </button>
+          <button className="btn btn-sm btn-outline" onClick={() => queryClient.invalidateQueries({ queryKey: ['device', id] })}>
+            <RefreshCw size={13} />
+          </button>
+        </div>
       </div>
 
-      {/* ── Section I — Identity ─────────────────────────────────── */}
-      <div>
-        <div className="flex items-center gap-2 pb-3 mb-4 border-b border-[hsl(var(--rule))]">
-          <span className="serif-i text-muted-foreground mr-2">№ I</span>
-          <span className="eyebrow">Identity</span>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-px bg-[hsl(var(--rule))] border border-[hsl(var(--rule))]">
-          {[
-            { label: 'Category',    value: d.category },
-            { label: 'Protocol',    value: d.protocol?.toUpperCase() },
-            { label: 'Format',      value: d.payloadFormat?.toUpperCase() },
-            { label: 'Serial',      value: d.serialNumber || '—' },
-            { label: 'Firmware',    value: d.firmwareVersion || '—' },
-            { label: 'First seen',  value: d.firstSeenAt ? fmtDate(d.firstSeenAt) : '—' },
-            { label: 'Created',     value: d.createdAt ? fmtDate(d.createdAt) : '—' },
-            { label: 'Tags',        value: d.tags?.join(', ') || '—' },
-          ].map(({ label, value }) => (
-            <div key={label} className="bg-[hsl(var(--surface))] px-4 py-3.5">
-              <p className="eyebrow text-[9px] mb-1">{label}</p>
-              <p className="text-[13px] font-medium text-foreground capitalize font-mono">{value}</p>
-            </div>
+      {/* ── Live metrics grid ── */}
+      {numericFields.length > 0 && (
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
+          borderTop: '1px solid hsl(var(--fg))',
+          marginBottom: 32,
+        }}>
+          {numericFields.map(([k, v], i) => (
+            <button
+              key={k}
+              onClick={() => setChartField(k)}
+              style={{
+                padding: `18px 20px 18px ${i % 4 === 0 ? 0 : 20}px`,
+                borderBottom: '1px solid hsl(var(--border))',
+                borderRight: (i + 1) % 4 !== 0 ? '1px solid hsl(var(--border))' : 'none',
+                textAlign: 'left',
+                background: chartField === k ? 'hsl(var(--surface-raised))' : 'transparent',
+                cursor: 'pointer',
+                outline: chartField === k ? `1px solid ${COLORS[i % COLORS.length]}` : 'none',
+                outlineOffset: -1,
+                transition: 'background 0.1s',
+              }}
+            >
+              <div className="eyebrow" style={{ fontSize: 9.5 }}>{k.replace(/_/g, ' ')}</div>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: 32, lineHeight: 1, letterSpacing: '-0.02em', marginTop: 4, color: COLORS[i % COLORS.length] }} className="num">
+                {v.toFixed(2)}
+              </div>
+            </button>
           ))}
         </div>
-      </div>
+      )}
 
-      {/* ── Section II — Live Telemetry ──────────────────────────── */}
-      <div>
-        <div className="flex items-center gap-2 pb-3 mb-4 border-b border-[hsl(var(--rule))]">
-          <span className="serif-i text-muted-foreground mr-2">№ II</span>
-          <span className="eyebrow">Live Telemetry</span>
-          {latestTelemetry?.timestamp && (
-            <span className="ml-auto font-mono text-[10px] text-muted-foreground">{timeAgo(latestTelemetry.timestamp)}</span>
-          )}
-        </div>
-
-        {allFields.length === 0 ? (
-          <div className="border border-[hsl(var(--rule))] py-12 text-center">
-            <p className="text-[13px] text-muted-foreground">No telemetry received yet</p>
-          </div>
-        ) : (
-          <>
-            {/* Numeric metrics grid */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-px bg-[hsl(var(--rule))] border border-[hsl(var(--rule))] mb-4">
-              {numericFields.slice(0, 10).map(([key, val], i) => {
-                const COLORS = ['#FF6A30','#5B8DEF','#22C55E','#F59E0B','#8B5CF6','#06B6D4'];
-                const col = COLORS[i % COLORS.length];
-                return (
-                  <motion.button
-                    key={key}
-                    initial={{ opacity: 0.7 }}
-                    animate={{ opacity: 1 }}
-                    onClick={() => setChartField(key)}
-                    className={`bg-[hsl(var(--surface))] px-4 py-3.5 text-left transition-colors hover:bg-[hsl(var(--muted))] ${chartField === key ? 'ring-1 ring-inset ring-primary/30' : ''}`}
-                  >
-                    <p className="eyebrow text-[9px] mb-1 capitalize">{key}</p>
-                    <p className="text-[1.4rem] font-semibold leading-none" style={{ color: col }}>
-                      {val.toFixed(2)}
-                    </p>
-                  </motion.button>
-                );
-              })}
-            </div>
-
-            {/* String/bool fields */}
-            {allFields.filter(([, v]) => typeof v !== 'number').length > 0 && (
-              <div className="flex flex-wrap gap-2 mb-4">
-                {allFields.filter(([, v]) => typeof v !== 'number').map(([key, val]) => (
-                  <div key={key} className="border border-[hsl(var(--rule))] px-3 py-1.5">
-                    <span className="font-mono text-[10px] text-muted-foreground">{key}:</span>
-                    <span className="font-mono text-[11px] text-foreground ml-1.5">{String(val)}</span>
-                  </div>
-                ))}
+      {/* ── Section I: Telemetry chart + device info ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 32, marginBottom: 0 }}>
+        {/* Chart */}
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12, gap: 12, flexWrap: 'wrap' }}>
+            <div>
+              <div className="eyebrow">№ I · Live telemetry</div>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: 28, lineHeight: 1, marginTop: 4, textTransform: 'capitalize' }}>
+                {chartField.replace(/_/g, ' ')} <span style={{ fontStyle: 'italic', color: 'hsl(var(--primary))' }}>· {chartRange}</span>
               </div>
-            )}
-
-            {/* Chart */}
-            <div className="border border-[hsl(var(--rule))] bg-[hsl(var(--surface))] p-5">
-              <div className="flex items-center gap-3 mb-4 flex-wrap">
-                {/* Field selector */}
-                <div className="relative">
-                  <button
-                    onClick={() => setFieldDropdown(v => !v)}
-                    className="flex items-center gap-2 text-[12px] font-mono border border-[hsl(var(--rule))] px-3 py-1.5 hover:bg-muted transition-colors"
-                  >
-                    <span className="text-primary">{chartField || 'Select field'}</span>
-                    <ChevronDown size={11} className={`transition-transform ${fieldDropdown ? 'rotate-180' : ''}`} />
-                  </button>
-                  {fieldDropdown && (
-                    <>
-                      <div className="fixed inset-0 z-10" onClick={() => setFieldDropdown(false)} />
-                      <div className="absolute left-0 top-full mt-1 bg-[hsl(var(--surface))] border border-[hsl(var(--rule))] shadow-xl z-20 min-w-[140px] animate-fade-in">
-                        {numericFields.map(([k]) => (
-                          <button
-                            key={k}
-                            onClick={() => { setChartField(k); setFieldDropdown(false); }}
-                            className={`w-full px-3 py-2 text-left font-mono text-[11px] hover:bg-muted transition-colors ${k === chartField ? 'text-primary' : 'text-foreground'}`}
-                          >
-                            {k}
-                          </button>
-                        ))}
-                      </div>
-                    </>
-                  )}
-                </div>
-
-                {/* Range */}
-                <div className="flex items-center gap-px border border-[hsl(var(--rule))]">
-                  {['1h','6h','24h','7d'].map(r => (
-                    <button
-                      key={r}
-                      onClick={() => setChartRange(r)}
-                      className={`px-3 py-1.5 text-[11px] font-mono transition-colors ${chartRange === r ? 'bg-primary text-white' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}
-                    >
-                      {r}
-                    </button>
-                  ))}
-                </div>
-
-                <span className="ml-auto font-mono text-[10px] text-muted-foreground">{seriesPoints.length} points</span>
-              </div>
-
-              {seriesPoints.length === 0 ? (
-                <div className="h-[200px] flex items-center justify-center text-[13px] text-muted-foreground">
-                  No data for <strong className="mx-1 font-mono">{chartField}</strong> in {chartRange}
-                </div>
-              ) : (
-                <LineChart
-                  series={[{ name: chartField, data: seriesPoints, color: '#FF6A30' }]}
-                  height={200}
-                  showArea
-                />
-              )}
             </div>
-          </>
-        )}
-      </div>
-
-      {/* ── Section III — Location ────────────────────────────────── */}
-      <div>
-        <div className="flex items-center gap-2 pb-3 mb-4 border-b border-[hsl(var(--rule))]">
-          <span className="serif-i text-muted-foreground mr-2">№ III</span>
-          <span className="eyebrow">Location</span>
-        </div>
-        {d.location?.lat ? (
-          <div className="border border-[hsl(var(--rule))]">
-            <div className="overflow-hidden">
-              <SatelliteMap lat={d.location.lat} lng={d.location.lng ?? d.location.lon ?? 0} />
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-px bg-[hsl(var(--rule))] border-t border-[hsl(var(--rule))]">
-              {[
-                { label: 'Latitude',  value: d.location.lat?.toFixed(6) },
-                { label: 'Longitude', value: (d.location.lng ?? d.location.lon)?.toFixed(6) },
-                { label: 'Altitude',  value: d.location.alt ? `${d.location.alt?.toFixed(1)} m` : '—' },
-                { label: 'Speed',     value: d.location.speed ? `${d.location.speed?.toFixed(1)} km/h` : '—' },
-                { label: 'Heading',   value: d.location.heading ? `${d.location.heading?.toFixed(0)}°` : '—' },
-                { label: 'Updated',   value: d.location.timestamp ? timeAgo(d.location.timestamp) : '—' },
-              ].map(({ label, value }) => (
-                <div key={label} className="bg-[hsl(var(--surface))] px-4 py-3">
-                  <p className="eyebrow text-[9px] mb-1">{label}</p>
-                  <p className="font-mono text-[12px] text-foreground">{value}</p>
-                </div>
+            <div className="seg">
+              {['1h', '6h', '24h', '7d'].map(r => (
+                <button key={r} className={chartRange === r ? 'on' : ''} onClick={() => setChartRange(r)}>{r.toUpperCase()}</button>
               ))}
             </div>
           </div>
-        ) : (
-          <div className="border border-[hsl(var(--rule))] border-dashed py-12 text-center">
-            <p className="text-[13px] text-muted-foreground">No location data — device has not sent GPS coordinates</p>
+          <div className="panel" style={{ padding: '16px 12px 8px' }}>
+            {seriesPoints.length === 0 ? (
+              <div style={{ height: 280, display: 'flex', alignItems: 'center', justifyContent: 'center' }} className="dim">
+                No data for <strong style={{ marginLeft: 4, fontFamily: 'var(--font-mono)' }}>{chartField}</strong>
+              </div>
+            ) : (
+              <LineChart series={[{ name: chartField, data: seriesPoints, color: 'hsl(var(--primary))' }]} height={280} showArea />
+            )}
           </div>
-        )}
+        </div>
+
+        {/* Device info */}
+        <div>
+          <div className="eyebrow" style={{ marginBottom: 12 }}>№ II · Device info</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+            {[
+              ['Category',   d.category,                            ''],
+              ['Protocol',   d.protocol?.toUpperCase(),             'mono'],
+              ['Format',     d.payloadFormat?.toUpperCase() ?? '—', 'mono'],
+              ['Serial',     d.serialNumber ?? '—',                 'mono'],
+              ['Firmware',   d.firmwareVersion ?? '—',              'mono'],
+              ['First seen', d.firstSeenAt ? fmtDate(d.firstSeenAt) : '—', ''],
+              ['Tags',       d.tags?.join(', ') || '—',             ''],
+            ].map(([label, value, cls]) => (
+              <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '11px 0', borderBottom: '1px solid hsl(var(--rule-ghost))' }}>
+                <span className="mono faint" style={{ fontSize: 10.5, letterSpacing: '0.14em', textTransform: 'uppercase' }}>{label}</span>
+                <span className={cls} style={{ fontSize: 13, textTransform: cls === '' ? 'capitalize' : 'none' }}>{value}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* API key */}
+          <div className="eyebrow" style={{ marginTop: 24, marginBottom: 8 }}>№ III · API key</div>
+          <div className="panel" style={{ padding: 10 }}>
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <input
+                type={apiKeyVisible ? 'text' : 'password'}
+                value={currentKey || '••••••••••••••••'}
+                readOnly
+                className="input mono"
+                style={{ flex: 1, fontSize: 11.5, height: 32 }}
+              />
+              <button onClick={() => setApiKeyVisible(v => !v)} className="btn btn-sm btn-icon">
+                {apiKeyVisible ? <EyeOff size={12} /> : <Eye size={12} />}
+              </button>
+              <button
+                onClick={() => { navigator.clipboard.writeText(currentKey); toast.success('Copied!'); }}
+                className="btn btn-sm btn-icon"
+              >
+                <Copy size={12} />
+              </button>
+            </div>
+            <button onClick={regenerateKey} className="dim" style={{ marginTop: 8, fontSize: 11, display: 'flex', alignItems: 'center', gap: 4, background: 'none', border: 0, cursor: 'pointer', color: 'hsl(var(--bad))', padding: 0 }}>
+              <RefreshCw size={10} /> Regenerate
+            </button>
+          </div>
+        </div>
       </div>
 
-      {/* ── Section IV — Commands ─────────────────────────────────── */}
-      <div>
-        <div className="flex items-center gap-2 pb-3 mb-4 border-b border-[hsl(var(--rule))]">
-          <span className="serif-i text-muted-foreground mr-2">№ IV</span>
-          <span className="eyebrow">Commands</span>
+      {/* ── Section IV: Location ── */}
+      <div className="section">
+        <div>
+          <div className="ssh"><span className="no">№ IV</span>Location</div>
+          <p className="dim" style={{ fontSize: 13, marginTop: 8, maxWidth: '28ch' }}>
+            Live position on satellite imagery.
+          </p>
+          {d.location?.lat && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 16, fontSize: 13 }}>
+              {[
+                ['Lat',  d.location.lat?.toFixed(6)],
+                ['Lng',  (d.location.lng ?? d.location.lon)?.toFixed(6)],
+                d.location.alt   ? ['Alt',     `${d.location.alt?.toFixed(1)} m`]         : null,
+                d.location.speed ? ['Speed',   `${d.location.speed?.toFixed(1)} km/h`]    : null,
+              ].filter(Boolean).map(([k, v]: any) => (
+                <div key={k} style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span className="mono faint" style={{ fontSize: 10.5, letterSpacing: '0.14em', textTransform: 'uppercase' }}>{k}</span>
+                  <span className="mono" style={{ fontSize: 13 }}>{v}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-px bg-[hsl(var(--rule))] border border-[hsl(var(--rule))]">
+        <div>
+          {d.location?.lat ? (
+            <SatelliteMap lat={d.location.lat} lng={d.location.lng ?? d.location.lon ?? 0} />
+          ) : (
+            <div className="panel" style={{ padding: 48, textAlign: 'center' }}>
+              <p className="dim" style={{ fontSize: 13 }}>No location data for this device.</p>
+            </div>
+          )}
+        </div>
+      </div>
 
+      {/* ── Section V: Commands ── */}
+      <div className="section">
+        <div>
+          <div className="ssh"><span className="no">№ V</span>Controls</div>
+          <p className="dim" style={{ fontSize: 13, marginTop: 8, maxWidth: '28ch' }}>
+            Send a command to this device. Each gesture sends the matching payload.
+          </p>
+        </div>
+        <div>
           {/* Send form */}
-          <div className="bg-[hsl(var(--surface))] p-5">
-            <p className="text-[12px] font-semibold text-foreground mb-4 uppercase tracking-wider">Send Command</p>
-            <div className="space-y-3">
+          <div className="panel" style={{ padding: 20, marginBottom: 16 }}>
+            <div className="eyebrow" style={{ marginBottom: 12 }}>Send command</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
               <div>
-                <label className="eyebrow text-[9px] block mb-1.5">Command Name</label>
+                <label className="eyebrow" style={{ fontSize: 9, display: 'block', marginBottom: 6 }}>Command</label>
                 <input
                   value={cmdName}
                   onChange={e => setCmdName(e.target.value)}
-                  className="input font-mono"
-                  placeholder="reboot, get_status, set_mode…"
+                  className="input mono"
+                  placeholder="reboot, get_status…"
                 />
               </div>
               <div>
-                <label className="eyebrow text-[9px] block mb-1.5">Payload (JSON)</label>
+                <label className="eyebrow" style={{ fontSize: 9, display: 'block', marginBottom: 6 }}>Payload (JSON)</label>
                 <input
                   value={cmdPayload}
                   onChange={e => setCmdPayload(e.target.value)}
-                  className="input font-mono"
+                  className="input mono"
                   placeholder="{}"
+                  style={{ fontSize: 12 }}
                 />
               </div>
-              <button
-                onClick={sendCommand}
-                disabled={sending || !cmdName.trim()}
-                className="btn btn-primary gap-2"
-              >
-                <Terminal size={13} />
-                {sending ? 'Sending…' : 'Send'}
-              </button>
             </div>
+            <button onClick={sendCommand} disabled={sending || !cmdName.trim()} className="btn btn-primary" style={{ gap: 6 }}>
+              <Terminal size={13} />
+              {sending ? 'Sending…' : 'Send'}
+            </button>
           </div>
 
           {/* Command history */}
-          <div className="bg-[hsl(var(--surface))]">
-            <div className="px-5 py-3 border-b border-[hsl(var(--rule))]">
-              <p className="text-[12px] font-semibold text-foreground uppercase tracking-wider">History</p>
-            </div>
-            <div className="max-h-[280px] overflow-y-auto">
-              {(commands?.data ?? []).length === 0 ? (
-                <div className="py-10 text-center text-[12px] text-muted-foreground">No commands sent yet</div>
-              ) : (
-                (commands?.data ?? []).map((cmd: any) => (
-                  <div key={cmd._id} className="flex items-center gap-3 px-5 py-2.5 border-b border-[hsl(var(--rule)/0.5)] last:border-0">
-                    <span className="font-mono text-[12px] text-primary flex-1 truncate">{cmd.name}</span>
-                    <span className={`font-mono text-[10px] border px-1.5 py-0.5 ${
-                      cmd.status === 'executed' ? 'border-emerald-500/40 text-emerald-600 dark:text-emerald-400' :
-                      cmd.status === 'failed'   ? 'border-red-500/40 text-red-600 dark:text-red-400' :
-                      'border-[hsl(var(--rule))] text-muted-foreground'
-                    }`}>{cmd.status}</span>
-                    <span className="text-[10px] text-muted-foreground font-mono">{timeAgo(cmd.createdAt)}</span>
-                  </div>
-                ))
-              )}
-            </div>
+          <div className="eyebrow" style={{ marginBottom: 8 }}>Command history</div>
+          <div className="table-responsive">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Command</th>
+                  <th>Status</th>
+                  <th>Sent</th>
+                  <th>Response</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(commands?.data ?? []).length === 0 ? (
+                  <tr><td colSpan={4} style={{ textAlign: 'center', padding: '24px 0' }} className="dim">No commands sent yet</td></tr>
+                ) : (
+                  (commands?.data ?? []).map((cmd: any) => (
+                    <tr key={cmd._id}>
+                      <td className="mono acc" style={{ fontSize: 12 }}>{cmd.name}</td>
+                      <td>
+                        <span className={`tag tag-${cmd.status === 'executed' ? 'online' : cmd.status === 'failed' ? 'error' : 'offline'}`}>
+                          {cmd.status}
+                        </span>
+                      </td>
+                      <td className="mono faint" style={{ fontSize: 11 }}>{timeAgo(cmd.createdAt)}</td>
+                      <td className="mono faint" style={{ fontSize: 11, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {cmd.errorMessage ?? (cmd.response ? JSON.stringify(cmd.response).slice(0, 60) : '—')}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
 
-      {/* ── Section V — Configuration ─────────────────────────────── */}
-      <div>
-        <div className="flex items-center gap-2 pb-3 mb-4 border-b border-[hsl(var(--rule))]">
-          <span className="serif-i text-muted-foreground mr-2">№ V</span>
-          <span className="eyebrow">Configuration</span>
-        </div>
-        <div className="border border-[hsl(var(--rule))] bg-[hsl(var(--surface))] p-5 max-w-2xl">
-          <p className="eyebrow text-[9px] mb-3">Device API Key</p>
-          <div className="flex items-center gap-2">
-            <input
-              type={apiKeyVisible ? 'text' : 'password'}
-              value={currentKey}
-              readOnly
-              className="input font-mono text-[12px] flex-1"
-            />
-            <button onClick={() => setApiKeyVisible(v => !v)} className="btn btn-secondary btn-sm !px-2.5">
-              {apiKeyVisible ? <EyeOff size={13} /> : <Eye size={13} />}
-            </button>
-            <button
-              onClick={() => { navigator.clipboard.writeText(currentKey); toast.success('Copied!'); }}
-              className="btn btn-secondary btn-sm"
-            >
-              <Copy size={12} /> Copy
-            </button>
-          </div>
-          <p className="text-[11px] text-muted-foreground mt-2 font-mono">
-            Include as <span className="text-primary">X-API-Key</span> header in your requests
+      {/* ── Section VI: Quick integration ── */}
+      <div className="section">
+        <div>
+          <div className="ssh"><span className="no">№ VI</span>Integration</div>
+          <p className="dim" style={{ fontSize: 13, marginTop: 8, maxWidth: '28ch' }}>
+            Ingest telemetry via HTTP with your device API key.
           </p>
-          <button
-            onClick={regenerateKey}
-            className="mt-3 flex items-center gap-1.5 text-[11px] text-red-500 hover:text-red-600 dark:hover:text-red-400 transition-colors"
-          >
-            <RefreshCw size={11} /> Regenerate key
-          </button>
-
-          <div className="mt-5 pt-4 border-t border-[hsl(var(--rule))]">
-            <p className="eyebrow text-[9px] mb-2">Quick ingestion example</p>
-            <pre className="bg-muted px-4 py-3 text-[11px] font-mono text-muted-foreground overflow-x-auto leading-relaxed">
+        </div>
+        <div>
+          <pre className="panel" style={{ padding: '14px 16px', fontSize: 11, fontFamily: 'var(--font-mono)', color: 'hsl(var(--muted-fg))', overflowX: 'auto', lineHeight: 1.6 }}>
 {`curl -X POST https://orion.vortan.io/api/v1/telemetry/ingest \\
   -H "X-API-Key: ${currentKey?.slice(0, 16) || '<api-key>'}..." \\
   -H "Content-Type: application/json" \\
   -d '{"temperature": 24.3, "humidity": 65}'`}
-            </pre>
-          </div>
+          </pre>
+          <p className="dim" style={{ fontSize: 11, marginTop: 8 }}>
+            Include as <span className="mono acc">X-API-Key</span> header.
+            <button
+              className="acc"
+              style={{ marginLeft: 8, background: 'none', border: 0, cursor: 'pointer', fontFamily: 'var(--font-mono)', fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 4 }}
+              onClick={() => { navigator.clipboard.writeText(currentKey); toast.success('Copied!'); }}
+            >
+              <Copy size={10} /> Copy key
+            </button>
+          </p>
         </div>
       </div>
     </div>

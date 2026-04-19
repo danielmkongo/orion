@@ -1,244 +1,161 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useState, useEffect, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
 import apiClient from '@/api/client';
 import { devicesApi } from '@/api/devices';
 import { timeAgo } from '@/lib/utils';
 import {
-  Sliders, Send, X, Check, Clock, AlertCircle, Loader2,
-  Terminal, ChevronDown, ChevronUp, Info, Radio, Globe, Wifi,
-  ToggleLeft, SlidersHorizontal, Type, Minus, Plus, RefreshCw,
+  Send, X, Check, Clock, AlertCircle, Loader2,
+  Terminal, ToggleLeft, SlidersHorizontal, Type, RefreshCw, Minus, Plus,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { DataField } from '@/components/devices/DeviceForm';
 
-/* ── Status config ─────────────────────────────────────────── */
-const STATUS_CFG: Record<string, { badge: string; Icon: any }> = {
-  pending:      { badge: 'badge-warning', Icon: Clock       },
-  sent:         { badge: 'badge-info',    Icon: Send        },
-  acknowledged: { badge: 'badge-info',    Icon: Check       },
-  executed:     { badge: 'badge-online',  Icon: Check       },
-  failed:       { badge: 'badge-error',   Icon: AlertCircle },
-  timeout:      { badge: 'badge-error',   Icon: Clock       },
-  cancelled:    { badge: 'badge-offline', Icon: X           },
-};
-
-/* ── Boolean control ───────────────────────────────────────── */
+/* ── Boolean control ───────────────────────────────────────────────── */
 function BoolControl({
-  field, onSend, loading,
-}: { field: DataField; onSend: (name: string, value: unknown) => void; loading: boolean }) {
+  field, onSend,
+}: { field: DataField; onSend: (name: string, value: unknown) => void }) {
   const [on, setOn] = useState(false);
   return (
-    <div className="card p-4 flex items-center justify-between gap-4">
-      <div className="flex-1 min-w-0">
-        <p className="text-[13px] font-semibold text-foreground truncate">
-          {field.label || field.key}
-        </p>
-        <p className="text-[11px] text-muted-foreground mt-0.5 uppercase tracking-wider">
-          Boolean · {field.key}
-        </p>
+    <div className="panel" style={{ padding: '14px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 13.5, fontWeight: 500 }}>{field.label || field.key}</div>
+        <div className="eyebrow" style={{ fontSize: 9, marginTop: 3 }}>Boolean · {field.key}</div>
       </div>
-      <div className="flex items-center gap-3 flex-shrink-0">
-        <span className={`text-[12px] font-medium transition-colors ${on ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+        <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: on ? 'hsl(var(--good))' : 'hsl(var(--muted-fg))' }}>
           {on ? 'ON' : 'OFF'}
         </span>
-        <button
-          onClick={() => {
-            const next = !on;
-            setOn(next);
-            onSend(field.key, next);
-          }}
-          disabled={loading}
-          style={{ width: 44, height: 24 }}
-          className={`relative rounded-full transition-colors flex-shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 ${on ? 'bg-primary' : 'bg-border'} disabled:opacity-50`}
-        >
-          <motion.div
-            animate={{ x: on ? 22 : 2 }}
-            transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-            className="absolute top-[3px] w-[18px] h-[18px] rounded-full bg-white shadow-sm"
+        <label className="switch">
+          <input
+            type="checkbox"
+            checked={on}
+            onChange={e => { setOn(e.target.checked); onSend(field.key, e.target.checked); }}
+            style={{ opacity: 0, width: 0, height: 0 }}
           />
-        </button>
+          <span />
+        </label>
       </div>
     </div>
   );
 }
 
-/* ── Number / slider control ───────────────────────────────── */
+/* ── Number / slider control ───────────────────────────────────────── */
 function NumberControl({
-  field, onSend, loading,
-}: { field: DataField; onSend: (name: string, value: unknown) => void; loading: boolean }) {
-  const [val, setVal] = useState(0);
+  field, onSend,
+}: { field: DataField; onSend: (name: string, value: unknown) => void }) {
+  const [val, setVal]     = useState(0);
   const [dirty, setDirty] = useState(false);
 
   return (
-    <div className="card p-4 space-y-3">
-      <div className="flex items-center justify-between">
+    <div className="panel" style={{ padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
-          <p className="text-[13px] font-semibold text-foreground">{field.label || field.key}</p>
-          <p className="text-[11px] text-muted-foreground uppercase tracking-wider">
+          <div style={{ fontSize: 13.5, fontWeight: 500 }}>{field.label || field.key}</div>
+          <div className="eyebrow" style={{ fontSize: 9, marginTop: 3 }}>
             Number{field.unit ? ` · ${field.unit}` : ''} · {field.key}
-          </p>
+          </div>
         </div>
-        <div className="flex items-center gap-1.5">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <button
             onClick={() => { setVal(v => Math.max(0, v - 1)); setDirty(true); }}
-            className="btn btn-ghost btn-sm !w-7 !h-7 !px-0"
-          ><Minus size={12} /></button>
+            className="btn btn-ghost btn-sm btn-icon"><Minus size={11} /></button>
           <input
-            type="number"
-            value={val}
+            type="number" value={val}
             onChange={e => { setVal(Number(e.target.value)); setDirty(true); }}
-            className="input !h-8 !w-20 text-center text-[13px] font-mono"
+            className="input mono" style={{ width: 68, height: 30, textAlign: 'center', fontSize: 13 }}
           />
           <button
             onClick={() => { setVal(v => v + 1); setDirty(true); }}
-            className="btn btn-ghost btn-sm !w-7 !h-7 !px-0"
-          ><Plus size={12} /></button>
-          {field.unit && <span className="text-[12px] text-muted-foreground">{field.unit}</span>}
+            className="btn btn-ghost btn-sm btn-icon"><Plus size={11} /></button>
+          {field.unit && <span className="mono faint" style={{ fontSize: 12 }}>{field.unit}</span>}
         </div>
       </div>
       <input
-        type="range"
-        min={0} max={100} step={1}
-        value={Math.min(val, 100)}
+        type="range" min={0} max={100} step={1} value={Math.min(val, 100)}
         onChange={e => { setVal(Number(e.target.value)); setDirty(true); }}
-        className="w-full h-1.5 rounded-full appearance-none cursor-pointer accent-primary"
+        style={{ width: '100%', accentColor: 'hsl(var(--primary))', cursor: 'pointer' }}
       />
-      <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-        <span>0</span><span>50</span><span>100{field.unit ? ` ${field.unit}` : ''}</span>
+      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+        <span className="mono faint" style={{ fontSize: 10 }}>0</span>
+        <span className="mono faint" style={{ fontSize: 10 }}>50</span>
+        <span className="mono faint" style={{ fontSize: 10 }}>100{field.unit ? ` ${field.unit}` : ''}</span>
       </div>
       <button
         onClick={() => { onSend(field.key, val); setDirty(false); }}
-        disabled={loading || !dirty}
-        className="btn btn-primary btn-sm w-full"
+        disabled={!dirty}
+        className="btn btn-primary btn-sm" style={{ gap: 6 }}
       >
-        {loading ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
-        Set {field.label || field.key}
+        <Send size={11} /> Set {field.label || field.key}
       </button>
     </div>
   );
 }
 
-/* ── String / text control ─────────────────────────────────── */
+/* ── String / text control ─────────────────────────────────────────── */
 const STRING_PRESETS: Record<string, string[]> = {
-  mode: ['auto', 'manual', 'sleep', 'off'],
+  mode:  ['auto', 'manual', 'sleep', 'off'],
   state: ['active', 'idle', 'disabled'],
   level: ['low', 'medium', 'high'],
 };
 
 function StringControl({
-  field, onSend, loading,
-}: { field: DataField; onSend: (name: string, value: unknown) => void; loading: boolean }) {
+  field, onSend,
+}: { field: DataField; onSend: (name: string, value: unknown) => void }) {
   const [val, setVal] = useState('');
-  const presets = STRING_PRESETS[field.key] ?? [];
+  const presets       = STRING_PRESETS[field.key] ?? [];
 
   return (
-    <div className="card p-4 space-y-3">
+    <div className="panel" style={{ padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 10 }}>
       <div>
-        <p className="text-[13px] font-semibold text-foreground">{field.label || field.key}</p>
-        <p className="text-[11px] text-muted-foreground uppercase tracking-wider">Text · {field.key}</p>
+        <div style={{ fontSize: 13.5, fontWeight: 500 }}>{field.label || field.key}</div>
+        <div className="eyebrow" style={{ fontSize: 9, marginTop: 3 }}>Text · {field.key}</div>
       </div>
       {presets.length > 0 && (
-        <div className="flex flex-wrap gap-2">
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
           {presets.map(p => (
             <button
               key={p}
               onClick={() => onSend(field.key, p)}
-              disabled={loading}
-              className={`px-3 py-1 rounded-lg border text-[12px] font-medium transition-all disabled:opacity-50 ${
-                val === p
-                  ? 'border-primary bg-primary/5 text-primary'
-                  : 'border-border bg-surface text-muted-foreground hover:text-foreground hover:border-border-strong'
-              }`}
+              className="btn btn-ghost btn-sm"
+              style={{ fontSize: 12 }}
             >
               {p}
             </button>
           ))}
         </div>
       )}
-      <div className="flex gap-2">
+      <div style={{ display: 'flex', gap: 8 }}>
         <input
           value={val}
           onChange={e => setVal(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter' && val.trim()) { onSend(field.key, val); setVal(''); } }}
           placeholder={`Enter ${field.label || field.key}…`}
-          className="input flex-1"
+          className="input" style={{ flex: 1 }}
         />
         <button
           onClick={() => { if (val.trim()) { onSend(field.key, val); setVal(''); } }}
-          disabled={loading || !val.trim()}
+          disabled={!val.trim()}
           className="btn btn-primary btn-sm"
         >
-          {loading ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
+          <Send size={11} />
         </button>
       </div>
     </div>
   );
 }
 
-/* ── Delivery info ─────────────────────────────────────────── */
-function DeliveryInfo({ deviceId }: { deviceId: string }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div className="rounded-xl border border-border overflow-hidden">
-      <button
-        onClick={() => setOpen(v => !v)}
-        className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-muted/40 transition-colors"
-      >
-        <div className="flex items-center gap-2">
-          <Info size={14} className="text-primary" />
-          <span className="text-[13px] font-medium text-foreground">Command Delivery</span>
-          <span className="badge badge-info text-[10px]">How your device receives commands</span>
-        </div>
-        {open ? <ChevronUp size={14} className="text-muted-foreground" /> : <ChevronDown size={14} className="text-muted-foreground" />}
-      </button>
-      <AnimatePresence>
-        {open && (
-          <motion.div
-            initial={{ height: 0 }} animate={{ height: 'auto' }} exit={{ height: 0 }}
-            className="overflow-hidden"
-          >
-            <div className="p-4 border-t border-border grid grid-cols-1 sm:grid-cols-3 gap-3">
-              {[
-                {
-                  Icon: Radio,
-                  label: 'MQTT',
-                  desc: 'Subscribe topic',
-                  code: `devices/${deviceId}/commands`,
-                },
-                {
-                  Icon: Globe,
-                  label: 'HTTP Polling',
-                  desc: 'GET pending commands',
-                  code: `GET /api/v1/devices/${deviceId}/pending-commands`,
-                },
-                {
-                  Icon: Wifi,
-                  label: 'WebSocket',
-                  desc: 'Event on connection',
-                  code: 'event: "command"',
-                },
-              ].map(({ Icon, label, desc, code }) => (
-                <div key={label} className="bg-muted/50 rounded-xl p-3">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Icon size={13} className="text-primary" />
-                    <span className="text-[12px] font-semibold text-foreground">{label}</span>
-                    <span className="text-[11px] text-muted-foreground">{desc}</span>
-                  </div>
-                  <code className="text-[11px] font-mono text-foreground/70 bg-background/60 rounded px-2 py-1 block break-all">
-                    {code}
-                  </code>
-                </div>
-              ))}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-}
+const CMD_STATUS_CFG: Record<string, { tag: string }> = {
+  pending:      { tag: 'tag-warn'    },
+  sent:         { tag: 'tag-info'    },
+  acknowledged: { tag: 'tag-info'    },
+  executed:     { tag: 'tag-online'  },
+  failed:       { tag: 'tag-error'   },
+  timeout:      { tag: 'tag-error'   },
+  cancelled:    { tag: 'tag-offline' },
+};
 
-/* ── Main page ─────────────────────────────────────────────── */
+/* ── Main Page ─────────────────────────────────────────────────────── */
 export function ControlPage() {
   const [deviceId, setDeviceId]     = useState('');
   const [cmdName, setCmdName]       = useState('');
@@ -266,16 +183,16 @@ export function ControlPage() {
   const devices  = devicesData?.devices ?? [];
   const commands = commandsData?.data ?? commandsData?.commands ?? [];
 
-  // Auto-select first device
   useEffect(() => {
     if (!deviceId && devices.length > 0) setDeviceId((devices[0] as any)._id);
   }, [devices, deviceId]);
 
-  const selectedDevice = devices.find((d: any) => d._id === deviceId) as any;
+  const selectedDevice     = devices.find((d: any) => d._id === deviceId) as any;
   const schemaFields: DataField[] = selectedDevice?.meta?.dataSchema?.fields ?? [];
-  const controllableFields = schemaFields.filter(f =>
-    ['boolean', 'number', 'string'].includes(f.type)
-  );
+  const controllableFields = schemaFields.filter(f => ['boolean', 'number', 'string'].includes(f.type));
+  const boolFields   = controllableFields.filter(f => f.type === 'boolean');
+  const numberFields = controllableFields.filter(f => f.type === 'number');
+  const stringFields = controllableFields.filter(f => f.type === 'string');
 
   const sendControl = async (name: string, value: unknown) => {
     if (!deviceId) return;
@@ -301,225 +218,218 @@ export function ControlPage() {
     finally { setSending(false); }
   };
 
-  const boolFields   = controllableFields.filter(f => f.type === 'boolean');
-  const numberFields = controllableFields.filter(f => f.type === 'number');
-  const stringFields = controllableFields.filter(f => f.type === 'string');
-
   return (
-    <div className="space-y-5">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+    <div className="page">
+      {/* ── Page header ── */}
+      <div className="ph">
         <div>
-          <h2 className="text-[22px] font-semibold text-foreground tracking-tight">Control</h2>
-          <p className="text-[14px] text-muted-foreground mt-0.5">
-            Send commands and control devices in real time
-          </p>
+          <div style={{ marginBottom: 6 }}><span className="eyebrow">Operate · Remote control</span></div>
+          <h1><em>Control</em>.</h1>
+          <p className="lede">Send schema-driven commands and operate devices in real time via MQTT or HTTP.</p>
         </div>
       </div>
 
-      {/* Device selector */}
-      <div className="card p-4 flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-2 flex-1 min-w-[200px]">
-          <Sliders size={15} className="text-primary flex-shrink-0" />
-          <select
-            value={deviceId}
-            onChange={e => setDeviceId(e.target.value)}
-            className="select flex-1"
+      {/* ── Device selector strip ── */}
+      <div style={{
+        borderTop: '2px solid hsl(var(--fg))', borderBottom: '1px solid hsl(var(--border))',
+        display: 'flex', alignItems: 'center', gap: 0, overflowX: 'auto',
+        marginBottom: 8,
+      }}>
+        {(devices as any[]).map(d => (
+          <button
+            key={d._id}
+            onClick={() => setDeviceId(d._id)}
+            style={{
+              padding: '10px 18px', flexShrink: 0, fontSize: 13,
+              fontWeight: deviceId === d._id ? 500 : 400,
+              color: deviceId === d._id ? 'hsl(var(--fg))' : 'hsl(var(--muted-fg))',
+              background: 'transparent', border: 'none',
+              borderTop: `2px solid ${deviceId === d._id ? 'hsl(var(--primary))' : 'transparent'}`,
+              cursor: 'pointer',
+            }}
           >
-            {devices.length === 0 && <option value="">No devices</option>}
-            {devices.map((d: any) => (
-              <option key={d._id} value={d._id}>{d.name}</option>
-            ))}
-          </select>
-        </div>
-        {selectedDevice && (
-          <div className="flex items-center gap-2 text-[12px]">
-            <span className={`status-dot ${selectedDevice.status === 'online' ? 'status-dot-online' : 'status-dot-offline'}`} />
-            <span className="text-muted-foreground capitalize">{selectedDevice.status}</span>
-            <span className="text-border">·</span>
-            <span className="text-muted-foreground capitalize">{selectedDevice.category}</span>
-            {controllableFields.length > 0 && (
-              <>
-                <span className="text-border">·</span>
-                <span className="text-primary font-medium">{controllableFields.length} controls</span>
-              </>
-            )}
-          </div>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{
+                width: 6, height: 6, borderRadius: '50%',
+                background: d.status === 'online' ? 'hsl(var(--good))' : 'hsl(var(--muted-fg))',
+                flexShrink: 0,
+              }} />
+              {d.name}
+            </span>
+          </button>
+        ))}
+        {devices.length === 0 && (
+          <span className="dim" style={{ padding: '10px 18px', fontSize: 13 }}>No devices found</span>
         )}
       </div>
 
-      {/* Delivery info */}
-      {deviceId && <DeliveryInfo deviceId={deviceId} />}
-
-      {/* Schema-based controls */}
+      {/* ── Section I: Controls ── */}
       {deviceId && (
-        <>
-          {controllableFields.length === 0 ? (
-            <div className="card p-10 text-center">
-              <SlidersHorizontal size={28} className="text-muted-foreground/30 mx-auto mb-3" />
-              <p className="text-[14px] font-semibold text-foreground">No controls defined</p>
-              <p className="text-[13px] text-muted-foreground mt-1 max-w-sm mx-auto">
-                Define fields in the device's Data Schema to generate controls automatically.
-                Use the terminal below to send raw commands.
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {/* Toggles row */}
-              {boolFields.length > 0 && (
-                <div>
-                  <div className="flex items-center gap-2 mb-3">
-                    <ToggleLeft size={14} className="text-muted-foreground" />
-                    <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Toggles</p>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-                    {boolFields.map(f => (
-                      <BoolControl key={f.key} field={f} onSend={sendControl} loading={false} />
-                    ))}
-                  </div>
+        <div className="section">
+          <div>
+            <div className="ssh"><span className="no">№ I</span>Device<br />Controls</div>
+            <p className="dim" style={{ fontSize: 13, marginTop: 8, maxWidth: '22ch' }}>
+              {selectedDevice?.name}<br />
+              {controllableFields.length} control{controllableFields.length !== 1 ? 's' : ''} available.
+            </p>
+          </div>
+          <div>
+            {controllableFields.length === 0 ? (
+              <div className="panel" style={{ padding: '48px 24px', textAlign: 'center' }}>
+                <SlidersHorizontal size={28} style={{ color: 'hsl(var(--muted-fg))', margin: '0 auto 12px' }} />
+                <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, marginBottom: 8 }}>
+                  No <em style={{ color: 'hsl(var(--primary))' }}>controls</em> defined
                 </div>
-              )}
-
-              {/* Setpoints row */}
-              {numberFields.length > 0 && (
-                <div>
-                  <div className="flex items-center gap-2 mb-3">
-                    <SlidersHorizontal size={14} className="text-muted-foreground" />
-                    <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Setpoints</p>
+                <p className="dim" style={{ fontSize: 13 }}>
+                  Define fields in the device's Data Schema to generate controls automatically.
+                </p>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+                {boolFields.length > 0 && (
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                      <ToggleLeft size={13} className="faint" />
+                      <span className="eyebrow" style={{ fontSize: 9 }}>Toggles</span>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 8 }}>
+                      {boolFields.map(f => <BoolControl key={f.key} field={f} onSend={sendControl} />)}
+                    </div>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {numberFields.map(f => (
-                      <NumberControl key={f.key} field={f} onSend={sendControl} loading={false} />
-                    ))}
+                )}
+                {numberFields.length > 0 && (
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                      <SlidersHorizontal size={13} className="faint" />
+                      <span className="eyebrow" style={{ fontSize: 9 }}>Setpoints</span>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 8 }}>
+                      {numberFields.map(f => <NumberControl key={f.key} field={f} onSend={sendControl} />)}
+                    </div>
                   </div>
-                </div>
-              )}
-
-              {/* Text controls */}
-              {stringFields.length > 0 && (
-                <div>
-                  <div className="flex items-center gap-2 mb-3">
-                    <Type size={14} className="text-muted-foreground" />
-                    <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Text Controls</p>
+                )}
+                {stringFields.length > 0 && (
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                      <Type size={13} className="faint" />
+                      <span className="eyebrow" style={{ fontSize: 9 }}>Text Controls</span>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 8 }}>
+                      {stringFields.map(f => <StringControl key={f.key} field={f} onSend={sendControl} />)}
+                    </div>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {stringFields.map(f => (
-                      <StringControl key={f.key} field={f} onSend={sendControl} loading={false} />
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
-      {/* Terminal */}
-      <div className="card overflow-hidden">
-        <button
-          onClick={() => setTerminal(v => !v)}
-          className="w-full flex items-center justify-between px-4 py-3 hover:bg-muted/40 transition-colors"
-        >
-          <div className="flex items-center gap-2">
-            <Terminal size={14} className="text-primary" />
-            <span className="text-[13px] font-semibold text-foreground">Terminal</span>
-            <span className="text-[11px] text-muted-foreground">Send arbitrary commands</span>
-          </div>
-          {terminalOpen ? <ChevronUp size={14} className="text-muted-foreground" /> : <ChevronDown size={14} className="text-muted-foreground" />}
-        </button>
-        <AnimatePresence>
-          {terminalOpen && (
-            <motion.div
-              initial={{ height: 0 }} animate={{ height: 'auto' }} exit={{ height: 0 }}
-              className="overflow-hidden"
-            >
-              <form onSubmit={sendTerminal} className="flex flex-wrap items-end gap-3 p-4 border-t border-border">
-                <div className="min-w-[160px]">
-                  <label className="block text-[12px] font-medium text-foreground mb-1.5">Command Name</label>
-                  <input
-                    value={cmdName}
-                    onChange={e => setCmdName(e.target.value)}
-                    className="input font-mono"
-                    placeholder="reboot, get_status…"
-                    required
-                  />
+      {/* ── Section II: Terminal ── */}
+      <div className="section">
+        <div>
+          <div className="ssh"><span className="no">№ II</span>Raw<br />Terminal</div>
+          <p className="dim" style={{ fontSize: 13, marginTop: 8, maxWidth: '22ch' }}>
+            Send arbitrary commands with a custom JSON payload.
+          </p>
+          <button
+            className="btn btn-ghost btn-sm" style={{ marginTop: 12, gap: 6, fontSize: 12 }}
+            onClick={() => setTerminal(v => !v)}
+          >
+            <Terminal size={12} /> {terminalOpen ? 'Collapse' : 'Expand'}
+          </button>
+        </div>
+        <div>
+          {terminalOpen ? (
+            <div className="panel" style={{ padding: 20 }}>
+              <form onSubmit={sendTerminal} style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'flex-end' }}>
+                <div style={{ minWidth: 200 }}>
+                  <label className="eyebrow" style={{ fontSize: 9, display: 'block', marginBottom: 6 }}>Target device</label>
+                  <select value={deviceId} onChange={e => setDeviceId(e.target.value)} className="select" required>
+                    <option value="">Select device…</option>
+                    {(devices as any[]).map(d => <option key={d._id} value={d._id}>{d.name}</option>)}
+                  </select>
                 </div>
-                <div className="min-w-[220px] flex-1">
-                  <label className="block text-[12px] font-medium text-foreground mb-1.5">Payload (JSON)</label>
-                  <input
-                    value={payload}
-                    onChange={e => setPayload(e.target.value)}
-                    className="input font-mono text-[12px]"
-                    placeholder="{}"
-                  />
+                <div style={{ minWidth: 180 }}>
+                  <label className="eyebrow" style={{ fontSize: 9, display: 'block', marginBottom: 6 }}>Command name</label>
+                  <input value={cmdName} onChange={e => setCmdName(e.target.value)} className="input mono" placeholder="reboot, get_status…" required />
                 </div>
-                <button type="submit" disabled={sending || !deviceId} className="btn btn-primary self-end">
-                  {sending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+                <div style={{ minWidth: 240, flex: 1 }}>
+                  <label className="eyebrow" style={{ fontSize: 9, display: 'block', marginBottom: 6 }}>Payload (JSON)</label>
+                  <input value={payload} onChange={e => setPayload(e.target.value)} className="input mono" style={{ fontSize: 12 }} placeholder="{}" />
+                </div>
+                <button type="submit" disabled={sending || !deviceId} className="btn btn-primary" style={{ gap: 6 }}>
+                  {sending ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
                   {sending ? 'Sending…' : 'Send'}
                 </button>
               </form>
-            </motion.div>
+            </div>
+          ) : (
+            <div className="panel" style={{ padding: '14px 20px' }}>
+              <p className="dim" style={{ fontSize: 13 }}>Terminal collapsed. Click Expand to open.</p>
+            </div>
           )}
-        </AnimatePresence>
+        </div>
       </div>
 
-      {/* Command history */}
-      <div className="card overflow-hidden">
-        <div className="px-4 py-3 border-b border-border flex items-center justify-between">
-          <span className="text-[13px] font-semibold text-foreground">Command History</span>
-          <div className="flex items-center gap-2">
-            <span className="text-[12px] text-muted-foreground">{commands.length} records</span>
-            <button
-              onClick={() => queryClient.invalidateQueries({ queryKey: ['commands'] })}
-              className="btn btn-ghost btn-sm !w-7 !h-7 !px-0"
-            >
-              <RefreshCw size={12} />
-            </button>
-          </div>
+      {/* ── Section III: Command History ── */}
+      <div className="section">
+        <div>
+          <div className="ssh"><span className="no">№ III</span>Command<br />History</div>
+          <p className="dim" style={{ fontSize: 13, marginTop: 8, maxWidth: '22ch' }}>
+            {commands.length} record{commands.length !== 1 ? 's' : ''} dispatched.
+          </p>
+          <button
+            onClick={() => queryClient.invalidateQueries({ queryKey: ['commands'] })}
+            className="btn btn-ghost btn-sm btn-icon" style={{ marginTop: 12 }}
+            title="Refresh"
+          >
+            <RefreshCw size={12} />
+          </button>
         </div>
-        {cmdLoading ? (
-          <div className="p-4 space-y-2">
-            {Array.from({ length: 4 }).map((_, i) => <div key={i} className="skeleton h-12 rounded-lg" />)}
-          </div>
-        ) : commands.length === 0 ? (
-          <div className="p-10 text-center text-[13px] text-muted-foreground">No commands sent yet</div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="data-table">
+        <div className="panel table-responsive">
+          {cmdLoading ? (
+            <div style={{ padding: 32, textAlign: 'center' }} className="mono faint">Loading…</div>
+          ) : commands.length === 0 ? (
+            <div style={{ padding: '48px 16px', textAlign: 'center' }}>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, marginBottom: 8 }}>
+                No <em style={{ color: 'hsl(var(--primary))' }}>commands</em> yet
+              </div>
+              <p className="dim" style={{ fontSize: 13 }}>Use controls above or the terminal to send commands.</p>
+            </div>
+          ) : (
+            <table className="table">
               <thead>
                 <tr>
-                  <th>Device</th><th>Command</th><th>Status</th>
-                  <th>Sent</th><th>Response</th><th></th>
+                  <th style={{ width: 36 }}>№</th>
+                  <th>Device</th>
+                  <th>Command</th>
+                  <th>Status</th>
+                  <th className="hide-sm">Sent</th>
+                  <th className="hide-sm">Response</th>
+                  <th style={{ width: 60 }} />
                 </tr>
               </thead>
               <tbody>
-                {commands.map((cmd: any, i: number) => {
-                  const sc = STATUS_CFG[cmd.status] ?? { badge: 'badge-offline', Icon: Clock };
-                  const Icon = sc.Icon;
-                  const devName = devices.find((d: any) => d._id === cmd.deviceId)?.name ?? cmd.deviceId?.slice(-8);
+                {(commands as any[]).map((cmd, i) => {
+                  const sc = CMD_STATUS_CFG[cmd.status] ?? { tag: 'tag-offline' };
+                  const devName = (devices as any[]).find(d => d._id === cmd.deviceId)?.name ?? (
+                    <span className="mono faint">{cmd.deviceId?.slice(-8)}</span>
+                  );
                   return (
                     <motion.tr key={cmd._id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.02 }}>
-                      <td><span className="text-[13px] text-foreground">{devName}</span></td>
-                      <td>
-                        <code className="text-[12px] font-mono text-primary bg-primary/8 px-2 py-0.5 rounded">
-                          {cmd.name}
-                        </code>
-                      </td>
-                      <td>
-                        <span className={`badge ${sc.badge} gap-1`}>
-                          <Icon size={10} /> {cmd.status}
-                        </span>
-                      </td>
-                      <td className="text-[12px] text-muted-foreground">{timeAgo(cmd.createdAt)}</td>
-                      <td className="text-[12px] text-muted-foreground font-mono max-w-[180px] truncate">
+                      <td className="row-n">{String(i + 1).padStart(2, '0')}</td>
+                      <td style={{ fontSize: 13 }}>{devName}</td>
+                      <td><code className="acc mono" style={{ fontSize: 12 }}>{cmd.name}</code></td>
+                      <td><span className={`tag ${sc.tag}`}>{cmd.status}</span></td>
+                      <td className="hide-sm mono faint" style={{ fontSize: 11 }}>{timeAgo(cmd.createdAt)}</td>
+                      <td className="hide-sm mono faint" style={{ fontSize: 11, maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {cmd.errorMessage ?? (cmd.response ? JSON.stringify(cmd.response).slice(0, 50) : '—')}
                       </td>
                       <td>
                         {['pending', 'sent'].includes(cmd.status) && (
-                          <button
-                            onClick={() => cancelMutation.mutate(cmd._id)}
-                            className="text-[12px] text-red-600 dark:text-red-400 hover:underline"
-                          >
+                          <button onClick={() => cancelMutation.mutate(cmd._id)}
+                            className="btn btn-ghost btn-sm" style={{ color: 'hsl(var(--bad))', fontSize: 11 }}>
                             Cancel
                           </button>
                         )}
@@ -529,8 +439,8 @@ export function ControlPage() {
                 })}
               </tbody>
             </table>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );
