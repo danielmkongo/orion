@@ -153,10 +153,9 @@ function Steps({ current }: { current: Step }) {
 /* ─── Graph preview component ────────────────────────────────────────── */
 function GraphPreview({ field }: { field: DataField }) {
   const sparklineData = useMemo(() =>
-    Array.from({ length: 20 }, (_, i) => ({
-      t: i,
-      v: 30 - Math.sin(i / 3) * 18 + Math.cos(i / 2) * 8,
-    })),
+    Array.from({ length: 20 }, (_, i) =>
+      30 - Math.sin(i / 3) * 18 + Math.cos(i / 2) * 8
+    ),
     []
   );
 
@@ -790,7 +789,7 @@ export function DeviceForm({ onClose }: { onClose: () => void }) {
                               </div>
                               <div>
                                 <label className="eyebrow text-[8px] block mb-1">Default</label>
-                                <input className="input text-[11px] !h-7" type="number" value={cmd.def ?? 0}
+                                <input className="input text-[11px] !h-7" type="number" value={typeof cmd.def === 'number' ? cmd.def : 0}
                                   onChange={e => updateCommand(i, { def: +e.target.value })} />
                               </div>
                             </div>

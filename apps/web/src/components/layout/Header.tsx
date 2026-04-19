@@ -57,7 +57,7 @@ export function Header() {
   const alertCount = alertsData?.total ?? 0;
 
   return (
-    <header className="fixed top-0 right-0 left-0 md:left-[248px] h-[58px] z-20 flex items-center justify-between px-5 border-b border-[hsl(var(--rule))] bg-[hsl(var(--surface)/0.96)] backdrop-blur-sm">
+    <header className="fixed top-0 right-0 left-0 md:left-[248px] h-[58px] z-20 flex items-center justify-between px-5 border-b border-[hsl(var(--border))] backdrop-blur-sm" style={{ background: 'color-mix(in oklab, hsl(var(--bg)) 92%, transparent)' }}>
       {/* Left */}
       <div className="flex items-center gap-3">
         {/* Mobile hamburger */}

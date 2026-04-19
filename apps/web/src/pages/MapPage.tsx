@@ -1,30 +1,32 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
+import { Link } from 'react-router-dom';
+import { APIProvider, Map, AdvancedMarker, InfoWindow } from '@vis.gl/react-google-maps';
+import { Search, ExternalLink } from 'lucide-react';
 import { devicesApi } from '@/api/devices';
+
+const API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
+const MAP_ID = import.meta.env.VITE_GOOGLE_MAP_ID || '';
+
+type Status = 'online' | 'offline' | 'idle' | 'error';
 
 interface Device {
   _id: string;
   id: string;
   name: string;
-  status: 'online' | 'offline' | 'idle' | 'error';
+  status: Status;
   category: string;
   location?: { lat: number; lng: number };
 }
 
-const CAT_GLYPHS: Record<string, string> = {
-  tracker: '<path d="M12 2 L20 18 L12 14 L4 18 Z" fill="#fff"/>',
-  environmental: '<path d="M5 16 C5 10 9 6 12 4 C15 6 19 10 19 16 C19 19 16 21 12 21 C8 21 5 19 5 16 Z" fill="#fff"/>',
-  energy: '<path d="M13 3 L6 13 L11 13 L10 21 L17 11 L12 11 L13 3 Z" fill="#fff"/>',
-  water: '<path d="M12 3 C8 9 5 13 5 16 C5 19 8 21 12 21 C16 21 19 19 19 16 C19 13 16 9 12 3 Z" fill="#fff"/>',
-  pump: '<g fill="#fff"><circle cx="12" cy="12" r="3.2"/><path d="M12 4 L13 9 L11 9 Z M12 20 L11 15 L13 15 Z M4 12 L9 13 L9 11 Z M20 12 L15 11 L15 13 Z M6 6 L10 9 L9 10 Z M18 18 L14 15 L15 14 Z M18 6 L15 10 L14 9 Z M6 18 L9 14 L10 15 Z"/></g>',
-  gateway: '<g fill="#fff"><path d="M3 11 C7 6 17 6 21 11 L19 13 C16 9 8 9 5 13 Z"/><path d="M6 14 C9 11 15 11 18 14 L16 16 C14 13 10 13 8 16 Z"/><circle cx="12" cy="18" r="2"/></g>',
-  research: '<g fill="#fff"><path d="M9 3 H15 V5 H14 V10 L19 19 C20 21 18 22 16 22 H8 C6 22 4 21 5 19 L10 10 V5 H9 Z"/></g>',
-  industrial: '<g fill="#fff"><path d="M3 21 V11 L9 14 V11 L15 14 V8 L21 8 V21 Z"/></g>',
+const STATUS_COLOR: Record<Status, string> = {
+  online: '#0F7A3D',
+  offline: '#5E5C56',
+  idle: '#B45309',
+  error: '#C21D1D',
 };
 
-const CAT_COLORS: Record<string, string> = {
+const CAT_COLOR: Record<string, string> = {
   tracker: '#FF5B1F',
   environmental: '#10B981',
   energy: '#FACC15',
@@ -35,221 +37,314 @@ const CAT_COLORS: Record<string, string> = {
   industrial: '#F97316',
 };
 
-function makeMarker(device: Device, isSelected: boolean) {
-  const catColor = CAT_COLORS[device.category] || '#888';
-  const glyph = CAT_GLYPHS[device.category] || '<circle cx="12" cy="12" r="5" fill="#fff"/>';
-  const isOffline = device.status === 'offline';
-  const isError = device.status === 'error';
-  const ringColor = isError ? '#EF4444' : catColor;
-  const sz = isSelected ? 44 : 36;
-  const ringSize = isSelected ? 64 : 52;
-  const sat = isOffline ? 'filter:saturate(.25) brightness(.7);' : '';
+const CAT_GLYPH: Record<string, string> = {
+  tracker: 'M12 2 L20 18 L12 14 L4 18 Z',
+  environmental: 'M5 16 C5 10 9 6 12 4 C15 6 19 10 19 16 C19 19 16 21 12 21 C8 21 5 19 5 16 Z',
+  energy: 'M13 3 L6 13 L11 13 L10 21 L17 11 L12 11 L13 3 Z',
+  water: 'M12 3 C8 9 5 13 5 16 C5 19 8 21 12 21 C16 21 19 19 19 16 C19 13 16 9 12 3 Z',
+};
 
-  return L.divIcon({
-    className: 'orion-marker',
-    iconSize: [ringSize, ringSize],
-    iconAnchor: [ringSize / 2, ringSize / 2],
-    html: `
-      <div class="orion-marker-wrap" style="width:${ringSize}px;height:${ringSize}px;${sat}position:relative;">
-        <span style="position:absolute;inset:0;border:3px solid ${ringColor};border-radius:50%;opacity:0.3;"></span>
-        <div style="position:absolute;inset:0;width:${sz}px;height:${sz}px;left:${(ringSize - sz) / 2}px;top:${(ringSize - sz) / 2}px;background:${ringColor};border:2px solid #fff;border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,0.3);">
-          <svg viewBox="0 0 24 24" width="${sz - 8}" height="${sz - 8}">${glyph}</svg>
-        </div>
-      </div>
-    `,
-  });
-}
+function DevicePin({ device, isSelected }: { device: Device; isSelected: boolean }) {
+  const catColor = CAT_COLOR[device.category] || STATUS_COLOR[device.status];
+  const ringColor = device.status === 'error' ? '#C21D1D' : catColor;
+  const sz = isSelected ? 44 : 34;
 
-function StatusTag({ status }: { status: string }) {
-  const colors: Record<string, string> = {
-    online: '#0F7A3D',
-    offline: '#5E5C56',
-    idle: '#B45309',
-    error: '#C21D1D',
-  };
   return (
-    <span
+    <div
       style={{
-        display: 'inline-flex',
+        width: sz,
+        height: sz,
+        borderRadius: '50%',
+        background: ringColor,
+        border: isSelected ? '3px solid white' : '2px solid white',
+        display: 'flex',
         alignItems: 'center',
-        gap: '6px',
-        fontSize: '10.5px',
-        fontFamily: 'var(--font-mono)',
-        letterSpacing: '0.1em',
-        textTransform: 'uppercase',
-        padding: '3px 8px',
-        border: `1px solid ${colors[status] || '#999'}`,
-        borderRadius: 0,
-        color: colors[status] || '#999',
+        justifyContent: 'center',
+        boxShadow: isSelected
+          ? `0 0 0 3px ${ringColor}, 0 4px 16px rgba(0,0,0,0.35)`
+          : '0 2px 8px rgba(0,0,0,0.3)',
+        cursor: 'pointer',
+        transition: 'all 0.2s',
+        filter: device.status === 'offline' ? 'saturate(0.25) brightness(0.7)' : undefined,
       }}
     >
-      <span
-        style={{
-          width: '6px',
-          height: '6px',
-          borderRadius: '50%',
-          backgroundColor: colors[status] || '#999',
-          display: 'inline-block',
-        }}
-      />
+      <svg viewBox="0 0 24 24" width={sz - 10} height={sz - 10}>
+        <path d={CAT_GLYPH[device.category] || 'M12 5 A7 7 0 1 1 12 19 A7 7 0 1 1 12 5 Z'} fill="#fff" />
+      </svg>
+    </div>
+  );
+}
+
+function StatusTag({ status }: { status: Status }) {
+  const colorMap: Record<Status, string> = {
+    online: 'var(--good)',
+    offline: 'var(--ink-faint)',
+    idle: 'var(--warn)',
+    error: 'var(--bad)',
+  };
+  const tagClass: Record<Status, string> = {
+    online: 'tag tag-online',
+    offline: 'tag tag-offline',
+    idle: 'tag tag-warn',
+    error: 'tag tag-error',
+  };
+  return (
+    <span className={tagClass[status]}>
+      <span className={`dot dot-${status === 'idle' ? 'warn' : status}`} />
       {status}
     </span>
   );
 }
 
+function NoApiKey() {
+  return (
+    <div className="page flex items-center justify-center" style={{ minHeight: 'calc(100vh - 58px)' }}>
+      <div className="panel" style={{ padding: '48px', maxWidth: '480px', textAlign: 'center' }}>
+        <div style={{ fontFamily: 'var(--font-display)', fontSize: '28px', lineHeight: 1.1, marginBottom: '12px' }}>
+          <em style={{ color: 'hsl(var(--primary))' }}>Google Maps</em> API key required
+        </div>
+        <p className="dim" style={{ fontSize: '13px', marginBottom: '24px' }}>
+          Add your key to <code style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', background: 'hsl(var(--surface-raised))', padding: '2px 6px' }}>.env</code> to enable the map.
+        </p>
+        <div style={{ background: 'hsl(var(--bg))', border: '1px solid hsl(var(--border))', padding: '14px 16px', textAlign: 'left' }}>
+          <code style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'hsl(var(--primary))' }}>
+            VITE_GOOGLE_MAPS_API_KEY=your_key_here
+          </code>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function MapPage() {
-  const mapRef = useRef<HTMLDivElement>(null);
-  const mapInst = useRef<L.Map | null>(null);
-  const markersRef = useRef<Record<string, L.Marker>>({});
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [infoId, setInfoId] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
 
   const { data, isLoading } = useQuery({
     queryKey: ['devices'],
     queryFn: () => devicesApi.list(),
   });
 
-  const devices = data?.devices ?? [];
-  const located = devices.filter((d) => d.location?.lat && d.location?.lng) as Device[];
+  const devices = (data?.devices ?? []) as unknown as Device[];
+  const located = useMemo(() => devices.filter(d => d.location?.lat && d.location?.lng), [devices]);
 
-  // Initialize map
-  useEffect(() => {
-    if (!mapRef.current || mapInst.current) return;
-
-    const map = L.map(mapRef.current, {
-      zoomControl: true,
-      attributionControl: false,
-    }).setView([14.7, -17.4], 6);
-
-    // ArcGIS satellite + boundaries layers
-    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-      maxZoom: 19,
-    }).addTo(map);
-
-    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', {
-      maxZoom: 19,
-      opacity: 0.7,
-    }).addTo(map);
-
-    // Add markers
-    located.forEach((device) => {
-      const marker = L.marker([device.location!.lat, device.location!.lng], {
-        icon: makeMarker(device, false),
-      })
-        .on('click', () => setSelected(device._id || device.id))
-        .addTo(map);
-
-      markersRef.current[device._id || device.id] = marker;
+  const filtered = useMemo(() => {
+    return devices.filter(d => {
+      const matchSearch = !search || d.name.toLowerCase().includes(search.toLowerCase()) || d.category.toLowerCase().includes(search.toLowerCase());
+      const matchStatus = statusFilter === 'all' || d.status === statusFilter;
+      return matchSearch && matchStatus;
     });
+  }, [devices, search, statusFilter]);
 
-    mapInst.current = map;
-    setTimeout(() => map.invalidateSize(), 100);
-  }, []);
+  const mapCenter = useMemo(() => {
+    if (located.length === 0) return { lat: 14.7, lng: -17.4 };
+    const lats = located.map(d => d.location!.lat);
+    const lngs = located.map(d => d.location!.lng);
+    return {
+      lat: lats.reduce((a, b) => a + b) / lats.length,
+      lng: lngs.reduce((a, b) => a + b) / lngs.length,
+    };
+  }, [located]);
 
-  // Update selected marker
-  useEffect(() => {
-    Object.entries(markersRef.current).forEach(([id, marker]) => {
-      const device = located.find((d) => (d._id || d.id) === id);
-      if (device) {
-        marker.setIcon(makeMarker(device, id === selected));
-      }
-    });
+  const statusCounts = useMemo(() => ({
+    online: devices.filter(d => d.status === 'online').length,
+    offline: devices.filter(d => d.status === 'offline').length,
+    idle: devices.filter(d => d.status === 'idle').length,
+    error: devices.filter(d => d.status === 'error').length,
+  }), [devices]);
 
-    // Fly to selected device
-    if (selected && mapInst.current) {
-      const device = located.find((d) => (d._id || d.id) === selected);
-      if (device?.location) {
-        mapInst.current.flyTo([device.location.lat, device.location.lng], 12);
-      }
-    }
-  }, [selected, located]);
+  if (!API_KEY) return <NoApiKey />;
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', height: 'calc(100vh - 58px)', gap: 0 }}>
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', height: 'calc(100vh - 58px)' }}>
       {/* Map */}
-      <div
-        ref={mapRef}
-        style={{
-          height: '100%',
-          background: '#0a0a0a',
-          borderRight: '1px solid hsl(var(--border))',
-        }}
-      />
+      <APIProvider apiKey={API_KEY}>
+        <Map
+          mapId={MAP_ID || undefined}
+          defaultCenter={mapCenter}
+          defaultZoom={located.length > 0 ? 7 : 3}
+          mapTypeId="satellite"
+          gestureHandling="greedy"
+          streetViewControl={false}
+          mapTypeControl={false}
+          fullscreenControl={false}
+          style={{ width: '100%', height: '100%' }}
+        >
+          {located.map(device => {
+            const id = device._id || device.id;
+            const isSelected = selectedId === id;
+            return (
+              <AdvancedMarker
+                key={id}
+                position={{ lat: device.location!.lat, lng: device.location!.lng }}
+                onClick={() => { setSelectedId(id); setInfoId(id); }}
+                zIndex={isSelected ? 10 : 1}
+              >
+                <DevicePin device={device} isSelected={isSelected} />
+                {infoId === id && (
+                  <InfoWindow
+                    position={{ lat: device.location!.lat, lng: device.location!.lng }}
+                    onCloseClick={() => { setInfoId(null); }}
+                    pixelOffset={[0, -((isSelected ? 44 : 34) / 2 + 8)]}
+                  >
+                    <div style={{ padding: '4px 2px', minWidth: '180px', fontFamily: 'var(--font-sans)' }}>
+                      <div style={{ fontWeight: 600, fontSize: '13px', marginBottom: '4px' }}>{device.name}</div>
+                      <div style={{ fontSize: '11px', textTransform: 'capitalize', color: '#666', marginBottom: '10px' }}>
+                        {device.category} · {device.status}
+                      </div>
+                      <Link
+                        to={`/devices/${device._id || device.id}`}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          fontSize: '11px',
+                          color: '#FF5B1F',
+                          fontWeight: 500,
+                        }}
+                      >
+                        View device <ExternalLink size={10} />
+                      </Link>
+                    </div>
+                  </InfoWindow>
+                )}
+              </AdvancedMarker>
+            );
+          })}
+        </Map>
+      </APIProvider>
 
-      {/* Sidebar */}
+      {/* Right panel */}
       <div
         style={{
           display: 'flex',
           flexDirection: 'column',
-          background: 'hsl(var(--surface))',
+          background: 'hsl(var(--bg))',
           borderLeft: '1px solid hsl(var(--border))',
           overflow: 'hidden',
         }}
       >
-        <div style={{ padding: '20px 22px 18px', borderBottom: '1px solid hsl(var(--border))' }}>
+        {/* Panel header */}
+        <div style={{ padding: '18px 20px', borderBottom: '1px solid hsl(var(--border))' }}>
+          <div className="eyebrow" style={{ marginBottom: '12px' }}>
+            Geography · Fleet map
+          </div>
+          {/* Search */}
           <div
             style={{
-              fontFamily: 'var(--font-mono)',
-              fontSize: '10.5px',
-              fontWeight: 500,
-              letterSpacing: '0.18em',
-              textTransform: 'uppercase',
-              color: 'hsl(var(--muted-fg))',
-              marginBottom: '4px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              height: '34px',
+              padding: '0 10px',
+              border: '1px solid hsl(var(--border))',
+              background: 'hsl(var(--surface))',
+              marginBottom: '10px',
             }}
           >
-            {located.length} DEVICES
+            <Search size={13} style={{ color: 'hsl(var(--muted-fg))', flexShrink: 0 }} />
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search devices…"
+              style={{
+                border: 0,
+                outline: 0,
+                background: 'transparent',
+                color: 'hsl(var(--fg))',
+                fontFamily: 'var(--font-sans)',
+                fontSize: '13px',
+                width: '100%',
+              }}
+            />
+          </div>
+          {/* Status filters */}
+          <div className="seg" style={{ width: '100%', display: 'flex' }}>
+            {(['all', 'online', 'error', 'idle', 'offline'] as const).map(s => (
+              <button
+                key={s}
+                className={statusFilter === s ? 'on' : ''}
+                onClick={() => setStatusFilter(s)}
+                style={{ flex: 1, padding: '5px 4px', fontSize: '9.5px' }}
+              >
+                {s === 'all' ? 'ALL' : s.toUpperCase()}
+              </button>
+            ))}
           </div>
         </div>
 
-        {/* Device list */}
-        <div style={{ flex: 1, overflow: 'auto' }}>
-          {isLoading ? (
-            <div style={{ padding: '20px', textAlign: 'center', color: 'hsl(var(--muted-fg))' }}>
-              Loading...
+        {/* Status counters */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', borderBottom: '1px solid hsl(var(--border))' }}>
+          {([
+            ['online', statusCounts.online],
+            ['error', statusCounts.error],
+            ['idle', statusCounts.idle],
+            ['offline', statusCounts.offline],
+          ] as const).map(([s, n]) => (
+            <div key={s} style={{ padding: '10px 8px', borderRight: s !== 'offline' ? '1px solid hsl(var(--border))' : 0, textAlign: 'center' }}>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: '20px', lineHeight: 1 }}>{n}</div>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', letterSpacing: '0.14em', textTransform: 'uppercase', color: `hsl(var(--${s === 'idle' ? 'warn' : s === 'online' ? 'good' : s === 'error' ? 'bad' : 'muted-fg'}))`, marginTop: '3px' }}>{s}</div>
             </div>
-          ) : located.length === 0 ? (
-            <div style={{ padding: '20px', textAlign: 'center', color: 'hsl(var(--muted-fg))' }}>
-              No located devices
+          ))}
+        </div>
+
+        {/* Device list */}
+        <div style={{ flex: 1, overflowY: 'auto' }}>
+          {isLoading ? (
+            <div style={{ padding: '24px', textAlign: 'center', color: 'hsl(var(--muted-fg))', fontFamily: 'var(--font-mono)', fontSize: '11px', letterSpacing: '0.1em' }}>
+              LOADING…
+            </div>
+          ) : filtered.length === 0 ? (
+            <div style={{ padding: '24px', textAlign: 'center', color: 'hsl(var(--muted-fg))', fontFamily: 'var(--font-mono)', fontSize: '11px' }}>
+              NO DEVICES FOUND
             </div>
           ) : (
-            located.map((device) => (
-              <div
-                key={device._id || device.id}
-                onClick={() => setSelected(device._id || device.id)}
-                style={{
-                  padding: '10px 0',
-                  borderBottom: '1px solid hsl(var(--border-strong))',
-                  marginLeft: '22px',
-                  marginRight: '22px',
-                  cursor: 'pointer',
-                  background: selected === (device._id || device.id) ? 'hsl(var(--surface-raised))' : 'transparent',
-                  paddingLeft: '10px',
-                }}
-              >
+            filtered.map(device => {
+              const id = device._id || device.id;
+              const hasLocation = !!(device.location?.lat && device.location?.lng);
+              const isSelected = selectedId === id;
+              return (
                 <div
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    marginBottom: '4px',
+                  key={id}
+                  onClick={() => {
+                    if (hasLocation) {
+                      setSelectedId(id);
+                      setInfoId(id);
+                    }
                   }}
-                >
-                  <span style={{ fontSize: '13px', fontWeight: 500 }}>{device.name}</span>
-                  <StatusTag status={device.status} />
-                </div>
-                <div
                   style={{
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: '10.5px',
-                    color: 'hsl(var(--muted-fg))',
-                    marginTop: '2px',
+                    padding: '11px 20px',
+                    borderBottom: '1px solid hsl(var(--border))',
+                    cursor: hasLocation ? 'pointer' : 'default',
+                    background: isSelected ? 'hsl(var(--surface-raised))' : 'transparent',
+                    transition: 'background 0.1s',
                   }}
+                  onMouseEnter={e => { if (!isSelected) (e.currentTarget as HTMLDivElement).style.background = 'hsl(var(--surface))'; }}
+                  onMouseLeave={e => { if (!isSelected) (e.currentTarget as HTMLDivElement).style.background = 'transparent'; }}
                 >
-                  {device.location?.lat.toFixed(3)}, {device.location?.lng.toFixed(3)}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                    <span style={{ fontSize: '13px', fontWeight: 500 }}>{device.name}</span>
+                    <StatusTag status={device.status} />
+                  </div>
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: '10.5px', color: 'hsl(var(--muted-fg))', display: 'flex', gap: '8px' }}>
+                    <span style={{ textTransform: 'capitalize' }}>{device.category}</span>
+                    {hasLocation ? (
+                      <span>{device.location!.lat.toFixed(3)}, {device.location!.lng.toFixed(3)}</span>
+                    ) : (
+                      <span style={{ opacity: 0.5 }}>no location</span>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))
+              );
+            })
           )}
+        </div>
+
+        {/* Footer */}
+        <div style={{ padding: '10px 20px', borderTop: '1px solid hsl(var(--border))', fontFamily: 'var(--font-mono)', fontSize: '10px', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'hsl(var(--muted-fg))' }}>
+          {located.length} of {devices.length} devices located
         </div>
       </div>
     </div>

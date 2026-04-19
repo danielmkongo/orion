@@ -33,10 +33,8 @@ export function AppLayout() {
       <Sidebar />
       <Header />
       {/* Desktop: margin-left=248px. Mobile: no margin (sidebar overlays) */}
-      <main className="pt-[58px] md:ml-[248px] min-h-screen">
-        <div className="p-5 lg:p-7 max-w-[1600px]">
-          <Outlet />
-        </div>
+      <main className="pt-[58px] md:ml-[248px] min-h-[calc(100vh-58px)]">
+        <Outlet />
       </main>
     </div>
   );

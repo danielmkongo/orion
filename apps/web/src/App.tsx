@@ -1,4 +1,5 @@
-import { Routes, Route, Navigate, lazy, Suspense } from 'react-router-dom';
+import { lazy, Suspense } from 'react';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuthStore } from '@/store/auth.store';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { LoginPage } from '@/pages/LoginPage';

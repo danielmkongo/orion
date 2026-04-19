@@ -42,7 +42,7 @@ export function Sidebar() {
       <aside
         className={[
           'fixed left-0 top-0 h-full z-30 flex flex-col',
-          'border-r border-[hsl(var(--rule))] bg-[hsl(var(--surface))]',
+          'border-r border-[hsl(var(--border))] bg-[hsl(var(--bg))]',
           'transition-transform duration-200',
           'w-[248px]',
           // mobile: slide in/out; desktop: always visible
@@ -50,7 +50,7 @@ export function Sidebar() {
         ].join(' ')}
       >
         {/* Brand */}
-        <div className="flex items-center gap-3 px-5 h-[58px] border-b border-[hsl(var(--rule))] flex-shrink-0">
+        <div className="flex items-center gap-3 px-5 h-[58px] border-b border-[hsl(var(--border))] flex-shrink-0">
           <OrionMark size={22} className="text-primary flex-shrink-0" />
           <div>
             <span
@@ -103,7 +103,7 @@ export function Sidebar() {
         </nav>
 
         {/* Footer */}
-        <div className="flex-shrink-0 border-t border-[hsl(var(--rule))] p-3 space-y-2">
+        <div className="flex-shrink-0 border-t border-[hsl(var(--border))] p-3 space-y-2">
           <div className="flex items-center justify-between px-2">
             <div className="flex items-center gap-2.5 min-w-0">
               <div className="w-7 h-7 flex items-center justify-center flex-shrink-0 bg-primary/10 border border-primary/20">

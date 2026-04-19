@@ -1,39 +1,50 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { AnimatePresence, motion } from 'framer-motion';
-import { Plus, Search, RefreshCw, Cpu, Trash2, ExternalLink, MoreHorizontal } from 'lucide-react';
+import { AnimatePresence } from 'framer-motion';
+import { Plus, Search, Download, ArrowRight, Trash2 } from 'lucide-react';
 import { devicesApi } from '@/api/devices';
-import { timeAgo, getCategoryIconInfo } from '@/lib/utils';
+import { timeAgo } from '@/lib/utils';
+import { Sparkline } from '@/components/charts/Charts';
 import { DeviceForm } from '@/components/devices/DeviceForm';
 import toast from 'react-hot-toast';
 import type { Device } from '@orion/shared';
 
-const STATUS_COLOR: Record<string, string> = {
-  online:       '#22C55E',
-  error:        '#EF4444',
-  idle:         '#F59E0B',
-  provisioning: '#FF6A30',
-  offline:      '#6B7280',
-  decommissioned: '#6B7280',
-};
-
+const STATUSES = ['all', 'online', 'idle', 'error', 'offline'];
 const CATEGORIES = ['all', 'environmental', 'industrial', 'energy', 'water', 'tracker', 'gateway', 'research', 'custom'];
-const STATUSES   = ['all', 'online', 'offline', 'error', 'idle'];
+
+function sparkData(d: any) {
+  return Array.from({ length: 24 }, (_, i) =>
+    30 + Math.sin((i + (d.name?.charCodeAt(0) ?? 0)) / 3) * 12 + Math.cos(i / 2) * 5
+  );
+}
+
+function BatteryBar({ pct }: { pct: number }) {
+  const color = pct < 30 ? 'hsl(var(--bad))' : pct < 60 ? 'hsl(var(--warn))' : 'hsl(var(--good))';
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+      <div style={{ flex: 1, height: '4px', background: 'hsl(var(--border))', position: 'relative' }}>
+        <div style={{ position: 'absolute', inset: 0, width: `${pct}%`, background: color }} />
+      </div>
+      <span className="mono faint" style={{ fontSize: '10.5px', width: '28px', textAlign: 'right' }}>{pct}%</span>
+    </div>
+  );
+}
 
 export function DevicesPage() {
-  const [search, setSearch]     = useState('');
+  const navigate = useNavigate();
+  const [search, setSearch] = useState('');
+  const [status, setStatus] = useState('all');
   const [category, setCategory] = useState('all');
-  const [status, setStatus]     = useState('all');
   const [showForm, setShowForm] = useState(false);
   const queryClient = useQueryClient();
 
-  const { data, isLoading, refetch } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ['devices', { search, category, status }],
     queryFn: () => devicesApi.list({
-      search:   search   || undefined,
+      search: search || undefined,
       category: category !== 'all' ? category : undefined,
-      status:   status   !== 'all' ? status   : undefined,
+      status: status !== 'all' ? status : undefined,
       limit: 100,
     }),
   });
@@ -41,219 +52,159 @@ export function DevicesPage() {
   const deleteMut = useMutation({
     mutationFn: devicesApi.delete,
     onSuccess: () => { toast.success('Device deleted'); queryClient.invalidateQueries({ queryKey: ['devices'] }); },
-    onError:   () => toast.error('Failed to delete device'),
+    onError: () => toast.error('Failed to delete device'),
   });
 
   const devices = data?.devices ?? [];
-  const total   = data?.total   ?? 0;
+  const total = data?.total ?? 0;
 
-  function confirmDelete(d: Device) {
+  function confirmDelete(e: React.MouseEvent, d: Device) {
+    e.stopPropagation();
     if (!window.confirm(`Delete "${d.name}"? This cannot be undone.`)) return;
-    deleteMut.mutate(d.id ?? (d as any)._id);
+    deleteMut.mutate((d as any).id ?? (d as any)._id);
   }
 
   return (
-    <div className="space-y-6">
-
-      {/* ── Header ────────────────────────────────────────────────── */}
-      <div className="flex items-end justify-between gap-4 pt-1 flex-wrap">
+    <div className="page">
+      {/* ── Page header ── */}
+      <div className="ph">
         <div>
-          <p className="eyebrow text-[9px] mb-2">Fleet Management</p>
-          <h1 className="text-[26px] leading-none tracking-tight text-foreground" style={{ fontFamily: 'var(--font-display)' }}>
-            <em>Devices</em>
-          </h1>
-          <p className="text-[12px] text-muted-foreground mt-1.5 font-mono">
-            {isLoading ? 'Loading…' : `${total} device${total !== 1 ? 's' : ''} registered`}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '6px' }}>
+            <span className="eyebrow">Inventory · Catalog</span>
+          </div>
+          <h1>The <em>Fleet</em>.</h1>
+          <p className="lede">
+            {isLoading ? 'Loading…' : `${devices.length} of ${total} devices.`} Search, filter, and jump into any device for live telemetry, commands, and location.
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <button onClick={() => refetch()} className="btn btn-secondary btn-sm" title="Refresh">
-            <RefreshCw size={13} />
-          </button>
-          <button onClick={() => setShowForm(true)} className="btn btn-primary gap-1.5">
-            <Plus size={13} /> Add Device
+        <div style={{ gridColumn: 3, display: 'flex', alignItems: 'flex-end', gap: '8px', paddingBottom: '20px' }}>
+          <button className="btn btn-sm" style={{ gap: '6px' }}><Download size={13} /> Export CSV</button>
+          <button className="btn btn-primary btn-sm" style={{ gap: '6px' }} onClick={() => setShowForm(true)}>
+            <Plus size={13} /> New device
           </button>
         </div>
       </div>
 
-      {/* ── Filters ──────────────────────────────────────────────── */}
-      <div className="space-y-3">
+      {/* ── Filter bar ── */}
+      <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '24px' }}>
         {/* Search */}
-        <div className="relative max-w-sm">
-          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', border: '1px solid hsl(var(--border))', background: 'hsl(var(--surface))', padding: '0 12px', height: '38px', flex: '1 1 260px', maxWidth: '420px' }}>
+          <Search size={14} style={{ color: 'hsl(var(--muted-fg))', flexShrink: 0 }} />
           <input
-            className="input !pl-9"
-            placeholder="Search devices…"
             value={search}
             onChange={e => setSearch(e.target.value)}
+            placeholder="Search devices, codes, sites…"
+            style={{ border: 0, outline: 0, background: 'transparent', color: 'hsl(var(--fg))', fontSize: '13px', width: '100%', fontFamily: 'var(--font-sans)' }}
           />
         </div>
 
-        {/* Status chips */}
-        <div className="flex items-center gap-px border border-[hsl(var(--rule))] self-start">
+        {/* Status segmented */}
+        <div className="seg">
           {STATUSES.map(s => (
-            <button
-              key={s}
-              onClick={() => setStatus(s)}
-              className={`px-3 py-1.5 text-[11px] font-mono capitalize transition-colors ${status === s ? 'bg-primary text-white' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}
-            >
+            <button key={s} className={status === s ? 'on' : ''} onClick={() => setStatus(s)} style={{ textTransform: 'capitalize' }}>
               {s === 'all' ? 'All' : s}
             </button>
           ))}
         </div>
 
-        {/* Category chips */}
-        <div className="flex items-center gap-1.5 flex-wrap">
+        {/* Category segmented */}
+        <div className="seg" style={{ flexWrap: 'wrap' }}>
           {CATEGORIES.map(c => (
-            <button
-              key={c}
-              onClick={() => setCategory(c)}
-              className={`px-2.5 py-1 text-[11px] font-mono capitalize border transition-colors ${
-                category === c
-                  ? 'border-primary text-primary bg-primary/[0.07]'
-                  : 'border-[hsl(var(--rule))] text-muted-foreground hover:text-foreground hover:border-foreground/20'
-              }`}
-            >
-              {c === 'all' ? 'All categories' : c}
+            <button key={c} className={category === c ? 'on' : ''} onClick={() => setCategory(c)} style={{ textTransform: 'capitalize' }}>
+              {c === 'all' ? 'All' : c}
             </button>
           ))}
         </div>
       </div>
 
-      {/* ── Table ────────────────────────────────────────────────── */}
-      <div className="border border-[hsl(var(--rule))]">
+      {/* ── Table ── */}
+      <div className="panel table-responsive">
         {isLoading ? (
-          <div className="p-8 space-y-3">
-            {[1,2,3,4].map(i => <div key={i} className="h-10 bg-muted animate-pulse" />)}
+          <div style={{ padding: '32px', textAlign: 'center', color: 'hsl(var(--muted-fg))', fontFamily: 'var(--font-mono)', fontSize: '11px', letterSpacing: '0.14em', textTransform: 'uppercase' }}>
+            Loading…
           </div>
         ) : devices.length === 0 ? (
-          <div className="flex flex-col items-center py-16 text-center">
-            <Cpu size={24} className="text-muted-foreground/30 mb-4" />
-            <p className="text-[14px] font-semibold text-foreground">No devices found</p>
-            <p className="text-[12px] text-muted-foreground mt-1 mb-5">
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '64px 16px', textAlign: 'center' }}>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: '28px', lineHeight: 1, marginBottom: '8px' }}>
+              No <em style={{ color: 'hsl(var(--primary))' }}>devices</em> found
+            </div>
+            <p className="dim" style={{ fontSize: '13px', marginBottom: '20px', maxWidth: '36ch' }}>
               {search || category !== 'all' || status !== 'all'
                 ? 'Try adjusting your filters'
                 : 'Add your first device to get started'}
             </p>
             {!search && category === 'all' && status === 'all' && (
-              <button onClick={() => setShowForm(true)} className="btn btn-primary gap-1.5">
-                <Plus size={13} /> Add Device
+              <button className="btn btn-primary" style={{ gap: '6px' }} onClick={() => setShowForm(true)}>
+                <Plus size={13} /> New device
               </button>
             )}
           </div>
         ) : (
-          <table className="data-table">
+          <table className="table">
             <thead>
               <tr>
+                <th style={{ width: '40px' }}>№</th>
                 <th>Device</th>
+                <th className="hide-sm">Category</th>
                 <th>Status</th>
-                <th>Category</th>
-                <th>Protocol</th>
-                <th>Last Seen</th>
-                <th className="text-right">Actions</th>
+                <th className="hide-sm">Protocol</th>
+                <th className="hide-sm">Battery</th>
+                <th className="hide-sm">Last 24h</th>
+                <th>Last seen</th>
+                <th style={{ width: '40px' }} />
               </tr>
             </thead>
             <tbody>
-              {devices.map((device: any) => (
-                <DeviceRow
-                  key={device._id ?? device.id}
-                  device={device}
-                  onDelete={() => confirmDelete(device)}
-                />
-              ))}
+              {(devices as any[]).map((d, i) => {
+                const id = d._id ?? d.id;
+                const sp = sparkData(d);
+                const battery = d.meta?.battery ?? d.battery;
+                return (
+                  <tr
+                    key={id}
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => navigate(`/devices/${id}`)}
+                  >
+                    <td className="row-n">{String(i + 1).padStart(2, '0')}</td>
+                    <td>
+                      <div style={{ fontSize: '13.5px', fontWeight: 500 }}>{d.name}</div>
+                      <div className="mono faint" style={{ fontSize: '10.5px', marginTop: '2px' }}>{d.description || d.protocol?.toUpperCase() || ''}</div>
+                    </td>
+                    <td className="hide-sm dim" style={{ textTransform: 'capitalize', fontSize: '12.5px' }}>{d.category}</td>
+                    <td>
+                      <span className={`tag tag-${d.status === 'idle' ? 'warn' : d.status === 'online' ? 'online' : d.status === 'error' ? 'error' : 'offline'}`}>
+                        <span className={`dot dot-${d.status === 'idle' ? 'warn' : d.status}`} />
+                        {d.status}
+                      </span>
+                    </td>
+                    <td className="hide-sm mono" style={{ fontSize: '11px', color: 'hsl(var(--muted-fg))', textTransform: 'uppercase' }}>{d.protocol}</td>
+                    <td className="hide-sm" style={{ width: '110px' }}>
+                      {battery != null ? <BatteryBar pct={battery} /> : <span className="faint mono" style={{ fontSize: '10.5px' }}>—</span>}
+                    </td>
+                    <td className="hide-sm" style={{ width: '120px' }}>
+                      <Sparkline
+                        data={sp}
+                        color={d.status === 'error' ? 'hsl(var(--bad))' : d.status === 'online' ? 'hsl(var(--primary))' : 'hsl(var(--muted-fg))'}
+                        height={28}
+                      />
+                    </td>
+                    <td className="mono" style={{ fontSize: '11.5px', color: 'hsl(var(--muted-fg))' }}>
+                      {d.lastSeenAt ? timeAgo(d.lastSeenAt) : 'Never'}
+                    </td>
+                    <td onClick={e => confirmDelete(e, d)} style={{ cursor: 'pointer', color: 'hsl(var(--muted-fg))' }}>
+                      <Trash2 size={13} />
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         )}
       </div>
 
-      {/* Modal */}
       <AnimatePresence>
         {showForm && <DeviceForm onClose={() => setShowForm(false)} />}
       </AnimatePresence>
     </div>
-  );
-}
-
-function DeviceRow({ device, onDelete }: { device: any; onDelete: () => void }) {
-  const [open, setOpen] = useState(false);
-  const id = device._id ?? device.id;
-  const { Icon: CatIcon, color: catColor } = getCategoryIconInfo(device.category);
-  const sc = STATUS_COLOR[device.status] ?? '#6B7280';
-
-  return (
-    <tr>
-      <td>
-        <div className="flex items-center gap-2.5">
-          <div className="w-6 h-6 flex items-center justify-center flex-shrink-0" style={{ color: catColor }}>
-            <CatIcon size={13} />
-          </div>
-          <div>
-            <p className="text-[13px] font-medium text-foreground leading-tight">{device.name}</p>
-            {device.description && (
-              <p className="text-[11px] text-muted-foreground truncate max-w-[160px] font-mono">{device.description}</p>
-            )}
-          </div>
-        </div>
-      </td>
-      <td>
-        <span className="flex items-center gap-1.5 font-mono text-[11px]" style={{ color: sc }}>
-          <span className="w-1.5 h-1.5 flex-shrink-0" style={{ backgroundColor: sc }} />
-          {device.status}
-        </span>
-      </td>
-      <td>
-        <span className="font-mono text-[11px] text-muted-foreground capitalize">{device.category}</span>
-      </td>
-      <td>
-        <span className="font-mono text-[11px] text-muted-foreground uppercase">{device.protocol}</span>
-      </td>
-      <td>
-        <span className="font-mono text-[11px] text-muted-foreground">
-          {device.lastSeenAt ? timeAgo(device.lastSeenAt) : 'Never'}
-        </span>
-      </td>
-      <td>
-        <div className="flex items-center justify-end gap-1">
-          <Link to={`/devices/${id}`} className="w-7 h-7 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors" title="View">
-            <ExternalLink size={12} />
-          </Link>
-          <div className="relative">
-            <button
-              onClick={() => setOpen(v => !v)}
-              className="w-7 h-7 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <MoreHorizontal size={13} />
-            </button>
-            <AnimatePresence>
-              {open && (
-                <>
-                  <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-                  <motion.div
-                    initial={{ opacity: 0, y: -4 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -4 }}
-                    className="absolute right-0 top-full mt-1 w-36 bg-[hsl(var(--surface))] border border-[hsl(var(--rule))] shadow-xl z-20 py-1"
-                  >
-                    <Link
-                      to={`/devices/${id}`}
-                      onClick={() => setOpen(false)}
-                      className="flex items-center gap-2.5 px-3 py-2 text-[12px] text-foreground hover:bg-muted transition-colors"
-                    >
-                      <ExternalLink size={12} /> View details
-                    </Link>
-                    <button
-                      onClick={() => { onDelete(); setOpen(false); }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2 text-[12px] text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-                    >
-                      <Trash2 size={12} /> Delete
-                    </button>
-                  </motion.div>
-                </>
-              )}
-            </AnimatePresence>
-          </div>
-        </div>
-      </td>
-    </tr>
   );
 }
