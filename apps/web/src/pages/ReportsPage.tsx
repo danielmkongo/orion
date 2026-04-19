@@ -54,10 +54,12 @@ export function ReportsPage() {
   const [selectedPeriod, setSelectedPeriod] = useState<Report['period']>('7d');
 
   // Fetch devices
-  const { data: devices = [] } = useQuery({
+  const { data } = useQuery({
     queryKey: ['devices'],
     queryFn: () => devicesApi.list(),
   });
+
+  const devices = data?.devices ?? [];
 
   // Calculate fleet stats
   const fleetStats = useMemo(() => {

@@ -148,10 +148,12 @@ export function MapPage() {
   const [openDeviceId, setOpenDeviceId] = useState<string | null>(null);
   const [center, setCenter] = useState({ lat: 20, lng: 0 });
 
-  const { data: devices = [], isLoading, error } = useQuery({
+  const { data, isLoading, error } = useQuery({
     queryKey: ['devices'],
     queryFn: () => devicesApi.list(),
   });
+
+  const devices = data?.devices ?? [];
 
   const devicesWithLocation = useMemo(
     () => devices.filter(d => d.location?.lat && d.location?.lng) as Device[],
