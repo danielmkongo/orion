@@ -73,7 +73,7 @@ export function ReportsPage() {
   function saveReport() {
     if (!newTitle) return;
     setSavedReports(prev => [...prev, {
-      id: crypto.randomUUID(),
+      id: (crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`),
       title: newTitle,
       range: newRange,
       devices: allDevicesSel ? [] : newDevices,

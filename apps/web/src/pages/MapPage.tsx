@@ -7,7 +7,7 @@ import { Link } from 'react-router-dom';
 import { APIProvider, Map, AdvancedMarker, useMap } from '@vis.gl/react-google-maps';
 import {
   Search, ExternalLink, X, Activity, Clock, Cpu, Radio, FileCode,
-  Navigation, Shield, Plus, Trash2, ToggleLeft, ToggleRight, ChevronRight,
+  Navigation, Shield, Plus, Trash2, ToggleLeft, ToggleRight, ChevronRight, Layers,
 } from 'lucide-react';
 import { devicesApi } from '@/api/devices';
 import { telemetryApi } from '@/api/telemetry';
@@ -61,6 +61,26 @@ const LOCATION_KEYS = new Set([
 
 const TRAJ_COLORS = ['#FF5B1F','#3B82F6','#10B981','#FACC15','#EC4899','#8B5CF6','#06B6D4','#F97316'];
 const GF_COLORS   = ['#FF5B1F','#3B82F6','#10B981','#FACC15','#EC4899','#8B5CF6','#06B6D4','#F97316'];
+
+const DARK_MAP_STYLES = [
+  { elementType: 'geometry',            stylers: [{ color: '#080808' }] },
+  { elementType: 'labels.text.stroke',  stylers: [{ color: '#080808' }] },
+  { elementType: 'labels.text.fill',    stylers: [{ color: '#2a2a2a' }] },
+  { featureType: 'administrative',      elementType: 'geometry',           stylers: [{ color: '#111' }] },
+  { featureType: 'administrative.country',  elementType: 'labels.text.fill', stylers: [{ color: '#444' }] },
+  { featureType: 'administrative.locality', elementType: 'labels.text.fill', stylers: [{ color: '#444' }] },
+  { featureType: 'administrative.land_parcel', stylers: [{ visibility: 'off' }] },
+  { featureType: 'poi',                 stylers: [{ visibility: 'off' }] },
+  { featureType: 'road',                elementType: 'geometry',           stylers: [{ color: '#161616' }] },
+  { featureType: 'road',                elementType: 'geometry.stroke',    stylers: [{ color: '#0e0e0e' }] },
+  { featureType: 'road',                elementType: 'labels.text.fill',   stylers: [{ color: '#2e2e2e' }] },
+  { featureType: 'road.highway',        elementType: 'geometry',           stylers: [{ color: '#222' }] },
+  { featureType: 'road.highway',        elementType: 'geometry.stroke',    stylers: [{ color: '#161616' }] },
+  { featureType: 'transit',             stylers: [{ visibility: 'off' }] },
+  { featureType: 'landscape',           elementType: 'geometry',           stylers: [{ color: '#0c0c0c' }] },
+  { featureType: 'water',               elementType: 'geometry',           stylers: [{ color: '#040810' }] },
+  { featureType: 'water',               elementType: 'labels.text.fill',   stylers: [{ color: '#111820' }] },
+];
 
 const RANGES = [
   { label: '1h',  ms: 3_600_000 },
@@ -124,17 +144,21 @@ function formatVal(v: unknown): string {
 /* ═══════════════════════════════════════════════════════════
    DevicePin
 ═══════════════════════════════════════════════════════════ */
-function DevicePin({ device, isSelected }: { device: RichDevice; isSelected: boolean }) {
+function DevicePin({ device, isSelected, darkMode = false }: { device: RichDevice; isSelected: boolean; darkMode?: boolean }) {
   const catColor  = CAT_COLOR[device.category] ?? '#FF5B1F';
   const ringColor = device.status === 'error' ? '#C21D1D' : catColor;
   const isOffline = device.status === 'offline';
   const sz        = isSelected ? 52 : 40;
   const cssVar    = `rgba(${hexToRgb(ringColor)},0.5)`;
 
+  const darkBoxShadow = isSelected
+    ? `0 0 18px 4px ${ringColor}, 0 0 40px 8px ${ringColor}55, 0 0 2px 1px ${ringColor}`
+    : `0 0 10px 2px ${ringColor}, 0 0 22px 4px ${ringColor}44`;
+
   return (
     <div style={{
       width: sz, height: sz, borderRadius: '50%',
-      background: `${ringColor}18`,
+      background: darkMode ? `${ringColor}22` : `${ringColor}18`,
       border: `${isSelected ? 3 : 2}px solid ${ringColor}`,
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       cursor: 'pointer', fontSize: isSelected ? 19 : 15, fontWeight: 700,
@@ -142,9 +166,11 @@ function DevicePin({ device, isSelected }: { device: RichDevice; isSelected: boo
       filter: isOffline ? 'grayscale(1) opacity(0.45)' : undefined,
       '--glow-color': cssVar,
       animation: isOffline ? undefined : 'marker-glow 2.5s ease-in-out infinite',
-      boxShadow: isSelected
-        ? `0 0 0 0 ${cssVar}, 0 6px 20px rgba(0,0,0,0.4)`
-        : `0 0 0 0 ${cssVar}, 0 3px 10px rgba(0,0,0,0.25)`,
+      boxShadow: darkMode
+        ? darkBoxShadow
+        : isSelected
+          ? `0 0 0 0 ${cssVar}, 0 6px 20px rgba(0,0,0,0.4)`
+          : `0 0 0 0 ${cssVar}, 0 3px 10px rgba(0,0,0,0.25)`,
       backdropFilter: 'blur(4px)',
     } as CSSProperties}>
       {CAT_ICON[device.category] ?? '●'}
@@ -451,19 +477,23 @@ function Field({ icon, label, value, mono = true, accent }: {
    geofence toggles (always visible when map is open)
 ═══════════════════════════════════════════════════════════ */
 interface MapControlsProps {
+  hasTrackers: boolean;
   selectedIsTracker: boolean;
   trajEnabled: boolean;        setTrajEnabled: (v: boolean) => void;
   trajColor: string;           setTrajColor: (v: string) => void;
   trajRangeMs: number;         setTrajRangeMs: (v: number) => void;
   gfVisible: boolean;          setGfVisible: (v: boolean) => void;
+  mapStyle: 'satellite' | 'dark'; setMapStyle: (v: 'satellite' | 'dark') => void;
 }
 
 function MapControls({
+  hasTrackers,
   selectedIsTracker,
   trajEnabled, setTrajEnabled,
   trajColor, setTrajColor,
   trajRangeMs, setTrajRangeMs,
   gfVisible, setGfVisible,
+  mapStyle, setMapStyle,
 }: MapControlsProps) {
   return (
     <div style={{
@@ -474,60 +504,61 @@ function MapControls({
       padding: '10px 12px',
       minWidth: 220,
     }}>
-      {/* Trajectory */}
-      <div style={{ marginBottom: 10 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: trajEnabled && selectedIsTracker ? 8 : 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 5,
-            fontFamily: 'var(--font-mono)', fontSize: 9.5, letterSpacing: '0.12em',
-            textTransform: 'uppercase', color: 'hsl(var(--muted-fg))' }}>
-            <Navigation size={11} style={{ color: trajEnabled && selectedIsTracker ? '#FF5B1F' : undefined }} />
-            Trajectory
+      {/* Trajectory — only shown when tracker devices exist */}
+      {hasTrackers && (
+        <>
+          <div style={{ marginBottom: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: trajEnabled && selectedIsTracker ? 8 : 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5,
+                fontFamily: 'var(--font-mono)', fontSize: 9.5, letterSpacing: '0.12em',
+                textTransform: 'uppercase', color: 'hsl(var(--muted-fg))' }}>
+                <Navigation size={11} style={{ color: trajEnabled && selectedIsTracker ? '#FF5B1F' : undefined }} />
+                Trajectory
+              </div>
+              <button
+                onClick={() => setTrajEnabled(!trajEnabled)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+                  color: trajEnabled ? '#FF5B1F' : 'hsl(var(--muted-fg))', display: 'flex' }}
+              >
+                {trajEnabled ? <ToggleRight size={20} /> : <ToggleLeft size={20} />}
+              </button>
+            </div>
+
+            {trajEnabled && selectedIsTracker && (
+              <>
+                <div style={{ display: 'flex', gap: 3, marginBottom: 7 }}>
+                  {RANGES.map(r => (
+                    <button key={r.label} onClick={() => setTrajRangeMs(r.ms)} style={{
+                      flex: 1, padding: '3px 0',
+                      fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.08em',
+                      background: trajRangeMs === r.ms ? '#FF5B1F' : 'hsl(var(--bg))',
+                      color: trajRangeMs === r.ms ? '#fff' : 'hsl(var(--muted-fg))',
+                      border: `1px solid ${trajRangeMs === r.ms ? '#FF5B1F' : 'hsl(var(--border))'}`,
+                      cursor: 'pointer',
+                    }}>{r.label}</button>
+                  ))}
+                </div>
+                <div style={{ display: 'flex', gap: 5 }}>
+                  {TRAJ_COLORS.map(c => (
+                    <button key={c} onClick={() => setTrajColor(c)} style={{
+                      width: 16, height: 16, borderRadius: '50%',
+                      background: c, border: trajColor === c ? `2px solid hsl(var(--fg))` : '2px solid transparent',
+                      cursor: 'pointer', padding: 0, outline: 'none',
+                      boxShadow: trajColor === c ? '0 0 0 1px hsl(var(--border))' : 'none',
+                    }} />
+                  ))}
+                </div>
+              </>
+            )}
+
+            {trajEnabled && !selectedIsTracker && (
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'hsl(var(--muted-fg))',
+                marginTop: 4, opacity: 0.7 }}>Select a tracker device to show trail</div>
+            )}
           </div>
-          <button
-            onClick={() => setTrajEnabled(!trajEnabled)}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0,
-              color: trajEnabled ? '#FF5B1F' : 'hsl(var(--muted-fg))', display: 'flex' }}
-          >
-            {trajEnabled ? <ToggleRight size={20} /> : <ToggleLeft size={20} />}
-          </button>
-        </div>
-
-        {trajEnabled && selectedIsTracker && (
-          <>
-            {/* Range */}
-            <div style={{ display: 'flex', gap: 3, marginBottom: 7 }}>
-              {RANGES.map(r => (
-                <button key={r.label} onClick={() => setTrajRangeMs(r.ms)} style={{
-                  flex: 1, padding: '3px 0',
-                  fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.08em',
-                  background: trajRangeMs === r.ms ? '#FF5B1F' : 'hsl(var(--bg))',
-                  color: trajRangeMs === r.ms ? '#fff' : 'hsl(var(--muted-fg))',
-                  border: `1px solid ${trajRangeMs === r.ms ? '#FF5B1F' : 'hsl(var(--border))'}`,
-                  cursor: 'pointer',
-                }}>{r.label}</button>
-              ))}
-            </div>
-            {/* Color swatches */}
-            <div style={{ display: 'flex', gap: 5 }}>
-              {TRAJ_COLORS.map(c => (
-                <button key={c} onClick={() => setTrajColor(c)} style={{
-                  width: 16, height: 16, borderRadius: '50%',
-                  background: c, border: trajColor === c ? `2px solid hsl(var(--fg))` : '2px solid transparent',
-                  cursor: 'pointer', padding: 0, outline: 'none',
-                  boxShadow: trajColor === c ? '0 0 0 1px hsl(var(--border))' : 'none',
-                }} />
-              ))}
-            </div>
-          </>
-        )}
-
-        {trajEnabled && !selectedIsTracker && (
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'hsl(var(--muted-fg))',
-            marginTop: 4, opacity: 0.7 }}>Select a tracker device to show trail</div>
-        )}
-      </div>
-
-      <div style={{ borderTop: '1px solid hsl(var(--border))', margin: '8px 0' }} />
+          <div style={{ borderTop: '1px solid hsl(var(--border))', margin: '8px 0' }} />
+        </>
+      )}
 
       {/* Geofence overlay */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -543,6 +574,25 @@ function MapControls({
             color: gfVisible ? '#3B82F6' : 'hsl(var(--muted-fg))', display: 'flex' }}
         >
           {gfVisible ? <ToggleRight size={20} /> : <ToggleLeft size={20} />}
+        </button>
+      </div>
+
+      <div style={{ borderTop: '1px solid hsl(var(--border))', margin: '8px 0' }} />
+
+      {/* Map style */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5,
+          fontFamily: 'var(--font-mono)', fontSize: 9.5, letterSpacing: '0.12em',
+          textTransform: 'uppercase', color: 'hsl(var(--muted-fg))' }}>
+          <Layers size={11} style={{ color: mapStyle === 'dark' ? '#FF5B1F' : undefined }} />
+          {mapStyle === 'dark' ? 'Orion Black' : 'Satellite'}
+        </div>
+        <button
+          onClick={() => setMapStyle(mapStyle === 'dark' ? 'satellite' : 'dark')}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+            color: mapStyle === 'dark' ? '#FF5B1F' : 'hsl(var(--muted-fg))', display: 'flex' }}
+        >
+          {mapStyle === 'dark' ? <ToggleRight size={20} /> : <ToggleLeft size={20} />}
         </button>
       </div>
     </div>
@@ -1027,6 +1077,9 @@ export function MapPage() {
   // Geofence overlay
   const [gfVisible, setGfVisible]         = useState(true);
 
+  // Map style
+  const [mapStyle, setMapStyle]           = useState<'satellite' | 'dark'>('satellite');
+
   // Draw mode
   const [drawType, setDrawType]           = useState<DrawType | null>(null);
   const [drawPts, setDrawPts]             = useState(0);
@@ -1130,14 +1183,15 @@ export function MapPage() {
       <div style={{ position: 'relative' }}>
         <APIProvider apiKey={API_KEY}>
           <Map
-            mapId={MAP_ID}
+            {...(mapStyle === 'satellite' ? { mapId: MAP_ID } : { styles: DARK_MAP_STYLES })}
             defaultCenter={mapCenter}
             defaultZoom={located.length > 0 ? 5 : 3}
-            mapTypeId="satellite"
+            mapTypeId={mapStyle === 'satellite' ? 'satellite' : 'roadmap'}
             gestureHandling="greedy"
             streetViewControl={false}
             mapTypeControl={false}
             fullscreenControl={false}
+            minZoom={3}
             style={{ width: '100%', height: '100%' }}
           >
             <MapController device={selectedDevice} />
@@ -1171,23 +1225,23 @@ export function MapPage() {
                   onClick={() => setSelectedId(isSelected ? null : id)}
                   zIndex={isSelected ? 20 : 1}
                 >
-                  <DevicePin device={device} isSelected={isSelected} />
+                  <DevicePin device={device} isSelected={isSelected} darkMode={mapStyle === 'dark'} />
                 </AdvancedMarker>
               );
             })}
           </Map>
         </APIProvider>
 
-        {/* Floating controls — only shown when tracker devices exist */}
-        {hasTrackers && (
-          <MapControls
-            selectedIsTracker={selectedIsTracker}
-            trajEnabled={trajEnabled}   setTrajEnabled={setTrajEnabled}
-            trajColor={trajColor}       setTrajColor={setTrajColor}
-            trajRangeMs={trajRangeMs}   setTrajRangeMs={setTrajRangeMs}
-            gfVisible={gfVisible}       setGfVisible={setGfVisible}
-          />
-        )}
+        {/* Floating controls */}
+        <MapControls
+          hasTrackers={hasTrackers}
+          selectedIsTracker={selectedIsTracker}
+          trajEnabled={trajEnabled}   setTrajEnabled={setTrajEnabled}
+          trajColor={trajColor}       setTrajColor={setTrajColor}
+          trajRangeMs={trajRangeMs}   setTrajRangeMs={setTrajRangeMs}
+          gfVisible={gfVisible}       setGfVisible={setGfVisible}
+          mapStyle={mapStyle}         setMapStyle={setMapStyle}
+        />
 
         {/* Draw banner */}
         {drawType && !drawDraft && (
