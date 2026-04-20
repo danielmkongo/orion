@@ -153,14 +153,16 @@ function MapController({ device }: { device: RichDevice | null }) {
 }
 
 /* ── Status badge ── */
-function StatusBadge({ status }: { status: Status }) {
-  const colors: Record<Status, [string, string]> = {
-    online:  ['#0F7A3D22', '#0F7A3D'],
-    offline: ['#5E5C5622', '#5E5C56'],
-    idle:    ['#B4530922', '#B45309'],
-    error:   ['#C21D1D22', '#C21D1D'],
+function StatusBadge({ status }: { status: string }) {
+  const colors: Record<string, [string, string]> = {
+    online:        ['#0F7A3D22', '#0F7A3D'],
+    offline:       ['#5E5C5622', '#5E5C56'],
+    idle:          ['#B4530922', '#B45309'],
+    error:         ['#C21D1D22', '#C21D1D'],
+    provisioning:  ['#3B82F622', '#3B82F6'],
+    decommissioned:['#5E5C5622', '#5E5C56'],
   };
-  const [bg, fg] = colors[status];
+  const [bg, fg] = colors[status] ?? ['#5E5C5622', '#5E5C56'];
   return (
     <span style={{
       display: 'inline-flex', alignItems: 'center', gap: 5,
@@ -256,7 +258,7 @@ function DeviceCard({ device, onClose }: { device: RichDevice; onClose: () => vo
           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {device.name}
         </div>
-        <StatusBadge status={device.status as Status} />
+        <StatusBadge status={device.status} />
       </div>
 
       {/* ── Info grid ── */}
@@ -356,14 +358,19 @@ function DeviceCard({ device, onClose }: { device: RichDevice; onClose: () => vo
 }
 
 /* ── Status tag (sidebar list) ── */
-function StatusTag({ status }: { status: Status }) {
-  const tagClass: Record<Status, string> = {
+function StatusTag({ status }: { status: string }) {
+  const tagClass: Record<string, string> = {
     online: 'tag tag-online', offline: 'tag tag-offline',
     idle: 'tag tag-warn',     error: 'tag tag-error',
+    provisioning: 'tag tag-info', decommissioned: 'tag tag-offline',
+  };
+  const dotClass: Record<string, string> = {
+    online: 'online', offline: 'offline', idle: 'warn', error: 'error',
+    provisioning: 'info', decommissioned: 'offline',
   };
   return (
-    <span className={tagClass[status]}>
-      <span className={`dot dot-${status === 'idle' ? 'warn' : status}`} />
+    <span className={tagClass[status] ?? 'tag tag-offline'}>
+      <span className={`dot dot-${dotClass[status] ?? 'offline'}`} />
       {status}
     </span>
   );
