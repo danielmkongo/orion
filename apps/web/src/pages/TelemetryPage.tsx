@@ -298,9 +298,9 @@ export function TelemetryPage() {
       <div className="panel" style={{ padding: '22px 18px 14px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
           <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-            {chartSeries.map((s, i) => (
+            {chartSeries.map(s => (
               <span key={s.name} style={{ display: 'flex', alignItems: 'center', gap: 6, fontFamily: 'var(--font-mono)', fontSize: 11 }}>
-                <span style={{ width: 12, height: 2, background: COLORS[i % COLORS.length], display: 'inline-block' }} />
+                <span style={{ width: 12, height: 2, background: s.color ?? 'hsl(var(--primary))', display: 'inline-block' }} />
                 {s.name}
               </span>
             ))}
@@ -342,7 +342,7 @@ export function TelemetryPage() {
                     {chartSeries.map((s, si) => {
                       const match = s.data.find((p: any) => p.ts === pt.ts);
                       return (
-                        <td key={si} className="mono num" style={{ fontSize: 12, color: COLORS[si % COLORS.length] }}>
+                        <td key={si} className="mono num" style={{ fontSize: 12, color: s.color ?? 'hsl(var(--primary))' }}>
                           {match ? (match as any).value.toFixed(3) : '—'}
                         </td>
                       );

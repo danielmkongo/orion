@@ -6,7 +6,7 @@ import { telemetryApi } from '@/api/telemetry';
 import apiClient from '@/api/client';
 import { timeAgo, formatDate as fmtDate, getCategoryIconInfo, copyText, formatPayloadStr, formatCommandStr } from '@/lib/utils';
 import { useSocket } from '@/hooks/useSocket';
-import { LineChart } from '@/components/charts/Charts';
+import { LineChart, BarChart } from '@/components/charts/Charts';
 import { ArrowLeft, Eye, EyeOff, Copy, RefreshCw, Terminal, Plus, Trash2, Check, ChevronDown, ChevronRight, Pencil, X } from 'lucide-react';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import toast from 'react-hot-toast';
@@ -375,9 +375,61 @@ export function DeviceDetailPage() {
               <div style={{ height: 280, display: 'flex', alignItems: 'center', justifyContent: 'center' }} className="dim">
                 No data for <strong style={{ marginLeft: 4, fontFamily: 'var(--font-mono)' }}>{chartField}</strong>
               </div>
-            ) : (
-              <LineChart series={[{ name: chartField, data: seriesPoints, color: chartColor }]} height={280} showArea />
-            )}
+            ) : (() => {
+              const ct = chartFieldMeta?.chartType ?? 'area';
+              const latestVal = seriesPoints[seriesPoints.length - 1]?.value ?? 0;
+              const minV = chartFieldMeta?.min ?? 0;
+              const maxV = chartFieldMeta?.max ?? 100;
+              if (ct === 'bar') {
+                const barData = seriesPoints.slice(-40).map(p => ({
+                  label: new Date(p.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                  value: p.value,
+                }));
+                return <BarChart data={barData} color={chartColor} height={280} />;
+              }
+              if (ct === 'gauge') {
+                const pct = Math.min(100, Math.max(0, ((latestVal - minV) / (maxV - minV)) * 100));
+                const r = 80; const cx = 110; const cy = 110;
+                const start = Math.PI * 0.75; const end = Math.PI * 2.25;
+                const arc = (angle: number) => ({ x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) });
+                const s = arc(start); const e = arc(end);
+                const a = arc(start + (end - start) * (pct / 100));
+                const large = pct > 50 ? 1 : 0;
+                return (
+                  <div style={{ height: 280, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                    <svg viewBox="0 0 220 180" style={{ width: 220, height: 180 }}>
+                      <path d={`M ${s.x} ${s.y} A ${r} ${r} 0 1 1 ${e.x} ${e.y}`} fill="none" stroke="hsl(var(--border))" strokeWidth={14} strokeLinecap="round" />
+                      {pct > 0 && <path d={`M ${s.x} ${s.y} A ${r} ${r} 0 ${large} 1 ${a.x} ${a.y}`} fill="none" stroke={chartColor} strokeWidth={14} strokeLinecap="round" />}
+                      <text x={cx} y={cy - 6} textAnchor="middle" style={{ fontFamily: 'var(--font-display)', fontSize: 28, fill: 'hsl(var(--fg))' }}>{latestVal.toFixed(1)}</text>
+                      <text x={cx} y={cy + 18} textAnchor="middle" style={{ fontFamily: 'var(--font-mono)', fontSize: 10, fill: 'hsl(var(--muted-fg))', textTransform: 'uppercase' }}>{chartFieldMeta?.unit ?? chartField}</text>
+                      <text x={cx - r - 4} y={cy + 32} textAnchor="middle" style={{ fontFamily: 'var(--font-mono)', fontSize: 9, fill: 'hsl(var(--muted-fg))' }}>{minV}</text>
+                      <text x={cx + r + 4} y={cy + 32} textAnchor="middle" style={{ fontFamily: 'var(--font-mono)', fontSize: 9, fill: 'hsl(var(--muted-fg))' }}>{maxV}</text>
+                    </svg>
+                  </div>
+                );
+              }
+              if (ct === 'level') {
+                const pct = Math.min(100, Math.max(0, ((latestVal - minV) / (maxV - minV)) * 100));
+                return (
+                  <div style={{ height: 280, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 32 }}>
+                    <svg viewBox="0 0 60 200" style={{ width: 60, height: 200 }}>
+                      <rect x={10} y={10} width={40} height={180} rx={4} fill="hsl(var(--border))" />
+                      <rect x={10} y={10 + 180 * (1 - pct / 100)} width={40} height={180 * (pct / 100)} rx={4} fill={chartColor} />
+                      <rect x={10} y={10} width={40} height={180} rx={4} fill="none" stroke="hsl(var(--border))" strokeWidth={1.5} />
+                    </svg>
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{ fontFamily: 'var(--font-display)', fontSize: 52, lineHeight: 1, color: chartColor }}>{latestVal.toFixed(1)}</div>
+                      <div className="mono faint" style={{ fontSize: 12, marginTop: 4 }}>{chartFieldMeta?.unit ?? chartField}</div>
+                      <div className="mono faint" style={{ fontSize: 10, marginTop: 8 }}>{pct.toFixed(0)}% of range</div>
+                    </div>
+                  </div>
+                );
+              }
+              if (ct === 'scatter') {
+                return <LineChart series={[{ name: chartField, data: seriesPoints, color: chartColor }]} height={280} showArea={false} />;
+              }
+              return <LineChart series={[{ name: chartField, data: seriesPoints, color: chartColor }]} height={280} showArea={ct === 'area'} />;
+            })()}
           </div>
         </div>
 

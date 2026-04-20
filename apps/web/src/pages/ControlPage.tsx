@@ -312,9 +312,9 @@ export function ControlPage() {
                   <th style={{ width: 36 }}>№</th>
                   <th>Device</th>
                   <th>Command</th>
+                  <th>Value sent</th>
                   <th>Status</th>
-                  <th className="hide-sm">Sent</th>
-                  <th className="hide-sm">Response</th>
+                  <th className="hide-sm">When</th>
                   <th style={{ width: 60 }} />
                 </tr>
               </thead>
@@ -324,16 +324,29 @@ export function ControlPage() {
                   const devName = (devices as any[]).find(d => d._id === cmd.deviceId)?.name ?? (
                     <span className="mono faint">{cmd.deviceId?.slice(-8)}</span>
                   );
+                  const payloadObj = cmd.payload ?? {};
+                  const payloadStr = (() => {
+                    const entries = Object.entries(payloadObj);
+                    if (entries.length === 0) return '—';
+                    if (entries.length === 1) {
+                      const [k, v] = entries[0];
+                      return k === 'value' ? String(v) : `${k}: ${v}`;
+                    }
+                    return JSON.stringify(payloadObj).slice(0, 48);
+                  })();
                   return (
                     <motion.tr key={cmd._id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.02 }}>
                       <td className="row-n">{String(i + 1).padStart(2, '0')}</td>
                       <td style={{ fontSize: 13 }}>{devName}</td>
                       <td><code className="acc mono" style={{ fontSize: 12 }}>{cmd.name}</code></td>
+                      <td>
+                        <span className="mono" style={{ fontSize: 12, color: 'hsl(var(--fg))' }}>{payloadStr}</span>
+                        {cmd.errorMessage && (
+                          <span className="mono faint" style={{ fontSize: 10, display: 'block', color: 'hsl(var(--bad))' }}>{cmd.errorMessage}</span>
+                        )}
+                      </td>
                       <td><span className={`tag ${sc.tag}`}>{cmd.status}</span></td>
                       <td className="hide-sm mono faint" style={{ fontSize: 11 }}>{timeAgo(cmd.createdAt)}</td>
-                      <td className="hide-sm mono faint" style={{ fontSize: 11, maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {cmd.errorMessage ?? (cmd.response ? JSON.stringify(cmd.response).slice(0, 50) : '—')}
-                      </td>
                       <td>
                         {['pending', 'sent'].includes(cmd.status) && (
                           <button onClick={() => cancelMutation.mutate(cmd._id)}
