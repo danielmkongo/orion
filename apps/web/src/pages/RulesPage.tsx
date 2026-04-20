@@ -9,7 +9,7 @@ import {
   Zap, Plus, Trash2, Bell, Terminal, Globe,
   Mail, MessageSquare, X, Check, ChevronLeft, ChevronRight,
   Loader2, AlertCircle, Clock, Cpu, Activity,
-  MapPin, Circle, Pentagon, RotateCcw,
+  MapPin, Circle, Pentagon, RotateCcw, Search,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -172,6 +172,21 @@ function RuleMapInner({ drawMode, drawnZone, onComplete, onPtAdded, completeRef 
   return null;
 }
 
+/* ── MapPanner — pans map to a geocoded result ────────── */
+function MapPanner({ target }: { target: { lat: number; lng: number } | null }) {
+  const map     = useMap();
+  const prevKey = useRef('');
+  useEffect(() => {
+    if (!map || !target) return;
+    const key = `${target.lat},${target.lng}`;
+    if (key === prevKey.current) return;
+    prevKey.current = key;
+    map.panTo(target);
+    map.setZoom(12);
+  }, [map, target]);
+  return null;
+}
+
 /* ── RuleLocationMap — full map draw panel ────────────── */
 interface RuleLocationMapProps {
   zone: LocationZone | null;
@@ -184,6 +199,23 @@ function RuleLocationMap({ zone, event, onChange }: RuleLocationMapProps) {
   const [drawPts, setDrawPts]     = useState(0);
   const [radius, setRadius]       = useState(zone?.radius ?? 500);
   const completeRef               = useRef<() => void>(() => {});
+  const [geoSearch, setGeoSearch]   = useState('');
+  const [searching, setSearching]   = useState(false);
+  const [panTarget, setPanTarget]   = useState<{ lat: number; lng: number } | null>(null);
+
+  const geocode = useCallback(async () => {
+    if (!geoSearch.trim() || !MAP_API_KEY) return;
+    setSearching(true);
+    try {
+      const res  = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(geoSearch)}&key=${MAP_API_KEY}`);
+      const json = await res.json();
+      if (json.results?.[0]) {
+        const { lat, lng } = json.results[0].geometry.location;
+        setPanTarget({ lat, lng });
+      }
+    } catch { /* silent */ }
+    finally { setSearching(false); }
+  }, [geoSearch]);
 
   const handleComplete = (z: LocationZone) => {
     setDrawMode(null);
@@ -314,6 +346,28 @@ function RuleLocationMap({ zone, event, onChange }: RuleLocationMapProps) {
 
       {/* Map */}
       <APIProvider apiKey={MAP_API_KEY}>
+        {/* Location search */}
+        <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
+          <div style={{ display: 'flex', flex: 1, alignItems: 'center', gap: 6, height: 32, padding: '0 8px', border: '1px solid hsl(var(--border))', background: 'hsl(var(--surface))' }}>
+            <Search size={12} style={{ color: 'hsl(var(--muted-fg))', flexShrink: 0 }} />
+            <input
+              value={geoSearch}
+              onChange={e => setGeoSearch(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') geocode(); }}
+              placeholder="Search location to zoom…"
+              style={{ border: 0, outline: 0, background: 'transparent', color: 'hsl(var(--fg))', fontFamily: 'var(--font-sans)', fontSize: 12, width: '100%' }}
+            />
+          </div>
+          <button
+            type="button"
+            onClick={geocode}
+            disabled={searching}
+            className="btn btn-sm btn-ghost"
+            style={{ gap: 4, minWidth: 48 }}
+          >
+            <MapPin size={12} /> {searching ? '…' : 'Go'}
+          </button>
+        </div>
         <div style={{ height: 260, border: '1px solid hsl(var(--border))', overflow: 'hidden', position: 'relative' }}>
           <Map
             mapId={MAP_ID}
@@ -326,6 +380,7 @@ function RuleLocationMap({ zone, event, onChange }: RuleLocationMapProps) {
             fullscreenControl={false}
             style={{ width: '100%', height: '100%' }}
           >
+            <MapPanner target={panTarget} />
             <RuleMapInner
               drawMode={drawMode}
               drawnZone={zone}

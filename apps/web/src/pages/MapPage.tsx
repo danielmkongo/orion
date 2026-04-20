@@ -62,25 +62,6 @@ const LOCATION_KEYS = new Set([
 const TRAJ_COLORS = ['#FF5B1F','#3B82F6','#10B981','#FACC15','#EC4899','#8B5CF6','#06B6D4','#F97316'];
 const GF_COLORS   = ['#FF5B1F','#3B82F6','#10B981','#FACC15','#EC4899','#8B5CF6','#06B6D4','#F97316'];
 
-const DARK_MAP_STYLES = [
-  { elementType: 'geometry',            stylers: [{ color: '#080808' }] },
-  { elementType: 'labels.text.stroke',  stylers: [{ color: '#080808' }] },
-  { elementType: 'labels.text.fill',    stylers: [{ color: '#2a2a2a' }] },
-  { featureType: 'administrative',      elementType: 'geometry',           stylers: [{ color: '#111' }] },
-  { featureType: 'administrative.country',  elementType: 'labels.text.fill', stylers: [{ color: '#444' }] },
-  { featureType: 'administrative.locality', elementType: 'labels.text.fill', stylers: [{ color: '#444' }] },
-  { featureType: 'administrative.land_parcel', stylers: [{ visibility: 'off' }] },
-  { featureType: 'poi',                 stylers: [{ visibility: 'off' }] },
-  { featureType: 'road',                elementType: 'geometry',           stylers: [{ color: '#161616' }] },
-  { featureType: 'road',                elementType: 'geometry.stroke',    stylers: [{ color: '#0e0e0e' }] },
-  { featureType: 'road',                elementType: 'labels.text.fill',   stylers: [{ color: '#2e2e2e' }] },
-  { featureType: 'road.highway',        elementType: 'geometry',           stylers: [{ color: '#222' }] },
-  { featureType: 'road.highway',        elementType: 'geometry.stroke',    stylers: [{ color: '#161616' }] },
-  { featureType: 'transit',             stylers: [{ visibility: 'off' }] },
-  { featureType: 'landscape',           elementType: 'geometry',           stylers: [{ color: '#0c0c0c' }] },
-  { featureType: 'water',               elementType: 'geometry',           stylers: [{ color: '#040810' }] },
-  { featureType: 'water',               elementType: 'labels.text.fill',   stylers: [{ color: '#111820' }] },
-];
 
 const RANGES = [
   { label: '1h',  ms: 3_600_000 },
@@ -163,7 +144,11 @@ function DevicePin({ device, isSelected, darkMode = false }: { device: RichDevic
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       cursor: 'pointer', fontSize: isSelected ? 19 : 15, fontWeight: 700,
       color: ringColor, transition: 'all 0.18s cubic-bezier(0.4,0,0.2,1)',
-      filter: isOffline ? 'grayscale(1) opacity(0.45)' : undefined,
+      filter: isOffline
+        ? 'grayscale(1) opacity(0.45)'
+        : darkMode
+          ? 'invert(1) hue-rotate(180deg) brightness(1.14) saturate(3.5)'
+          : undefined,
       '--glow-color': cssVar,
       animation: isOffline ? undefined : 'marker-glow 2.5s ease-in-out infinite',
       boxShadow: darkMode
@@ -483,7 +468,6 @@ interface MapControlsProps {
   trajColor: string;           setTrajColor: (v: string) => void;
   trajRangeMs: number;         setTrajRangeMs: (v: number) => void;
   gfVisible: boolean;          setGfVisible: (v: boolean) => void;
-  mapStyle: 'satellite' | 'dark'; setMapStyle: (v: 'satellite' | 'dark') => void;
 }
 
 function MapControls({
@@ -493,7 +477,6 @@ function MapControls({
   trajColor, setTrajColor,
   trajRangeMs, setTrajRangeMs,
   gfVisible, setGfVisible,
-  mapStyle, setMapStyle,
 }: MapControlsProps) {
   return (
     <div style={{
@@ -577,24 +560,6 @@ function MapControls({
         </button>
       </div>
 
-      <div style={{ borderTop: '1px solid hsl(var(--border))', margin: '8px 0' }} />
-
-      {/* Map style */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 5,
-          fontFamily: 'var(--font-mono)', fontSize: 9.5, letterSpacing: '0.12em',
-          textTransform: 'uppercase', color: 'hsl(var(--muted-fg))' }}>
-          <Layers size={11} style={{ color: mapStyle === 'dark' ? '#FF5B1F' : undefined }} />
-          {mapStyle === 'dark' ? 'Orion Black' : 'Satellite'}
-        </div>
-        <button
-          onClick={() => setMapStyle(mapStyle === 'dark' ? 'satellite' : 'dark')}
-          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0,
-            color: mapStyle === 'dark' ? '#FF5B1F' : 'hsl(var(--muted-fg))', display: 'flex' }}
-        >
-          {mapStyle === 'dark' ? <ToggleRight size={20} /> : <ToggleLeft size={20} />}
-        </button>
-      </div>
     </div>
   );
 }
@@ -1181,12 +1146,16 @@ export function MapPage() {
 
       {/* ── Map column ── */}
       <div style={{ position: 'relative' }}>
+        <div style={{
+          position: 'absolute', inset: 0,
+          ...(mapStyle === 'dark' && { filter: 'invert(1) hue-rotate(180deg) brightness(0.88) saturate(1.25)' }),
+        }}>
         <APIProvider apiKey={API_KEY}>
           <Map
-            {...(mapStyle === 'satellite' ? { mapId: MAP_ID } : { styles: DARK_MAP_STYLES })}
+            mapId={MAP_ID}
             defaultCenter={mapCenter}
             defaultZoom={located.length > 0 ? 5 : 3}
-            mapTypeId={mapStyle === 'satellite' ? 'satellite' : 'roadmap'}
+            mapTypeId={mapStyle === 'dark' ? 'roadmap' : 'satellite'}
             gestureHandling="greedy"
             streetViewControl={false}
             mapTypeControl={false}
@@ -1231,17 +1200,19 @@ export function MapPage() {
             })}
           </Map>
         </APIProvider>
+        </div>
 
-        {/* Floating controls */}
-        <MapControls
-          hasTrackers={hasTrackers}
-          selectedIsTracker={selectedIsTracker}
-          trajEnabled={trajEnabled}   setTrajEnabled={setTrajEnabled}
-          trajColor={trajColor}       setTrajColor={setTrajColor}
-          trajRangeMs={trajRangeMs}   setTrajRangeMs={setTrajRangeMs}
-          gfVisible={gfVisible}       setGfVisible={setGfVisible}
-          mapStyle={mapStyle}         setMapStyle={setMapStyle}
-        />
+        {/* Floating controls — only when tracker devices exist */}
+        {hasTrackers && (
+          <MapControls
+            hasTrackers={hasTrackers}
+            selectedIsTracker={selectedIsTracker}
+            trajEnabled={trajEnabled}   setTrajEnabled={setTrajEnabled}
+            trajColor={trajColor}       setTrajColor={setTrajColor}
+            trajRangeMs={trajRangeMs}   setTrajRangeMs={setTrajRangeMs}
+            gfVisible={gfVisible}       setGfVisible={setGfVisible}
+          />
+        )}
 
         {/* Draw banner */}
         {drawType && !drawDraft && (
@@ -1263,7 +1234,24 @@ export function MapPage() {
 
         {/* Header */}
         <div style={{ padding: '18px 20px 14px', borderBottom: '1px solid hsl(var(--border))' }}>
-          <div className="eyebrow" style={{ marginBottom: '12px' }}>Geography · Device map</div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+            <div className="eyebrow">Geography · Device map</div>
+            <button
+              onClick={() => setMapStyle(mapStyle === 'dark' ? 'satellite' : 'dark')}
+              title={mapStyle === 'dark' ? 'Switch to satellite' : 'Switch to Orion Black'}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 5, padding: '3px 8px',
+                background: mapStyle === 'dark' ? '#FF5B1F18' : 'transparent',
+                border: `1px solid ${mapStyle === 'dark' ? '#FF5B1F55' : 'hsl(var(--border))'}`,
+                color: mapStyle === 'dark' ? '#FF5B1F' : 'hsl(var(--muted-fg))',
+                fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.1em',
+                textTransform: 'uppercase', cursor: 'pointer',
+              }}
+            >
+              <Layers size={10} />
+              {mapStyle === 'dark' ? 'Orion Black' : 'Satellite'}
+            </button>
+          </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', height: '34px', padding: '0 10px', border: '1px solid hsl(var(--border))', background: 'hsl(var(--surface))', marginBottom: '10px' }}>
             <Search size={13} style={{ color: 'hsl(var(--muted-fg))', flexShrink: 0 }} />
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search devices…"

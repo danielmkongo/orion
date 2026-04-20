@@ -23,7 +23,10 @@
       "Bash(./node_modules/.bin/tsc --noEmit)",
       "Bash(pnpm --filter @orion/web exec tsc --noEmit)",
       "Bash(pnpm --filter @orion/api exec tsc --noEmit)",
-      "Bash(wmic logicaldisk *)"
+      "Bash(wmic logicaldisk *)",
+      "Bash(graphify update *)",
+      "Bash(npx graphify *)",
+      "Bash(where graphify *)"
     ],
     "additionalDirectories": [
       "C:\\Users\\danie\\Downloads\\orion marketing"
