@@ -21,6 +21,7 @@ import { rulesRoutes } from './routes/rules.routes.js';
 import { usersRoutes } from './routes/users.routes.js';
 import { otaRoutes } from './routes/ota.routes.js';
 import { orgRoutes } from './routes/org.routes.js';
+import { geofenceRoutes } from './routes/geofence.routes.js';
 
 const app = Fastify({
   logger: {
@@ -57,6 +58,7 @@ async function bootstrap() {
     await api.register(usersRoutes);
     await api.register(otaRoutes);
     await api.register(orgRoutes);
+    await api.register(geofenceRoutes);
   }, { prefix });
 
   // Health check

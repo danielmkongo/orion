@@ -21,7 +21,8 @@
       "Bash(pnpm --filter @orion/web typecheck)",
       "Bash(pnpm --filter @orion/api typecheck)",
       "Bash(./node_modules/.bin/tsc --noEmit)",
-      "Bash(pnpm --filter @orion/web exec tsc --noEmit)"
+      "Bash(pnpm --filter @orion/web exec tsc --noEmit)",
+      "Bash(pnpm --filter @orion/api exec tsc --noEmit)"
     ]
   }
 }

@@ -36,6 +36,11 @@ export async function telemetryRoutes(app: FastifyInstance) {
     const loc = (telemetryService as any).extractLocation?.(fields);
     realtimeService.emitTelemetry(String(device.orgId), String(device._id), fields, loc, timestamp);
 
+    if (loc?.lat && loc?.lng) {
+      const { geofenceService } = await import('../services/geofence.service.js');
+      geofenceService.checkTransitions(String(device._id), String(device.orgId), loc).catch(() => {});
+    }
+
     // If device uses HTTP response-mode command delivery, include oldest pending command
     const cmdMode = (device as any).meta?.channelConfig?.cmdMode;
     if (cmdMode === 'response') {
