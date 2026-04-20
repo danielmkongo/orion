@@ -129,33 +129,47 @@ function DevicePin({ device, isSelected, darkMode = false }: { device: RichDevic
   const catColor  = CAT_COLOR[device.category] ?? '#FF5B1F';
   const ringColor = device.status === 'error' ? '#C21D1D' : catColor;
   const isOffline = device.status === 'offline';
-  const sz        = isSelected ? 52 : 40;
-  const cssVar    = `rgba(${hexToRgb(ringColor)},0.5)`;
 
-  const darkBoxShadow = isSelected
-    ? `0 0 18px 4px ${ringColor}, 0 0 40px 8px ${ringColor}55, 0 0 2px 1px ${ringColor}`
-    : `0 0 10px 2px ${ringColor}, 0 0 22px 4px ${ringColor}44`;
+  /* ── Orion Black mode: exact Product Demo aesthetic ── */
+  if (darkMode) {
+    const sz = isSelected ? 16 : 12;
+    return (
+      <div style={{ position: 'relative', width: sz, height: sz, cursor: 'pointer' }}>
+        {!isOffline && (
+          <div style={{
+            position: 'absolute', inset: -4, borderRadius: '50%',
+            border: `2px solid ${ringColor}`,
+            animation: 'orionPulse 2s ease-out infinite',
+            pointerEvents: 'none',
+          }} />
+        )}
+        <div style={{
+          width: sz, height: sz, borderRadius: '50%',
+          background: isOffline ? '#1a1a1a' : ringColor,
+          border: '2px solid #050505',
+          boxShadow: isOffline ? 'none' : `0 0 10px ${ringColor}, 0 0 20px ${ringColor}88`,
+        }} />
+      </div>
+    );
+  }
 
+  /* ── Satellite mode: original marker ── */
+  const sz     = isSelected ? 52 : 40;
+  const cssVar = `rgba(${hexToRgb(ringColor)},0.5)`;
   return (
     <div style={{
       width: sz, height: sz, borderRadius: '50%',
-      background: darkMode ? `${ringColor}22` : `${ringColor}18`,
+      background: `${ringColor}18`,
       border: `${isSelected ? 3 : 2}px solid ${ringColor}`,
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       cursor: 'pointer', fontSize: isSelected ? 19 : 15, fontWeight: 700,
       color: ringColor, transition: 'all 0.18s cubic-bezier(0.4,0,0.2,1)',
-      filter: isOffline
-        ? 'grayscale(1) opacity(0.45)'
-        : darkMode
-          ? 'invert(1) hue-rotate(180deg) brightness(1.14) saturate(3.5)'
-          : undefined,
+      filter: isOffline ? 'grayscale(1) opacity(0.45)' : undefined,
       '--glow-color': cssVar,
       animation: isOffline ? undefined : 'marker-glow 2.5s ease-in-out infinite',
-      boxShadow: darkMode
-        ? darkBoxShadow
-        : isSelected
-          ? `0 0 0 0 ${cssVar}, 0 6px 20px rgba(0,0,0,0.4)`
-          : `0 0 0 0 ${cssVar}, 0 3px 10px rgba(0,0,0,0.25)`,
+      boxShadow: isSelected
+        ? `0 0 0 0 ${cssVar}, 0 6px 20px rgba(0,0,0,0.4)`
+        : `0 0 0 0 ${cssVar}, 0 3px 10px rgba(0,0,0,0.25)`,
       backdropFilter: 'blur(4px)',
     } as CSSProperties}>
       {CAT_ICON[device.category] ?? '●'}
@@ -1145,11 +1159,21 @@ export function MapPage() {
     <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', height: 'calc(100vh - 58px)' }}>
 
       {/* ── Map column ── */}
-      <div style={{ position: 'relative' }}>
-        <div style={{
-          position: 'absolute', inset: 0,
-          ...(mapStyle === 'dark' && { filter: 'invert(1) hue-rotate(180deg) brightness(0.88) saturate(1.25)' }),
-        }}>
+      <div id="orion-map-col" style={{ position: 'relative' }}>
+        {mapStyle === 'dark' && (
+          <style>{`
+            #orion-map-col .gm-style canvas,
+            #orion-map-col .gm-style > div:first-child > div:first-child {
+              filter: invert(1) hue-rotate(180deg) brightness(0.85) saturate(0.1) contrast(1.15) !important;
+            }
+            #orion-map-col .gm-style { background: #050505 !important; }
+            @keyframes orionPulse {
+              0%   { transform: scale(1);   opacity: 0.9; }
+              70%  { transform: scale(2.5); opacity: 0; }
+              100% { transform: scale(2.5); opacity: 0; }
+            }
+          `}</style>
+        )}
         <APIProvider apiKey={API_KEY}>
           <Map
             mapId={MAP_ID}
@@ -1200,7 +1224,6 @@ export function MapPage() {
             })}
           </Map>
         </APIProvider>
-        </div>
 
         {/* Floating controls — only when tracker devices exist */}
         {hasTrackers && (
