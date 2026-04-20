@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { APIProvider, Map, useMap } from '@vis.gl/react-google-maps';
 import apiClient from '@/api/client';
 import { devicesApi } from '@/api/devices';
 import { timeAgo } from '@/lib/utils';
@@ -8,8 +9,12 @@ import {
   Zap, Plus, Trash2, Bell, Terminal, Globe,
   Mail, MessageSquare, X, Check, ChevronLeft, ChevronRight,
   Loader2, AlertCircle, Clock, Cpu, Activity,
+  MapPin, Circle, Pentagon, RotateCcw,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+
+const MAP_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
+const MAP_ID      = import.meta.env.VITE_GOOGLE_MAP_ID || 'DEMO_MAP_ID';
 
 /* ── Operator display ─────────────────────────────────── */
 const OPERATORS = [
@@ -43,6 +48,329 @@ type Priority = typeof PRIORITY_OPTIONS[number];
 const PRIORITY_BADGE: Record<Priority, string> = {
   low: 'badge-offline', medium: 'badge-info', high: 'badge-warning', critical: 'badge-error',
 };
+
+/* ── Location zone types ──────────────────────────────── */
+interface LocationZone {
+  type: 'circle' | 'polygon';
+  center?: { lat: number; lng: number };
+  radius?: number;
+  coordinates?: { lat: number; lng: number }[];
+}
+
+type ZoneEvent = 'enter' | 'exit' | 'both';
+
+/* ── RuleMapInner — draw layer inside <Map> ───────────── */
+interface RuleMapInnerProps {
+  drawMode: 'circle' | 'polygon' | null;
+  drawnZone: LocationZone | null;
+  onComplete: (z: LocationZone) => void;
+  onPtAdded: (n: number) => void;
+  completeRef: React.MutableRefObject<() => void>;
+}
+
+function RuleMapInner({ drawMode, drawnZone, onComplete, onPtAdded, completeRef }: RuleMapInnerProps) {
+  const map          = useMap();
+  const listenersRef = useRef<google.maps.MapsEventListener[]>([]);
+  const previewRef   = useRef<google.maps.Circle | google.maps.Polygon | null>(null);
+  const ptsRef       = useRef<{ lat: number; lng: number }[]>([]);
+  const blockRef     = useRef(false);
+
+  const clearPreview = useCallback(() => {
+    previewRef.current?.setMap(null);
+    previewRef.current = null;
+  }, []);
+
+  const clearListeners = useCallback(() => {
+    listenersRef.current.forEach(l => google.maps.event.removeListener(l));
+    listenersRef.current = [];
+    ptsRef.current = [];
+    blockRef.current = false;
+    if (map) map.setOptions({ draggableCursor: undefined });
+  }, [map]);
+
+  // Draw zone preview when drawnZone changes (e.g. radius update)
+  useEffect(() => {
+    clearPreview();
+    if (!map || !drawnZone) return;
+    if (drawnZone.type === 'circle' && drawnZone.center && drawnZone.radius) {
+      previewRef.current = new google.maps.Circle({
+        center: drawnZone.center, radius: drawnZone.radius,
+        fillColor: '#3B82F6', fillOpacity: 0.18,
+        strokeColor: '#3B82F6', strokeOpacity: 0.85, strokeWeight: 2,
+        map, zIndex: 3,
+      });
+    } else if (drawnZone.type === 'polygon' && (drawnZone.coordinates?.length ?? 0) >= 3) {
+      previewRef.current = new google.maps.Polygon({
+        paths: drawnZone.coordinates!,
+        fillColor: '#3B82F6', fillOpacity: 0.18,
+        strokeColor: '#3B82F6', strokeOpacity: 0.85, strokeWeight: 2,
+        map, zIndex: 3,
+      });
+    }
+    return clearPreview;
+  }, [map, drawnZone]);
+
+  // Draw mode listeners
+  useEffect(() => {
+    clearListeners();
+    if (!map || !drawMode) return;
+
+    map.setOptions({ draggableCursor: 'crosshair' });
+
+    if (drawMode === 'circle') {
+      completeRef.current = () => {};
+      const l = map.addListener('click', (e: google.maps.MapMouseEvent) => {
+        clearListeners();
+        const center = { lat: e.latLng!.lat(), lng: e.latLng!.lng() };
+        onComplete({ type: 'circle', center, radius: 500 });
+      });
+      listenersRef.current.push(l);
+    } else {
+      // Polygon with live filled preview
+      const poly = new google.maps.Polygon({
+        paths: [], fillColor: '#3B82F6', fillOpacity: 0.15,
+        strokeColor: '#3B82F6', strokeOpacity: 0.8, strokeWeight: 2,
+        map, zIndex: 4, clickable: false,
+      });
+
+      const doComplete = () => {
+        if (ptsRef.current.length >= 3) {
+          const coords = [...ptsRef.current];
+          poly.setMap(null);
+          clearListeners();
+          onComplete({ type: 'polygon', coordinates: coords });
+        }
+      };
+      completeRef.current = doComplete;
+
+      const clickL = map.addListener('click', (e: google.maps.MapMouseEvent) => {
+        if (blockRef.current) return;
+        const pt = { lat: e.latLng!.lat(), lng: e.latLng!.lng() };
+        ptsRef.current = [...ptsRef.current, pt];
+        poly.setPath(ptsRef.current);
+        onPtAdded(ptsRef.current.length);
+      });
+
+      const dblL = map.addListener('dblclick', (e: google.maps.MapMouseEvent) => {
+        e.stop?.();
+        blockRef.current = true;
+        if (ptsRef.current.length > 0) {
+          ptsRef.current = ptsRef.current.slice(0, -1);
+          poly.setPath(ptsRef.current);
+          onPtAdded(ptsRef.current.length);
+        }
+        doComplete();
+        setTimeout(() => { blockRef.current = false; }, 100);
+      });
+
+      listenersRef.current.push(clickL, dblL);
+    }
+
+    return clearListeners;
+  }, [map, drawMode]);
+
+  return null;
+}
+
+/* ── RuleLocationMap — full map draw panel ────────────── */
+interface RuleLocationMapProps {
+  zone: LocationZone | null;
+  event: ZoneEvent;
+  onChange: (z: LocationZone | null, ev: ZoneEvent) => void;
+}
+
+function RuleLocationMap({ zone, event, onChange }: RuleLocationMapProps) {
+  const [drawMode, setDrawMode]   = useState<'circle' | 'polygon' | null>(null);
+  const [drawPts, setDrawPts]     = useState(0);
+  const [radius, setRadius]       = useState(zone?.radius ?? 500);
+  const completeRef               = useRef<() => void>(() => {});
+
+  const handleComplete = (z: LocationZone) => {
+    setDrawMode(null);
+    setDrawPts(0);
+    if (z.type === 'circle') setRadius(z.radius ?? 500);
+    onChange(z, event);
+  };
+
+  const handleRadiusChange = (r: number) => {
+    setRadius(r);
+    if (zone?.type === 'circle' && zone.center) {
+      onChange({ ...zone, radius: r }, event);
+    }
+  };
+
+  const handleReset = () => {
+    setDrawMode(null);
+    setDrawPts(0);
+    onChange(null, event);
+  };
+
+  const startDraw = (type: 'circle' | 'polygon') => {
+    onChange(null, event);
+    setDrawPts(0);
+    setDrawMode(type);
+  };
+
+  if (!MAP_API_KEY) {
+    return (
+      <div className="card p-4 text-center" style={{ borderStyle: 'dashed' }}>
+        <MapPin size={20} className="mx-auto mb-2 text-muted-foreground" />
+        <p className="text-[12px] text-muted-foreground">
+          Add <code className="font-mono text-[11px] bg-muted px-1">VITE_GOOGLE_MAPS_API_KEY</code> to enable the location picker.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      {/* Draw type + reset controls */}
+      <div className="flex items-center gap-2">
+        {!zone ? (
+          <>
+            <span className="text-[11px] text-muted-foreground font-mono uppercase tracking-wider">Draw zone:</span>
+            <button
+              type="button"
+              onClick={() => startDraw('circle')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[11px] font-mono uppercase tracking-wider transition-all ${
+                drawMode === 'circle'
+                  ? 'border-blue-500 bg-blue-500/10 text-blue-500'
+                  : 'border-border text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <Circle size={11} /> Circle
+            </button>
+            <button
+              type="button"
+              onClick={() => startDraw('polygon')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[11px] font-mono uppercase tracking-wider transition-all ${
+                drawMode === 'polygon'
+                  ? 'border-blue-500 bg-blue-500/10 text-blue-500'
+                  : 'border-border text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <Pentagon size={11} /> Polygon
+            </button>
+          </>
+        ) : (
+          <>
+            <div className="flex items-center gap-2 flex-1">
+              <div style={{ width: 10, height: 10, borderRadius: zone.type === 'circle' ? '50%' : '2px', background: '#3B82F6', flexShrink: 0 }} />
+              <span className="text-[12px] font-medium text-foreground">
+                {zone.type === 'circle'
+                  ? `Circle · ${radius >= 1000 ? `${(radius / 1000).toFixed(1)}km` : `${radius}m`} radius`
+                  : `Polygon · ${zone.coordinates?.length} vertices`}
+              </span>
+            </div>
+            <button type="button" onClick={handleReset}
+              className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors">
+              <RotateCcw size={11} /> Reset
+            </button>
+          </>
+        )}
+      </div>
+
+      {/* Draw hint during polygon mode */}
+      {drawMode === 'polygon' && (
+        <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-blue-500/8 border border-blue-500/20">
+          <span className="text-[11px] text-blue-400 font-mono">
+            {drawPts < 3
+              ? `Click to add vertices (${drawPts} so far, need 3)`
+              : `${drawPts} vertices — double-click or press Done to close`}
+          </span>
+          {drawPts >= 3 && (
+            <button type="button" onClick={() => completeRef.current()}
+              className="px-2 py-0.5 bg-blue-500 text-white text-[10px] font-mono rounded">
+              DONE
+            </button>
+          )}
+          <button type="button" onClick={() => { setDrawMode(null); setDrawPts(0); }}
+            className="ml-auto text-[10px] text-muted-foreground hover:text-foreground font-mono">
+            CANCEL
+          </button>
+        </div>
+      )}
+
+      {drawMode === 'circle' && (
+        <div className="px-3 py-2 rounded-lg bg-blue-500/8 border border-blue-500/20">
+          <span className="text-[11px] text-blue-400 font-mono">Click on the map to place the circle center</span>
+        </div>
+      )}
+
+      {/* Radius control for circles */}
+      {zone?.type === 'circle' && (
+        <div className="flex items-center gap-3">
+          <label className="text-[11px] text-muted-foreground font-mono uppercase tracking-wider">Radius</label>
+          <input
+            type="range" min={100} max={50000} step={100}
+            value={radius} onChange={e => handleRadiusChange(Number(e.target.value))}
+            className="flex-1 accent-blue-500 h-1.5"
+          />
+          <span className="text-[11px] font-mono text-foreground w-16 text-right">
+            {radius >= 1000 ? `${(radius / 1000).toFixed(1)} km` : `${radius} m`}
+          </span>
+        </div>
+      )}
+
+      {/* Map */}
+      <APIProvider apiKey={MAP_API_KEY}>
+        <div style={{ height: 260, border: '1px solid hsl(var(--border))', overflow: 'hidden', position: 'relative' }}>
+          <Map
+            mapId={MAP_ID}
+            defaultCenter={{ lat: 20, lng: 10 }}
+            defaultZoom={2}
+            mapTypeId="satellite"
+            gestureHandling="greedy"
+            streetViewControl={false}
+            mapTypeControl={false}
+            fullscreenControl={false}
+            style={{ width: '100%', height: '100%' }}
+          >
+            <RuleMapInner
+              drawMode={drawMode}
+              drawnZone={zone}
+              onComplete={handleComplete}
+              onPtAdded={setDrawPts}
+              completeRef={completeRef}
+            />
+          </Map>
+          {!zone && !drawMode && (
+            <div style={{
+              position: 'absolute', inset: 0, display: 'flex', alignItems: 'center',
+              justifyContent: 'center', pointerEvents: 'none',
+            }}>
+              <div style={{
+                background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)',
+                padding: '8px 16px', color: '#fff',
+                fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: '0.1em',
+              }}>
+                SELECT CIRCLE OR POLYGON ABOVE TO DRAW A ZONE
+              </div>
+            </div>
+          )}
+        </div>
+      </APIProvider>
+
+      {/* Alert event selector */}
+      <div className="flex items-center gap-2 pt-1">
+        <span className="text-[12px] text-muted-foreground">Alert when device</span>
+        <div className="flex gap-1">
+          {(['enter', 'exit', 'both'] as ZoneEvent[]).map(ev => (
+            <button key={ev} type="button" onClick={() => onChange(zone, ev)}
+              className={`px-3 py-1 rounded-lg border text-[11px] font-mono uppercase tracking-wider transition-all ${
+                event === ev
+                  ? 'border-blue-500 bg-blue-500/10 text-blue-500'
+                  : 'border-border text-muted-foreground hover:text-foreground'
+              }`}>
+              {ev}s
+            </button>
+          ))}
+        </div>
+        <span className="text-[12px] text-muted-foreground">this zone</span>
+      </div>
+    </div>
+  );
+}
 
 /* ── Rule card ────────────────────────────────────────── */
 function RuleCard({ rule, onToggle, onDelete }: {
@@ -158,6 +486,9 @@ function CreateRuleModal({ onClose }: { onClose: () => void }) {
   const [conditions, setConditions] = useState([
     { field: '', operator: 'gt', value: '', logic: 'and' as 'and' | 'or' },
   ]);
+  const [locationCond, setLocationCond] = useState<{ zone: LocationZone | null; event: ZoneEvent }>({
+    zone: null, event: 'enter',
+  });
 
   // Step 3 — Action
   const [actionType, setActionType] = useState('alert');
@@ -190,19 +521,29 @@ function CreateRuleModal({ onClose }: { onClose: () => void }) {
 
   const updAction = (k: string, v: string) => setActionConfig(prev => ({ ...prev, [k]: v }));
 
-  const buildPayload = () => ({
-    name: ruleName,
-    description,
-    triggerType,
-    priority,
-    conditions: conditions.filter(c => c.field.trim()).map(c => ({
-      field: c.field, operator: c.operator,
-      value: parseFloat(c.value) || c.value,
-    })),
-    conditionLogic: conditions.some(c => c.logic === 'or') ? 'or' : 'and',
-    actions: [buildAction()],
-    isEnabled: true,
-  });
+  const buildPayload = () => {
+    const builtConditions = triggerType === 'location'
+      ? (locationCond.zone ? [{
+          field: 'location',
+          operator: locationCond.event === 'exit' ? 'out_zone' : 'in_zone',
+          value: JSON.stringify(locationCond.zone),
+        }] : [])
+      : conditions.filter(c => c.field.trim()).map(c => ({
+          field: c.field, operator: c.operator,
+          value: parseFloat(c.value) || c.value,
+        }));
+
+    return {
+      name: ruleName,
+      description,
+      triggerType,
+      priority,
+      conditions: builtConditions,
+      conditionLogic: 'and',
+      actions: [buildAction()],
+      isEnabled: true,
+    };
+  };
 
   const buildAction = () => {
     switch (actionType) {
@@ -314,7 +655,25 @@ function CreateRuleModal({ onClose }: { onClose: () => void }) {
           )}
 
           {/* ── Step 2: Conditions ── */}
-          {step === 2 && (
+          {step === 2 && triggerType === 'location' && (
+            <motion.div key="s2-loc" initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} className="space-y-4">
+              <p className="text-[13px] font-medium text-foreground">Define the geographic zone:</p>
+              <RuleLocationMap
+                zone={locationCond.zone}
+                event={locationCond.event}
+                onChange={(z, ev) => setLocationCond({ zone: z, event: ev })}
+              />
+              {!locationCond.zone && (
+                <div className="bg-amber-500/8 border border-amber-500/20 rounded-xl p-3">
+                  <p className="text-[11px] text-amber-400">
+                    Draw a circle or polygon on the map to define the geofence boundary.
+                  </p>
+                </div>
+              )}
+            </motion.div>
+          )}
+
+          {step === 2 && triggerType !== 'location' && (
             <motion.div key="s2" initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} className="space-y-4">
               <p className="text-[13px] font-medium text-foreground">When these conditions are met:</p>
 
@@ -577,7 +936,13 @@ function CreateRuleModal({ onClose }: { onClose: () => void }) {
                   </div>
                   <div>
                     <p className="text-muted-foreground text-[11px]">Conditions</p>
-                    <p className="text-foreground font-medium">{conditions.filter(c => c.field).length} condition(s)</p>
+                    <p className="text-foreground font-medium">
+                      {triggerType === 'location'
+                        ? locationCond.zone
+                          ? `${locationCond.zone.type} zone · ${locationCond.event}`
+                          : 'No zone drawn'
+                        : `${conditions.filter(c => c.field).length} condition(s)`}
+                    </p>
                   </div>
                   <div>
                     <p className="text-muted-foreground text-[11px]">Action</p>

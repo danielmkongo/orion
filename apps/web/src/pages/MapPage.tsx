@@ -302,13 +302,16 @@ interface DrawLayerProps {
   defaultRadius: number;
   onComplete: (result: DrawResult) => void;
   onCancel: () => void;
+  onPtAdded: (count: number) => void;
+  completeRef: React.MutableRefObject<() => void>;
 }
 
-function DrawLayer({ drawType, color, defaultRadius, onComplete, onCancel }: DrawLayerProps) {
-  const map        = useMap();
+function DrawLayer({ drawType, color, defaultRadius, onComplete, onPtAdded, completeRef }: DrawLayerProps) {
+  const map          = useMap();
   const listenersRef = useRef<google.maps.MapsEventListener[]>([]);
-  const tempRef    = useRef<(google.maps.Circle | google.maps.Polyline | google.maps.Marker)[]>([]);
-  const ptsRef     = useRef<{ lat: number; lng: number }[]>([]);
+  const tempRef      = useRef<(google.maps.Circle | google.maps.Polygon)[]>([]);
+  const ptsRef       = useRef<{ lat: number; lng: number }[]>([]);
+  const blockingRef  = useRef(false);  // absorbs the extra click fired before dblclick
 
   const cleanup = useCallback(() => {
     listenersRef.current.forEach(l => google.maps.event.removeListener(l));
@@ -316,6 +319,7 @@ function DrawLayer({ drawType, color, defaultRadius, onComplete, onCancel }: Dra
     tempRef.current.forEach(o => o.setMap(null));
     tempRef.current = [];
     ptsRef.current = [];
+    blockingRef.current = false;
     if (map) map.setOptions({ draggableCursor: undefined });
   }, [map]);
 
@@ -324,13 +328,14 @@ function DrawLayer({ drawType, color, defaultRadius, onComplete, onCancel }: Dra
     map.setOptions({ draggableCursor: 'crosshair' });
 
     if (drawType === 'circle') {
+      completeRef.current = () => {};
       const clickL = map.addListener('click', (e: google.maps.MapMouseEvent) => {
         cleanup();
         const center = { lat: e.latLng!.lat(), lng: e.latLng!.lng() };
         const preview = new google.maps.Circle({
           center, radius: defaultRadius,
-          fillColor: color, fillOpacity: 0.15,
-          strokeColor: color, strokeOpacity: 0.8, strokeWeight: 2,
+          fillColor: color, fillOpacity: 0.18,
+          strokeColor: color, strokeOpacity: 0.85, strokeWeight: 2,
           map, zIndex: 4,
         });
         tempRef.current.push(preview);
@@ -338,25 +343,48 @@ function DrawLayer({ drawType, color, defaultRadius, onComplete, onCancel }: Dra
       });
       listenersRef.current.push(clickL);
     } else {
-      // Polygon — multiple clicks
-      const previewLine = new google.maps.Polyline({
-        path: [], strokeColor: color, strokeOpacity: 0.8, strokeWeight: 2, map, zIndex: 4,
+      // Polygon — live filled preview via google.maps.Polygon
+      const previewPoly = new google.maps.Polygon({
+        paths:         [],
+        fillColor:     color,
+        fillOpacity:   0.18,
+        strokeColor:   color,
+        strokeOpacity: 0.85,
+        strokeWeight:  2,
+        map,
+        zIndex: 4,
+        clickable: false,
       });
-      tempRef.current.push(previewLine);
+      tempRef.current.push(previewPoly);
 
-      const clickL = map.addListener('click', (e: google.maps.MapMouseEvent) => {
-        const pt = { lat: e.latLng!.lat(), lng: e.latLng!.lng() };
-        ptsRef.current = [...ptsRef.current, pt];
-        (previewLine as google.maps.Polyline).setPath(ptsRef.current);
-      });
-
-      const dblL = map.addListener('dblclick', (e: google.maps.MapMouseEvent) => {
-        e.stop?.();
+      const doComplete = () => {
         if (ptsRef.current.length >= 3) {
           const coords = [...ptsRef.current];
           cleanup();
           onComplete({ type: 'polygon', coordinates: coords });
         }
+      };
+      completeRef.current = doComplete;
+
+      const clickL = map.addListener('click', (e: google.maps.MapMouseEvent) => {
+        if (blockingRef.current) return;
+        const pt = { lat: e.latLng!.lat(), lng: e.latLng!.lng() };
+        ptsRef.current = [...ptsRef.current, pt];
+        previewPoly.setPath(ptsRef.current);
+        onPtAdded(ptsRef.current.length);
+      });
+
+      const dblL = map.addListener('dblclick', (e: google.maps.MapMouseEvent) => {
+        e.stop?.();
+        // The browser fires one extra 'click' just before 'dblclick' — remove that point
+        blockingRef.current = true;
+        if (ptsRef.current.length > 0) {
+          ptsRef.current = ptsRef.current.slice(0, -1);
+          previewPoly.setPath(ptsRef.current);
+          onPtAdded(ptsRef.current.length);
+        }
+        doComplete();
+        setTimeout(() => { blockingRef.current = false; }, 100);
       });
 
       listenersRef.current.push(clickL, dblL);
@@ -423,7 +451,7 @@ function Field({ icon, label, value, mono = true, accent }: {
    geofence toggles (always visible when map is open)
 ═══════════════════════════════════════════════════════════ */
 interface MapControlsProps {
-  hasSelectedDevice: boolean;
+  selectedIsTracker: boolean;
   trajEnabled: boolean;        setTrajEnabled: (v: boolean) => void;
   trajColor: string;           setTrajColor: (v: string) => void;
   trajRangeMs: number;         setTrajRangeMs: (v: number) => void;
@@ -431,7 +459,7 @@ interface MapControlsProps {
 }
 
 function MapControls({
-  hasSelectedDevice,
+  selectedIsTracker,
   trajEnabled, setTrajEnabled,
   trajColor, setTrajColor,
   trajRangeMs, setTrajRangeMs,
@@ -447,12 +475,12 @@ function MapControls({
       minWidth: 220,
     }}>
       {/* Trajectory */}
-      <div style={{ marginBottom: hasSelectedDevice ? 10 : 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: trajEnabled && hasSelectedDevice ? 8 : 0 }}>
+      <div style={{ marginBottom: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: trajEnabled && selectedIsTracker ? 8 : 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 5,
             fontFamily: 'var(--font-mono)', fontSize: 9.5, letterSpacing: '0.12em',
             textTransform: 'uppercase', color: 'hsl(var(--muted-fg))' }}>
-            <Navigation size={11} style={{ color: trajEnabled ? '#FF5B1F' : undefined }} />
+            <Navigation size={11} style={{ color: trajEnabled && selectedIsTracker ? '#FF5B1F' : undefined }} />
             Trajectory
           </div>
           <button
@@ -464,7 +492,7 @@ function MapControls({
           </button>
         </div>
 
-        {trajEnabled && hasSelectedDevice && (
+        {trajEnabled && selectedIsTracker && (
           <>
             {/* Range */}
             <div style={{ display: 'flex', gap: 3, marginBottom: 7 }}>
@@ -493,9 +521,9 @@ function MapControls({
           </>
         )}
 
-        {trajEnabled && !hasSelectedDevice && (
+        {trajEnabled && !selectedIsTracker && (
           <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'hsl(var(--muted-fg))',
-            marginTop: 4, opacity: 0.7 }}>Select a device to show trail</div>
+            marginTop: 4, opacity: 0.7 }}>Select a tracker device to show trail</div>
         )}
       </div>
 
@@ -1003,6 +1031,7 @@ export function MapPage() {
   const [drawType, setDrawType]           = useState<DrawType | null>(null);
   const [drawPts, setDrawPts]             = useState(0);
   const [drawDraft, setDrawDraft]         = useState<DrawResult | null>(null);
+  const drawCompleteRef                   = useRef<() => void>(() => {});
 
   // Devices query
   const { data, isLoading } = useQuery({
@@ -1049,6 +1078,9 @@ export function MapPage() {
     () => located.find(d => (d._id ?? d.id) === selectedId) ?? null,
     [located, selectedId],
   );
+
+  const hasTrackers      = useMemo(() => located.some(d => d.category === 'tracker'), [located]);
+  const selectedIsTracker = selectedDevice?.category === 'tracker';
 
   const mapCenter = useMemo(() => {
     if (located.length === 0) return { lat: 14.7, lng: -17.4 };
@@ -1112,7 +1144,7 @@ export function MapPage() {
 
             <TrajectoryLayer
               deviceId={selectedId}
-              enabled={trajEnabled}
+              enabled={trajEnabled && selectedIsTracker}
               color={trajColor}
               rangeMs={trajRangeMs}
             />
@@ -1125,6 +1157,8 @@ export function MapPage() {
               defaultRadius={500}
               onComplete={handleDrawComplete}
               onCancel={handleCancelDraw}
+              onPtAdded={setDrawPts}
+              completeRef={drawCompleteRef}
             />
 
             {located.map(device => {
@@ -1144,20 +1178,22 @@ export function MapPage() {
           </Map>
         </APIProvider>
 
-        {/* Floating controls */}
-        <MapControls
-          hasSelectedDevice={!!selectedDevice}
-          trajEnabled={trajEnabled}   setTrajEnabled={setTrajEnabled}
-          trajColor={trajColor}       setTrajColor={setTrajColor}
-          trajRangeMs={trajRangeMs}   setTrajRangeMs={setTrajRangeMs}
-          gfVisible={gfVisible}       setGfVisible={setGfVisible}
-        />
+        {/* Floating controls — only shown when tracker devices exist */}
+        {hasTrackers && (
+          <MapControls
+            selectedIsTracker={selectedIsTracker}
+            trajEnabled={trajEnabled}   setTrajEnabled={setTrajEnabled}
+            trajColor={trajColor}       setTrajColor={setTrajColor}
+            trajRangeMs={trajRangeMs}   setTrajRangeMs={setTrajRangeMs}
+            gfVisible={gfVisible}       setGfVisible={setGfVisible}
+          />
+        )}
 
         {/* Draw banner */}
         {drawType && !drawDraft && (
           <DrawBanner
             drawType={drawType} pts={drawPts}
-            onDone={() => { /* polygon done via dblclick */ }}
+            onDone={() => drawCompleteRef.current()}
             onCancel={handleCancelDraw}
           />
         )}
@@ -1179,9 +1215,9 @@ export function MapPage() {
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search devices…"
               style={{ border: 0, outline: 0, background: 'transparent', color: 'hsl(var(--fg))', fontFamily: 'var(--font-sans)', fontSize: '13px', width: '100%' }} />
           </div>
-          {/* Tabs */}
+          {/* Tabs — Geofences tab only shown when tracker devices are present */}
           <div style={{ display: 'flex', gap: 0, border: '1px solid hsl(var(--border))' }}>
-            {(['devices', 'geofences'] as RightTab[]).map((tab, i) => (
+            {(['devices', ...(hasTrackers ? ['geofences'] : [])] as RightTab[]).map((tab, i) => (
               <button key={tab} onClick={() => setRightTab(tab)} style={{
                 flex: 1, padding: '6px 0',
                 background: rightTab === tab ? 'hsl(var(--surface-raised))' : 'transparent',
