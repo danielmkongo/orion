@@ -1,7 +1,7 @@
 /**
- * ShareViewPage — public, unauthenticated viewer for shared device pages and builder pages.
+ * ShareViewPage — public unauthenticated viewer for shared device and builder pages.
  * Completely self-contained design system; independent of the app theme.
- * Orion branding woven throughout as a discovery surface.
+ * Orion branding is the primary discovery surface for new users.
  */
 
 import { useState, useEffect, useRef, createContext, useContext } from 'react';
@@ -29,29 +29,29 @@ interface Tokens {
 }
 
 const DARK: Tokens = {
-  bg: '#0c0c0b', surface: '#161614', surfaceHover: '#1e1e1c', surfaceActive: '#252522',
-  border: 'rgba(255,255,255,0.07)', borderStrong: 'rgba(255,255,255,0.14)',
-  fg: '#f0ede8', fgMuted: '#8a8a82', fgFaint: '#44443e',
-  primary: '#ff5b1f', primaryHover: '#ff7040', primaryMuted: 'rgba(255,91,31,0.14)',
+  bg: '#0a0a09', surface: '#131311', surfaceHover: '#1a1a18', surfaceActive: '#222220',
+  border: 'rgba(255,255,255,0.07)', borderStrong: 'rgba(255,255,255,0.16)',
+  fg: '#eeebe6', fgMuted: '#888880', fgFaint: '#3e3e38',
+  primary: '#ff5b1f', primaryHover: '#ff7040', primaryMuted: 'rgba(255,91,31,0.13)',
   good: '#22c55e', warn: '#f59e0b', bad: '#ef4444',
-  shadow: 'none', shadowCard: '0 1px 3px rgba(0,0,0,0.4)', shadowHover: '0 4px 20px rgba(0,0,0,0.6)',
+  shadow: 'none', shadowCard: '0 1px 3px rgba(0,0,0,0.5)', shadowHover: '0 8px 32px rgba(0,0,0,0.7)',
   fontDisplay: 'var(--font-display, "Satoshi", system-ui, sans-serif)',
   fontMono: 'var(--font-mono, "JetBrains Mono", monospace)',
 };
 
 const LIGHT: Tokens = {
-  bg: '#f5f5f3', surface: '#ffffff', surfaceHover: '#fafaf8', surfaceActive: '#f2f2f0',
-  border: 'rgba(0,0,0,0.07)', borderStrong: 'rgba(0,0,0,0.14)',
-  fg: '#0c0c0b', fgMuted: '#6b6b67', fgFaint: '#b8b8b2',
-  primary: '#ff5b1f', primaryHover: '#e64e15', primaryMuted: 'rgba(255,91,31,0.08)',
+  bg: '#f4f4f2', surface: '#ffffff', surfaceHover: '#f9f9f7', surfaceActive: '#efefed',
+  border: 'rgba(0,0,0,0.08)', borderStrong: 'rgba(0,0,0,0.18)',
+  fg: '#0a0a09', fgMuted: '#666660', fgFaint: '#bcbcb6',
+  primary: '#ff5b1f', primaryHover: '#e04d18', primaryMuted: 'rgba(255,91,31,0.08)',
   good: '#16a34a', warn: '#d97706', bad: '#dc2626',
-  shadow: 'none', shadowCard: '0 1px 4px rgba(0,0,0,0.08)', shadowHover: '0 4px 20px rgba(0,0,0,0.14)',
+  shadow: 'none', shadowCard: '0 1px 4px rgba(0,0,0,0.10)', shadowHover: '0 8px 32px rgba(0,0,0,0.15)',
   fontDisplay: 'var(--font-display, "Satoshi", system-ui, sans-serif)',
   fontMono: 'var(--font-mono, "JetBrains Mono", monospace)',
 };
 
-const ThemeCtx = createContext<{ T: Tokens; theme: Theme; setTheme: (t: Theme) => void }>({
-  T: DARK, theme: 'dark', setTheme: () => {},
+const ThemeCtx = createContext<{ T: Tokens; theme: Theme; resolved: 'light' | 'dark'; setTheme: (t: Theme) => void }>({
+  T: DARK, theme: 'system', resolved: 'dark', setTheme: () => {},
 });
 const useT = () => useContext(ThemeCtx);
 
@@ -63,42 +63,80 @@ function ThemeProvider({ children }: { children: React.ReactNode }) {
     const mq = window.matchMedia('(prefers-color-scheme: light)');
     const resolve = () => setResolved(theme === 'system' ? (mq.matches ? 'light' : 'dark') : theme as 'light' | 'dark');
     resolve();
-    if (theme === 'system') { mq.addEventListener('change', resolve); return () => mq.removeEventListener('change', resolve); }
+    mq.addEventListener('change', resolve);
+    return () => mq.removeEventListener('change', resolve);
   }, [theme]);
 
   const setTheme = (t: Theme) => { setThemeRaw(t); localStorage.setItem('orion_share_theme', t); };
   const T = resolved === 'light' ? LIGHT : DARK;
 
-  return <ThemeCtx.Provider value={{ T, theme, setTheme }}>{children}</ThemeCtx.Provider>;
+  return <ThemeCtx.Provider value={{ T, theme, resolved, setTheme }}>{children}</ThemeCtx.Provider>;
 }
 
-/* ── Theme toggle pill ───────────────────────────────────────────────── */
+/* ── Orion logo mark — actual brand SVG ─────────────────────────────── */
+function OrionMark({
+  size = 32,
+  color,
+  animate = false,
+  className,
+}: {
+  size?: number;
+  color?: string;
+  animate?: boolean;
+  className?: string;
+}) {
+  const { T } = useT();
+  const c = color ?? T.primary;
+  return (
+    <svg
+      width={size} height={size} viewBox="0 0 32 32" fill="none"
+      className={className}
+      style={animate ? { animation: 'orion-spin 12s linear infinite', transformOrigin: '50% 50%', display: 'block' } : { display: 'block' }}
+    >
+      <circle cx="16" cy="16" r="14" stroke={c} strokeWidth="2.5" />
+      <circle cx="16" cy="16" r="8" stroke={c} strokeWidth="2" opacity="0.45" />
+      <circle cx="16" cy="16" r="3" fill={c} />
+    </svg>
+  );
+}
+
+/* ── Theme toggle with system resolution label ───────────────────────── */
 function ThemeToggle() {
-  const { T, theme, setTheme } = useT();
+  const { T, theme, resolved, setTheme } = useT();
   const options: { key: Theme; Icon: typeof Sun; label: string }[] = [
     { key: 'light', Icon: Sun, label: 'Light' },
     { key: 'system', Icon: Monitor, label: 'Auto' },
     { key: 'dark', Icon: Moon, label: 'Dark' },
   ];
+  const sysLabel = resolved === 'light' ? 'Light' : 'Dark';
+
   return (
     <div style={{ display: 'flex', background: T.surfaceActive, border: `1px solid ${T.border}`, borderRadius: 24, padding: 3, gap: 2 }}>
-      {options.map(({ key, Icon, label }) => (
-        <button
-          key={key}
-          title={label}
-          onClick={() => setTheme(key)}
-          style={{
-            display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 20, border: 'none', cursor: 'pointer', fontSize: 11, fontFamily: T.fontMono,
-            background: theme === key ? T.surface : 'transparent',
-            color: theme === key ? T.fg : T.fgMuted,
-            boxShadow: theme === key ? T.shadowCard : 'none',
-            transition: 'all 0.15s',
-          }}
-        >
-          <Icon size={11} />
-          <span style={{ display: 'none' }}>{label}</span>
-        </button>
-      ))}
+      {options.map(({ key, Icon, label }) => {
+        const active = theme === key;
+        return (
+          <button
+            key={key}
+            title={key === 'system' ? `Follow OS (currently ${sysLabel})` : label}
+            onClick={() => setTheme(key)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 5,
+              padding: '5px 11px', borderRadius: 20, border: 'none', cursor: 'pointer',
+              fontSize: 11, fontFamily: T.fontMono,
+              background: active ? T.surface : 'transparent',
+              color: active ? T.fg : T.fgMuted,
+              boxShadow: active ? T.shadowCard : 'none',
+              transition: 'all 0.15s',
+            }}
+          >
+            <Icon size={11} />
+            {active && key === 'system'
+              ? <span style={{ fontSize: 10 }}>Auto · {sysLabel}</span>
+              : active ? <span>{label}</span>
+              : null}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -109,52 +147,49 @@ function TopNav({ subtitle }: { subtitle?: string }) {
   return (
     <nav style={{
       position: 'sticky', top: 0, zIndex: 50,
-      height: 54, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      height: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       padding: '0 24px', borderBottom: `1px solid ${T.border}`,
-      background: T.bg + 'ee', backdropFilter: 'blur(12px)',
+      background: T.bg + 'f0', backdropFilter: 'blur(16px)',
     }}>
       {/* Left: brand + page name */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          {/* Orion mark — square with O */}
-          <div style={{
-            width: 26, height: 26, background: T.primary, display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 12, fontFamily: T.fontDisplay, color: '#fff', fontWeight: 700, letterSpacing: '-0.03em', flexShrink: 0,
-          }}>O</div>
-          <span style={{ fontFamily: T.fontDisplay, fontSize: 16, fontWeight: 700, letterSpacing: '-0.04em', color: T.fg, lineHeight: 1 }}>
-            Orion
+        <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+          <OrionMark size={24} />
+          <span style={{ fontFamily: T.fontDisplay, fontSize: 17, fontWeight: 700, letterSpacing: '-0.04em', color: T.fg, lineHeight: 1 }}>
+            Orion<em style={{ color: T.primary, fontStyle: 'italic' }}>.</em>
           </span>
         </div>
         {subtitle && (
           <>
-            <span style={{ width: 1, height: 16, background: T.border }} />
-            <span style={{ fontSize: 13, color: T.fgMuted, maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <span style={{ width: 1, height: 18, background: T.border, flexShrink: 0 }} />
+            <span style={{ fontSize: 13, color: T.fgMuted, maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: T.fontMono }}>
               {subtitle}
             </span>
           </>
         )}
       </div>
 
-      {/* Right: theme toggle + CTA */}
+      {/* Right: theme + CTA */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <ThemeToggle />
         <a
           href="https://orion.vortan.io"
           target="_blank"
           rel="noreferrer"
-          className="orion-cta-nav"
           style={{
-            padding: '6px 14px', background: T.primary, color: '#fff', fontSize: 11,
-            fontFamily: T.fontMono, letterSpacing: '0.06em', textDecoration: 'none',
-            border: 'none', cursor: 'pointer', transition: 'opacity 0.15s',
+            display: 'inline-flex', alignItems: 'center',
+            padding: '6px 16px', background: T.primary, color: '#fff', fontSize: 11,
+            fontFamily: T.fontMono, letterSpacing: '0.07em', textDecoration: 'none',
+            transition: 'opacity 0.15s', flexShrink: 0,
           }}
-          onMouseEnter={e => (e.currentTarget.style.opacity = '0.82')}
+          onMouseEnter={e => (e.currentTarget.style.opacity = '0.80')}
           onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
+          className="orion-cta-nav"
         >
           GET ORION
         </a>
-        <style>{`.orion-cta-nav { display: none; } @media (min-width: 600px) { .orion-cta-nav { display: inline-flex; } }`}</style>
       </div>
+      <style>{`.orion-cta-nav{display:none}@media(min-width:540px){.orion-cta-nav{display:inline-flex}}`}</style>
     </nav>
   );
 }
@@ -163,13 +198,13 @@ function TopNav({ subtitle }: { subtitle?: string }) {
 function PageFooter() {
   const { T } = useT();
   return (
-    <footer style={{ borderTop: `1px solid ${T.border}`, padding: '40px 32px', marginTop: 80 }}>
-      <div style={{ maxWidth: 1200, margin: '0 auto', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20, textAlign: 'center' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-          <div style={{ width: 28, height: 28, background: T.primary, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontFamily: T.fontDisplay, color: '#fff', fontWeight: 700 }}>O</div>
-          <span style={{ fontFamily: T.fontDisplay, fontSize: 20, fontWeight: 700, letterSpacing: '-0.04em', color: T.fg }}>Orion</span>
+    <footer style={{ borderTop: `1px solid ${T.border}`, padding: '56px 32px', marginTop: 80 }}>
+      <div style={{ maxWidth: 1200, margin: '0 auto', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 24, textAlign: 'center' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <OrionMark size={36} />
+          <span style={{ fontFamily: T.fontDisplay, fontSize: 28, fontWeight: 700, letterSpacing: '-0.04em', color: T.fg }}>Orion<em style={{ color: T.primary, fontStyle: 'italic' }}>.</em></span>
         </div>
-        <p style={{ fontSize: 14, color: T.fgMuted, maxWidth: 400, lineHeight: 1.6 }}>
+        <p style={{ fontSize: 15, color: T.fgMuted, maxWidth: 420, lineHeight: 1.7, margin: 0 }}>
           Connect, monitor, and control your IoT devices from anywhere.
           Build dashboards like this one — no code required.
         </p>
@@ -178,19 +213,22 @@ function PageFooter() {
           target="_blank"
           rel="noreferrer"
           style={{
-            display: 'inline-flex', alignItems: 'center', gap: 8,
-            padding: '10px 24px', background: T.primary, color: '#fff',
-            fontSize: 13, fontFamily: T.fontMono, letterSpacing: '0.06em',
-            textDecoration: 'none', border: 'none', cursor: 'pointer',
-            transition: 'opacity 0.15s',
+            display: 'inline-flex', alignItems: 'center', gap: 10,
+            padding: '12px 28px', background: T.primary, color: '#fff',
+            fontSize: 13, fontFamily: T.fontMono, letterSpacing: '0.07em',
+            textDecoration: 'none', transition: 'opacity 0.15s',
           }}
-          onMouseEnter={e => (e.currentTarget.style.opacity = '0.85')}
+          onMouseEnter={e => (e.currentTarget.style.opacity = '0.82')}
           onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
         >
           START BUILDING FREE →
         </a>
-        <div style={{ fontSize: 11, fontFamily: T.fontMono, color: T.fgFaint, letterSpacing: '0.08em' }}>
-          Powered by Orion Platform · orion.vortan.io
+        <div style={{ display: 'flex', gap: 24, alignItems: 'center' }}>
+          <span style={{ width: 32, height: 1, background: T.border }} />
+          <span style={{ fontSize: 10, fontFamily: T.fontMono, color: T.fgFaint, letterSpacing: '0.1em' }}>
+            POWERED BY ORION · ORION.VORTAN.IO
+          </span>
+          <span style={{ width: 32, height: 1, background: T.border }} />
         </div>
       </div>
     </footer>
@@ -201,14 +239,14 @@ function PageFooter() {
 function LiveBadge() {
   const { T } = useT();
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 9px', background: T.primaryMuted, border: `1px solid ${T.primary}22`, fontSize: 9.5, fontFamily: T.fontMono, letterSpacing: '0.12em', color: T.primary }}>
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '3px 10px', background: T.primaryMuted, border: `1px solid ${T.primary}30`, fontSize: 9.5, fontFamily: T.fontMono, letterSpacing: '0.14em', color: T.primary }}>
       <span style={{ width: 5, height: 5, borderRadius: '50%', background: T.primary, animation: 'pulse 2s infinite' }} />
       LIVE
     </span>
   );
 }
 
-/* ── Tiny sparkline (inline SVG, no deps) ────────────────────────────── */
+/* ── Tiny sparkline ──────────────────────────────────────────────────── */
 function Sparkline({ points, color, height = 32 }: { points: number[]; color: string; height?: number }) {
   if (points.length < 2) return null;
   const min = Math.min(...points); const max = Math.max(...points);
@@ -219,6 +257,27 @@ function Sparkline({ points, color, height = 32 }: { points: number[]; color: st
     <svg viewBox={`0 0 ${w} ${height}`} style={{ width: '100%', maxWidth: 80, height }} preserveAspectRatio="none">
       <polyline points={coords} fill="none" stroke={color} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
     </svg>
+  );
+}
+
+/* ── Vertical side rail ──────────────────────────────────────────────── */
+function SideRail({ text, align = 'left', T }: { text: string; align?: 'left' | 'right'; T: Tokens }) {
+  return (
+    <div style={{
+      display: 'flex', flexDirection: 'column', alignItems: 'center',
+      padding: '80px 0', gap: 0, overflow: 'hidden',
+    }}>
+      <div style={{ width: 1, height: 80, flexShrink: 0, background: `linear-gradient(to bottom, transparent, ${T.border})` }} />
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 120, padding: '20px 0' }}>
+        <span style={{
+          writingMode: 'vertical-rl',
+          transform: align === 'left' ? 'rotate(180deg)' : undefined,
+          fontSize: 8.5, fontFamily: T.fontMono, letterSpacing: '0.2em',
+          color: T.fgFaint, textTransform: 'uppercase', userSelect: 'none',
+        }}>{text}</span>
+      </div>
+      <div style={{ width: 1, height: 80, flexShrink: 0, background: `linear-gradient(to top, transparent, ${T.border})` }} />
+    </div>
   );
 }
 
@@ -249,168 +308,217 @@ function DeviceShareView({ token, data }: { token: string; data: any }) {
     display: 'flex', background: T.surfaceActive, border: `1px solid ${T.border}`, borderRadius: 20, padding: 3, gap: 2,
   };
   const segBtn = (active: boolean): React.CSSProperties => ({
-    padding: '4px 12px', border: 'none', borderRadius: 16, cursor: 'pointer', fontSize: 11, fontFamily: T.fontMono,
+    padding: '5px 12px', border: 'none', borderRadius: 16, cursor: 'pointer', fontSize: 11, fontFamily: T.fontMono,
     background: active ? T.surface : 'transparent', color: active ? T.fg : T.fgMuted,
     boxShadow: active ? T.shadowCard : 'none', transition: 'all 0.15s',
   });
 
+  const leftLabel = [device.category, device.protocol?.toUpperCase()].filter(Boolean).join(' · ');
+
   return (
     <div style={{ background: T.bg, color: T.fg, minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
       <TopNav subtitle={device.name} />
-      <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }`}</style>
+      <style>{`
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+        @keyframes orion-spin { to { transform: rotate(360deg); } }
+        @keyframes orion-pulse { 0%{transform:scale(0.9);opacity:0.7} 100%{transform:scale(2.2);opacity:0} }
+      `}</style>
 
-      <div style={{ maxWidth: 1060, margin: '0 auto', width: '100%', padding: '48px 24px 0' }}>
-        {/* Hero */}
-        <div style={{ marginBottom: 40 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-            <span style={{ fontSize: 10, fontFamily: T.fontMono, letterSpacing: '0.14em', color: T.fgMuted, textTransform: 'uppercase' }}>
-              {device.category} · {device.protocol?.toUpperCase()}
-            </span>
-            {sections.includes('metrics') && <LiveBadge />}
-          </div>
-          <h1 style={{ fontFamily: T.fontDisplay, fontSize: 'clamp(32px,5vw,56px)', lineHeight: 1, margin: '0 0 10px', letterSpacing: '-0.03em', color: T.fg }}>
-            {device.name.split(' ').slice(0, -1).join(' ')}{' '}
-            <em style={{ fontStyle: 'italic', color: T.primary }}>{device.name.split(' ').slice(-1)[0]}</em>
-          </h1>
-          {device.description && <p style={{ fontSize: 15, color: T.fgMuted, maxWidth: 600, lineHeight: 1.6, margin: 0 }}>{device.description}</p>}
-        </div>
+      {/* Full-width hero accent gradient */}
+      <div style={{ position: 'relative', flex: 1 }}>
+        <div style={{
+          position: 'absolute', top: 0, left: 0, right: 0, height: 400, pointerEvents: 'none', zIndex: 0,
+          background: `radial-gradient(ellipse 70% 50% at 50% 0%, ${T.primaryMuted} 0%, transparent 80%)`,
+        }} />
 
-        {/* Metrics grid */}
-        {sections.includes('metrics') && numericFields.length > 0 && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(170px,1fr))', borderTop: `2px solid ${T.fg}`, marginBottom: 40 }}>
-            {numericFields.map(([k, v], i) => {
-              const fmeta = schemaFields.find((f: any) => f.key === k);
-              const color = fieldColors[k];
-              const selected = k === chartField && sections.includes('chart');
-              return (
-                <button
-                  key={k}
-                  onClick={() => sections.includes('chart') && setChartField(k)}
-                  style={{
-                    padding: '20px 22px', textAlign: 'left', background: selected ? T.primaryMuted : 'transparent',
-                    border: 'none', borderBottom: `1px solid ${T.border}`, borderRight: `1px solid ${T.border}`,
-                    cursor: sections.includes('chart') ? 'pointer' : 'default',
-                    outline: selected ? `1.5px solid ${color}` : 'none', outlineOffset: -1,
-                    transition: 'background 0.15s', color: T.fg,
-                  }}
-                >
-                  <div style={{ fontSize: 9.5, fontFamily: T.fontMono, letterSpacing: '0.1em', textTransform: 'uppercase', color: T.fgMuted, marginBottom: 6 }}>{k.replace(/_/g, ' ')}</div>
-                  <div style={{ fontFamily: T.fontDisplay, fontSize: 36, lineHeight: 1, color, letterSpacing: '-0.02em' }}>{v.toFixed(2)}</div>
-                  {fmeta?.unit && <div style={{ fontSize: 10, fontFamily: T.fontMono, color: T.fgFaint, marginTop: 4 }}>{fmeta.unit}</div>}
-                </button>
-              );
-            })}
-          </div>
-        )}
+        {/* 3-col layout: rail | content | rail */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'minmax(0, 48px) minmax(0, 1fr) minmax(0, 48px)',
+          maxWidth: 1200,
+          margin: '0 auto',
+          width: '100%',
+          position: 'relative', zIndex: 1,
+        }}>
+          {/* Left rail */}
+          <SideRail text={leftLabel} align="left" T={T} />
 
-        {/* Chart section */}
-        {sections.includes('chart') && numericFields.length > 0 && (
-          <div style={{ marginBottom: 40 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16, gap: 12, flexWrap: 'wrap' }}>
-              <div>
-                <div style={{ fontSize: 9.5, fontFamily: T.fontMono, letterSpacing: '0.12em', textTransform: 'uppercase', color: T.fgMuted, marginBottom: 6 }}>Telemetry</div>
-                <div style={{ fontFamily: T.fontDisplay, fontSize: 28, lineHeight: 1, color: T.fg, letterSpacing: '-0.02em', textTransform: 'capitalize' }}>
-                  {telemView === 'chart' ? chartField.replace(/_/g, ' ') : 'All fields'}{' '}
-                  <span style={{ fontStyle: 'italic', color: T.primary }}>· {chartRange}</span>
-                </div>
+          {/* Main content */}
+          <div style={{ padding: '52px 24px 0', minWidth: 0 }}>
+            {/* Hero */}
+            <div style={{ marginBottom: 44 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+                <span style={{ fontSize: 10, fontFamily: T.fontMono, letterSpacing: '0.14em', color: T.fgMuted, textTransform: 'uppercase' }}>
+                  {device.category} · {device.protocol?.toUpperCase()}
+                </span>
+                {sections.includes('metrics') && <LiveBadge />}
               </div>
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                {telemView === 'chart' && numericFields.length > 1 && (
-                  <select value={chartField} onChange={e => setChartField(e.target.value)}
-                    style={{ padding: '5px 10px', background: T.surface, border: `1px solid ${T.border}`, color: T.fg, fontSize: 11, fontFamily: T.fontMono, outline: 'none', cursor: 'pointer' }}>
-                    {numericFields.map(([k]) => <option key={k} value={k}>{k.replace(/_/g, ' ')}</option>)}
-                  </select>
-                )}
-                <div style={seg}>
-                  <button style={segBtn(telemView === 'chart')} onClick={() => setTelemView('chart')}><BarChart2 size={11} style={{ verticalAlign: 'middle', marginRight: 4 }} />Chart</button>
-                  <button style={segBtn(telemView === 'table')} onClick={() => setTelemView('table')}><TableProperties size={11} style={{ verticalAlign: 'middle', marginRight: 4 }} />Table</button>
-                </div>
-                <div style={seg}>
-                  {['1h', '6h', '24h', '7d'].map(r => <button key={r} style={segBtn(chartRange === r)} onClick={() => setChartRange(r)}>{r.toUpperCase()}</button>)}
-                </div>
+              <h1 style={{ fontFamily: T.fontDisplay, fontSize: 'clamp(34px,5vw,60px)', lineHeight: 1, margin: '0 0 12px', letterSpacing: '-0.03em', color: T.fg }}>
+                {(() => {
+                  const words = device.name.split(' ');
+                  if (words.length === 1) return <em style={{ fontStyle: 'italic', color: T.primary }}>{device.name}</em>;
+                  return <>{words.slice(0, -1).join(' ')}{' '}<em style={{ fontStyle: 'italic', color: T.primary }}>{words.slice(-1)[0]}</em></>;
+                })()}
+              </h1>
+              {device.description && <p style={{ fontSize: 15, color: T.fgMuted, maxWidth: 580, lineHeight: 1.65, margin: 0 }}>{device.description}</p>}
+            </div>
+
+            {/* Metrics grid */}
+            {sections.includes('metrics') && numericFields.length > 0 && (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(160px,1fr))', borderTop: `2px solid ${T.fg}`, marginBottom: 44 }}>
+                {numericFields.map(([k, v]) => {
+                  const fmeta = schemaFields.find((f: any) => f.key === k);
+                  const color = fieldColors[k];
+                  const selected = k === chartField && sections.includes('chart');
+                  return (
+                    <button
+                      key={k}
+                      onClick={() => sections.includes('chart') && setChartField(k)}
+                      style={{
+                        padding: '20px 22px', textAlign: 'left', background: selected ? T.primaryMuted : 'transparent',
+                        border: 'none', borderBottom: `1px solid ${T.border}`, borderRight: `1px solid ${T.border}`,
+                        cursor: sections.includes('chart') ? 'pointer' : 'default',
+                        outline: selected ? `1.5px solid ${color}` : 'none', outlineOffset: -1,
+                        transition: 'background 0.15s', color: T.fg,
+                      }}
+                    >
+                      <div style={{ fontSize: 9.5, fontFamily: T.fontMono, letterSpacing: '0.1em', textTransform: 'uppercase', color: T.fgMuted, marginBottom: 8 }}>{k.replace(/_/g, ' ')}</div>
+                      <div style={{ fontFamily: T.fontDisplay, fontSize: 38, lineHeight: 1, color, letterSpacing: '-0.02em' }}>{v.toFixed(2)}</div>
+                      {fmeta?.unit && <div style={{ fontSize: 10, fontFamily: T.fontMono, color: T.fgFaint, marginTop: 5 }}>{fmeta.unit}</div>}
+                    </button>
+                  );
+                })}
               </div>
-            </div>
-            <div style={{ background: T.surface, border: `1px solid ${T.border}`, overflow: 'hidden' }}>
-              {telemView === 'chart'
-                ? <DeviceChart token={token} field={chartField} color={chartColor} from={fromTs} T={T} />
-                : <DeviceTable token={token} field={chartField} schemaFields={schemaFields} from={fromTs} T={T} />}
-            </div>
-          </div>
-        )}
+            )}
 
-        {/* Info */}
-        {sections.includes('info') && (
-          <div style={{ marginBottom: 40 }}>
-            <SectionHeading label="Device Info" T={T} />
-            <div style={{ background: T.surface, border: `1px solid ${T.border}` }}>
-              {[['Category', device.category], ['Protocol', device.protocol?.toUpperCase()],
-                ['Payload format', device.payloadFormat?.toUpperCase() ?? '—'],
-                ['Firmware', device.firmwareVersion ?? '—'],
-                ['Tags', device.tags?.join(', ') || '—']
-              ].map(([label, val]) => (
-                <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 18px', borderBottom: `1px solid ${T.border}` }}>
-                  <span style={{ fontSize: 10.5, fontFamily: T.fontMono, letterSpacing: '0.1em', textTransform: 'uppercase', color: T.fgMuted }}>{label}</span>
-                  <span style={{ fontSize: 13, color: T.fg }}>{val}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Location */}
-        {sections.includes('location') && device.location?.lat && (
-          <div style={{ marginBottom: 40 }}>
-            <SectionHeading label="Location" T={T} />
-            <div style={{ display: 'grid', gridTemplateColumns: '200px 1fr', gap: 16 }}>
-              <div style={{ background: T.surface, border: `1px solid ${T.border}`, padding: 18, display: 'flex', flexDirection: 'column', gap: 14 }}>
-                {[['LAT', device.location.lat?.toFixed(6)], ['LNG', (device.location.lng ?? device.location.lon)?.toFixed(6)]].map(([k, v]) => (
-                  <div key={k}>
-                    <div style={{ fontSize: 9, fontFamily: T.fontMono, letterSpacing: '0.12em', color: T.fgFaint, marginBottom: 4 }}>{k}</div>
-                    <div style={{ fontSize: 14, fontFamily: T.fontMono, color: T.fg }}>{v}</div>
+            {/* Chart section */}
+            {sections.includes('chart') && numericFields.length > 0 && (
+              <div style={{ marginBottom: 44 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 18, gap: 12, flexWrap: 'wrap' }}>
+                  <div>
+                    <div style={{ fontSize: 9.5, fontFamily: T.fontMono, letterSpacing: '0.12em', textTransform: 'uppercase', color: T.fgMuted, marginBottom: 6 }}>Telemetry</div>
+                    <div style={{ fontFamily: T.fontDisplay, fontSize: 30, lineHeight: 1, color: T.fg, letterSpacing: '-0.02em', textTransform: 'capitalize' }}>
+                      {telemView === 'chart' ? chartField.replace(/_/g, ' ') : 'All fields'}{' '}
+                      <span style={{ fontStyle: 'italic', color: T.primary }}>· {chartRange}</span>
+                    </div>
                   </div>
-                ))}
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                    {telemView === 'chart' && numericFields.length > 1 && (
+                      <select value={chartField} onChange={e => setChartField(e.target.value)}
+                        style={{ padding: '5px 10px', background: T.surface, border: `1px solid ${T.border}`, color: T.fg, fontSize: 11, fontFamily: T.fontMono, outline: 'none', cursor: 'pointer' }}>
+                        {numericFields.map(([k]) => <option key={k} value={k}>{k.replace(/_/g, ' ')}</option>)}
+                      </select>
+                    )}
+                    <div style={seg}>
+                      <button style={segBtn(telemView === 'chart')} onClick={() => setTelemView('chart')}>
+                        <BarChart2 size={11} style={{ verticalAlign: 'middle', marginRight: 4 }} />Chart
+                      </button>
+                      <button style={segBtn(telemView === 'table')} onClick={() => setTelemView('table')}>
+                        <TableProperties size={11} style={{ verticalAlign: 'middle', marginRight: 4 }} />Table
+                      </button>
+                    </div>
+                    <div style={seg}>
+                      {['1h', '6h', '24h', '7d'].map(r => <button key={r} style={segBtn(chartRange === r)} onClick={() => setChartRange(r)}>{r.toUpperCase()}</button>)}
+                    </div>
+                  </div>
+                </div>
+                <div style={{ background: T.surface, border: `1px solid ${T.border}`, overflow: 'hidden' }}>
+                  {telemView === 'chart'
+                    ? <DeviceChart token={token} field={chartField} color={chartColor} from={fromTs} T={T} />
+                    : <DeviceTable token={token} field={chartField} schemaFields={schemaFields} from={fromTs} T={T} />}
+                </div>
               </div>
-              <div style={{ border: `1px solid ${T.border}`, overflow: 'hidden', minHeight: 260 }}>
-                <ShareMap devices={[device]} geofences={[]} mapTypeId="satellite" T={T} />
-              </div>
-            </div>
-          </div>
-        )}
+            )}
 
-        {/* History */}
-        {sections.includes('history') && (
-          <div style={{ marginBottom: 40 }}>
-            <SectionHeading label="Command History" T={T} />
-            <div style={{ background: T.surface, border: `1px solid ${T.border}`, overflow: 'hidden' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: T.fontMono, fontSize: 11 }}>
-                <thead>
-                  <tr style={{ background: T.surfaceActive }}>
-                    {['Command', 'Status', 'Sent'].map(h => (
-                      <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontSize: 9.5, letterSpacing: '0.1em', textTransform: 'uppercase', color: T.fgMuted, borderBottom: `1px solid ${T.border}`, fontWeight: 600 }}>{h}</th>
+            {/* Info */}
+            {sections.includes('info') && (
+              <div style={{ marginBottom: 44 }}>
+                <SectionHeading label="Device Info" T={T} />
+                <div style={{ background: T.surface, border: `1px solid ${T.border}` }}>
+                  {[['Category', device.category], ['Protocol', device.protocol?.toUpperCase()],
+                    ['Payload format', device.payloadFormat?.toUpperCase() ?? '—'],
+                    ['Firmware', device.firmwareVersion ?? '—'],
+                    ['Tags', device.tags?.join(', ') || '—'],
+                  ].map(([label, val]) => (
+                    <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 18px', borderBottom: `1px solid ${T.border}` }}>
+                      <span style={{ fontSize: 10.5, fontFamily: T.fontMono, letterSpacing: '0.1em', textTransform: 'uppercase', color: T.fgMuted }}>{label}</span>
+                      <span style={{ fontSize: 13, color: T.fg }}>{val}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Location */}
+            {sections.includes('location') && device.location?.lat && (
+              <div style={{ marginBottom: 44 }}>
+                <SectionHeading label="Location" T={T} />
+                <div style={{ display: 'grid', gridTemplateColumns: 'minmax(180px,200px) 1fr', gap: 16 }}>
+                  <div style={{ background: T.surface, border: `1px solid ${T.border}`, padding: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
+                    {[['LAT', device.location.lat?.toFixed(6)], ['LNG', (device.location.lng ?? device.location.lon)?.toFixed(6)]].map(([k, v]) => (
+                      <div key={k}>
+                        <div style={{ fontSize: 9, fontFamily: T.fontMono, letterSpacing: '0.14em', color: T.fgFaint, marginBottom: 4 }}>{k}</div>
+                        <div style={{ fontSize: 14, fontFamily: T.fontMono, color: T.fg }}>{v}</div>
+                      </div>
                     ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {(data.commandHistory ?? []).length === 0
-                    ? <tr><td colSpan={3} style={{ padding: '28px 16px', textAlign: 'center', color: T.fgMuted }}>No commands recorded</td></tr>
-                    : (data.commandHistory ?? []).map((cmd: any, i: number) => (
-                      <tr key={cmd._id} style={{ background: i % 2 === 0 ? 'transparent' : T.surfaceHover }}>
-                        <td style={{ padding: '10px 16px', color: T.primary, borderBottom: `1px solid ${T.border}` }}>{cmd.name}</td>
-                        <td style={{ padding: '10px 16px', borderBottom: `1px solid ${T.border}` }}>
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 9.5, padding: '2px 8px', letterSpacing: '0.08em',
-                            background: cmd.status === 'executed' ? T.good + '22' : cmd.status === 'failed' ? T.bad + '22' : T.border,
-                            color: cmd.status === 'executed' ? T.good : cmd.status === 'failed' ? T.bad : T.fgMuted }}>
-                            {cmd.status?.toUpperCase()}
-                          </span>
-                        </td>
-                        <td style={{ padding: '10px 16px', color: T.fgMuted, borderBottom: `1px solid ${T.border}` }}>{new Date(cmd.createdAt).toLocaleString()}</td>
+                    <div style={{ marginTop: 'auto', paddingTop: 16, borderTop: `1px solid ${T.border}` }}>
+                      <div style={{ fontSize: 9, fontFamily: T.fontMono, color: T.fgFaint, letterSpacing: '0.1em', marginBottom: 4 }}>STATUS</div>
+                      <span style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 10, fontFamily: T.fontMono, padding: '3px 8px',
+                        background: device.status === 'online' ? T.good + '22' : T.border,
+                        color: device.status === 'online' ? T.good : T.fgMuted,
+                      }}>
+                        {device.status === 'online' && <span style={{ width: 5, height: 5, borderRadius: '50%', background: T.good, animation: 'pulse 2s infinite' }} />}
+                        {device.status?.toUpperCase()}
+                      </span>
+                    </div>
+                  </div>
+                  <div style={{ border: `1px solid ${T.border}`, overflow: 'hidden', minHeight: 280 }}>
+                    <ShareMap devices={[device]} geofences={[]} mapTypeId="satellite" T={T} />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* History */}
+            {sections.includes('history') && (
+              <div style={{ marginBottom: 44 }}>
+                <SectionHeading label="Command History" T={T} />
+                <div style={{ background: T.surface, border: `1px solid ${T.border}`, overflow: 'hidden' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: T.fontMono, fontSize: 11 }}>
+                    <thead>
+                      <tr style={{ background: T.surfaceActive }}>
+                        {['Command', 'Status', 'Sent'].map(h => (
+                          <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontSize: 9.5, letterSpacing: '0.1em', textTransform: 'uppercase', color: T.fgMuted, borderBottom: `1px solid ${T.border}`, fontWeight: 600 }}>{h}</th>
+                        ))}
                       </tr>
-                    ))}
-                </tbody>
-              </table>
-            </div>
+                    </thead>
+                    <tbody>
+                      {(data.commandHistory ?? []).length === 0
+                        ? <tr><td colSpan={3} style={{ padding: '28px 16px', textAlign: 'center', color: T.fgMuted }}>No commands recorded</td></tr>
+                        : (data.commandHistory ?? []).map((cmd: any, i: number) => (
+                          <tr key={cmd._id} style={{ background: i % 2 === 0 ? 'transparent' : T.surfaceHover }}>
+                            <td style={{ padding: '10px 16px', color: T.primary, borderBottom: `1px solid ${T.border}` }}>{cmd.name}</td>
+                            <td style={{ padding: '10px 16px', borderBottom: `1px solid ${T.border}` }}>
+                              <span style={{
+                                display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 9.5, padding: '2px 8px', letterSpacing: '0.08em',
+                                background: cmd.status === 'executed' ? T.good + '22' : cmd.status === 'failed' ? T.bad + '22' : T.border,
+                                color: cmd.status === 'executed' ? T.good : cmd.status === 'failed' ? T.bad : T.fgMuted,
+                              }}>{cmd.status?.toUpperCase()}</span>
+                            </td>
+                            <td style={{ padding: '10px 16px', color: T.fgMuted, borderBottom: `1px solid ${T.border}` }}>{new Date(cmd.createdAt).toLocaleString()}</td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </div>
-        )}
+
+          {/* Right rail */}
+          <SideRail text="Orion Platform · Live" align="right" T={T} />
+        </div>
       </div>
       <PageFooter />
     </div>
@@ -418,7 +526,7 @@ function DeviceShareView({ token, data }: { token: string; data: any }) {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
-   PAGE SHARE VIEW — premium builder layout
+   PAGE SHARE VIEW
    ═══════════════════════════════════════════════════════════════════════ */
 function PageShareView({ pageData }: { pageData: any }) {
   const { T } = useT();
@@ -429,41 +537,73 @@ function PageShareView({ pageData }: { pageData: any }) {
   return (
     <div style={{ background: T.bg, color: T.fg, minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
       <TopNav subtitle={page.name} />
-      <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }`}</style>
+      <style>{`
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+        @keyframes orion-spin { to { transform: rotate(360deg); } }
+        @keyframes orion-pulse { 0%{transform:scale(0.9);opacity:0.7} 100%{transform:scale(2.2);opacity:0} }
+      `}</style>
 
-      <div style={{ maxWidth: 1440, margin: '0 auto', width: '100%', padding: '48px 24px 0' }}>
-        {/* Hero */}
-        <div style={{ marginBottom: 48, paddingBottom: 36, borderBottom: `1px solid ${T.border}` }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-            <span style={{ fontSize: 9.5, fontFamily: T.fontMono, letterSpacing: '0.14em', color: T.fgMuted, textTransform: 'uppercase' }}>Dashboard · Orion Platform</span>
-            <LiveBadge />
+      <div style={{ position: 'relative', flex: 1 }}>
+        {/* Hero accent */}
+        <div style={{
+          position: 'absolute', top: 0, left: 0, right: 0, height: 300, pointerEvents: 'none', zIndex: 0,
+          background: `radial-gradient(ellipse 80% 60% at 50% 0%, ${T.primaryMuted} 0%, transparent 80%)`,
+        }} />
+
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'minmax(0, 48px) minmax(0, 1fr) minmax(0, 48px)',
+          maxWidth: 1600,
+          margin: '0 auto',
+          width: '100%',
+          position: 'relative', zIndex: 1,
+        }}>
+          {/* Left rail */}
+          <SideRail text={`Dashboard · ${page.widgets?.length ?? 0} widgets`} align="left" T={T} />
+
+          {/* Main content */}
+          <div style={{ padding: '52px 20px 0', minWidth: 0 }}>
+            {/* Hero */}
+            <div style={{ marginBottom: 48, paddingBottom: 40, borderBottom: `1px solid ${T.border}` }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+                <span style={{ fontSize: 9.5, fontFamily: T.fontMono, letterSpacing: '0.14em', color: T.fgMuted, textTransform: 'uppercase' }}>Dashboard · Orion Platform</span>
+                <LiveBadge />
+              </div>
+              <h1 style={{ fontFamily: T.fontDisplay, fontSize: 'clamp(36px,5vw,64px)', lineHeight: 1, margin: '0 0 14px', letterSpacing: '-0.03em', color: T.fg }}>
+                {(() => {
+                  const words = page.name.split(' ');
+                  if (words.length === 1) return <em style={{ fontStyle: 'italic', color: T.primary }}>{page.name}</em>;
+                  return <>{words.slice(0, -1).join(' ')}{' '}<em style={{ fontStyle: 'italic', color: T.primary }}>{words.slice(-1)[0]}</em></>;
+                })()}
+              </h1>
+              {page.description && <p style={{ fontSize: 15, color: T.fgMuted, maxWidth: 560, lineHeight: 1.65, margin: 0 }}>{page.description}</p>}
+            </div>
+
+            {/* Widget grid — 12-col × 70px-row, exact match to builder */}
+            {visibleWidgets.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '80px 24px', opacity: 0.35 }}>
+                <div style={{ fontFamily: T.fontDisplay, fontSize: 28, marginBottom: 8, color: T.fg }}>Nothing here yet</div>
+                <p style={{ fontSize: 13, color: T.fgMuted }}>This page has no visible widgets.</p>
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(12, 1fr)', gridAutoRows: '70px', gap: '12px' }}>
+                {visibleWidgets.map((w: any) => {
+                  const pos = w.position ?? { x: 0, y: 0, w: 4, h: 3 };
+                  // content height = rows × rowH + (rows-1) × gap − card-header
+                  const contentH = Math.max(80, pos.h * 70 + (pos.h - 1) * 12 - 50);
+                  return (
+                    <div key={w.id} style={{ gridColumn: `${pos.x + 1} / span ${pos.w}`, gridRow: `${pos.y + 1} / span ${pos.h}`, minWidth: 0, minHeight: 0 }}>
+                      <PageWidgetCard widget={w} data={widgetData[w.id]} T={T} allowExports={allowExports} contentH={contentH} />
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
-          <h1 style={{ fontFamily: T.fontDisplay, fontSize: 'clamp(36px,5vw,60px)', lineHeight: 1, margin: '0 0 12px', letterSpacing: '-0.03em', color: T.fg }}>
-            {page.name.split(' ').length > 1
-              ? <>{page.name.split(' ').slice(0, -1).join(' ')}{' '}<em style={{ fontStyle: 'italic', color: T.primary }}>{page.name.split(' ').slice(-1)[0]}</em></>
-              : <em style={{ fontStyle: 'italic', color: T.primary }}>{page.name}</em>}
-          </h1>
-          {page.description && <p style={{ fontSize: 15, color: T.fgMuted, maxWidth: 560, lineHeight: 1.65, margin: 0 }}>{page.description}</p>}
+
+          {/* Right rail */}
+          <SideRail text="Orion Platform · Live" align="right" T={T} />
         </div>
-
-        {/* Widget grid — exact 12-col, 70px-row grid matching builder */}
-        {visibleWidgets.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '80px 24px', opacity: 0.35 }}>
-            <div style={{ fontFamily: T.fontDisplay, fontSize: 28, marginBottom: 8, color: T.fg }}>Nothing here yet</div>
-            <p style={{ fontSize: 13, color: T.fgMuted }}>This page has no visible widgets.</p>
-          </div>
-        ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(12, 1fr)', gridAutoRows: '70px', gap: '12px' }}>
-            {visibleWidgets.map((w: any) => {
-              const pos = w.position ?? { x: 0, y: 0, w: 4, h: 3 };
-              return (
-                <div key={w.id} style={{ gridColumn: `${pos.x + 1} / span ${pos.w}`, gridRow: `${pos.y + 1} / span ${pos.h}`, minWidth: 0, minHeight: 0 }}>
-                  <PageWidgetCard widget={w} data={widgetData[w.id]} T={T} allowExports={allowExports} />
-                </div>
-              );
-            })}
-          </div>
-        )}
       </div>
       <PageFooter />
     </div>
@@ -475,10 +615,11 @@ const WIDGET_ACCENT: Record<string, string> = {
   kpi_card: '#ff5b1f', line_chart: '#6366f1', bar_chart: '#22d3ee',
   gauge: '#f59e0b', data_table: '#10b981', map: '#3b82f6', status_grid: '#a855f7',
 };
-
 const EXPORTABLE_TYPES = new Set(['line_chart', 'bar_chart', 'data_table']);
 
-function PageWidgetCard({ widget, data, T, allowExports }: { widget: any; data: any; T: Tokens; allowExports?: boolean }) {
+function PageWidgetCard({ widget, data, T, allowExports, contentH }: {
+  widget: any; data: any; T: Tokens; allowExports?: boolean; contentH?: number;
+}) {
   const [hovered, setHovered] = useState(false);
   const accent = WIDGET_ACCENT[widget.type] ?? T.primary;
   const canExport = allowExports && EXPORTABLE_TYPES.has(widget.type);
@@ -489,7 +630,6 @@ function PageWidgetCard({ widget, data, T, allowExports }: { widget: any; data: 
       const rows = entries.map(([k, v]) => `"${k}","${v}"`);
       downloadCsv(`${widget.title.replace(/\s+/g, '-')}-${new Date().toISOString().slice(0,10)}.csv`, ['field', 'value'], rows as any);
     } else {
-      // line_chart / bar_chart — data is array of {ts, value}
       const pts: any[] = Array.isArray(data) ? data : [];
       const rows = pts.map(p => `"${new Date(p.ts).toISOString()}","${p.value}"`);
       const field = widget.field ?? widget.type;
@@ -507,14 +647,14 @@ function PageWidgetCard({ widget, data, T, allowExports }: { widget: any; data: 
         borderTop: `2px solid ${accent}`,
         boxShadow: hovered ? T.shadowHover : T.shadowCard,
         transition: 'box-shadow 0.2s, transform 0.2s',
-        transform: hovered ? 'translateY(-1px)' : 'none',
+        transform: hovered ? 'translateY(-2px)' : 'none',
         overflow: 'hidden',
       }}
     >
       {/* Card header */}
       <div style={{
         padding: '9px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        borderBottom: `1px solid ${T.border}`, flexShrink: 0, background: T.surfaceActive,
+        borderBottom: `1px solid ${T.border}`, flexShrink: 0, background: T.surfaceActive, minHeight: 40,
       }}>
         <span style={{ fontSize: 12, fontWeight: 600, color: T.fg, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', letterSpacing: '-0.01em' }}>{widget.title}</span>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, marginLeft: 8 }}>
@@ -527,14 +667,15 @@ function PageWidgetCard({ widget, data, T, allowExports }: { widget: any; data: 
 
       {/* Content */}
       <div style={{ flex: 1, overflow: 'hidden', minHeight: 0, position: 'relative' }}>
-        <PageWidgetContent widget={widget} data={data} T={T} />
+        <PageWidgetContent widget={widget} data={data} T={T} contentH={contentH} />
       </div>
     </div>
   );
 }
 
 /* ── Widget content by type ──────────────────────────────────────────── */
-function PageWidgetContent({ widget, data, T }: { widget: any; data: any; T: Tokens }) {
+function PageWidgetContent({ widget, data, T, contentH = 200 }: { widget: any; data: any; T: Tokens; contentH?: number }) {
+  const chartH = Math.max(80, contentH - 16);
   const empty = (msg = 'No data') => (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', fontSize: 12, fontFamily: T.fontMono, color: T.fgMuted }}>{msg}</div>
   );
@@ -542,9 +683,9 @@ function PageWidgetContent({ widget, data, T }: { widget: any; data: any; T: Tok
   if (widget.type === 'kpi_card') {
     const val = data?.fields?.[widget.field];
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 6, padding: 16 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 8, padding: 16 }}>
         <div style={{ fontSize: 9.5, fontFamily: T.fontMono, letterSpacing: '0.12em', textTransform: 'uppercase', color: T.fgMuted }}>{(widget.field ?? 'value').replace(/_/g, ' ')}</div>
-        <div style={{ fontFamily: T.fontDisplay, fontSize: 'clamp(26px,4vw,52px)', lineHeight: 1, color: T.primary, letterSpacing: '-0.02em' }}>
+        <div style={{ fontFamily: T.fontDisplay, fontSize: `clamp(24px,${Math.max(3, contentH / 8)}px,60px)`, lineHeight: 1, color: T.primary, letterSpacing: '-0.02em' }}>
           {val !== undefined ? Number(val).toFixed(2) : <span style={{ fontSize: 22, color: T.fgFaint }}>—</span>}
         </div>
         {data?.timestamp && <div style={{ fontSize: 9, fontFamily: T.fontMono, color: T.fgFaint }}>updated {new Date(data.timestamp).toLocaleTimeString()}</div>}
@@ -556,14 +697,15 @@ function PageWidgetContent({ widget, data, T }: { widget: any; data: any; T: Tok
     const pts: any[] = Array.isArray(data) ? data : [];
     const lastVal = pts.length > 0 ? pts[pts.length - 1].value : undefined;
     const pct = lastVal !== undefined ? Math.min(100, Math.max(0, lastVal)) : 0;
-    const r = 56; const cx = 80; const cy = 76;
+    const scale = Math.min(1, contentH / 150);
+    const r = 56 * scale; const cx = 80; const cy = 76;
     const start = Math.PI * 0.75; const end = Math.PI * 2.25;
     const arc = (a: number) => ({ x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) });
     const s = arc(start); const e = arc(end); const a = arc(start + (end - start) * (pct / 100));
     const large = pct > 50 ? 1 : 0;
     return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
-        <svg viewBox="0 0 160 115" style={{ width: '100%', maxWidth: 160, height: 'auto' }}>
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', padding: 8 }}>
+        <svg viewBox="0 0 160 115" style={{ width: '100%', maxWidth: Math.min(160, contentH * 1.4), height: 'auto' }}>
           <path d={`M ${s.x} ${s.y} A ${r} ${r} 0 1 1 ${e.x} ${e.y}`} fill="none" stroke={T.border} strokeWidth={10} strokeLinecap="round" />
           {pct > 0 && <path d={`M ${s.x} ${s.y} A ${r} ${r} 0 ${large} 1 ${a.x} ${a.y}`} fill="none" stroke={T.primary} strokeWidth={10} strokeLinecap="round" />}
           <text x={cx} y={cy} textAnchor="middle" fill={T.fg} style={{ fontFamily: T.fontDisplay, fontSize: 22 }}>{lastVal?.toFixed(1) ?? '—'}</text>
@@ -576,7 +718,7 @@ function PageWidgetContent({ widget, data, T }: { widget: any; data: any; T: Tok
   if (widget.type === 'line_chart') {
     const pts = (Array.isArray(data) ? data : []).map((p: any) => ({ ts: new Date(p.ts).getTime(), value: p.value }));
     return pts.length > 0
-      ? <div style={{ padding: '8px 4px 4px', height: '100%' }}><LineChart series={[{ name: widget.field ?? '', data: pts, color: T.primary }]} height={180} showArea /></div>
+      ? <div style={{ padding: '6px 4px 2px', height: '100%' }}><LineChart series={[{ name: widget.field ?? '', data: pts, color: T.primary }]} height={chartH} showArea /></div>
       : empty('No data yet');
   }
 
@@ -586,7 +728,7 @@ function PageWidgetContent({ widget, data, T }: { widget: any; data: any; T: Tok
       value: p.value,
     }));
     return pts.length > 0
-      ? <div style={{ padding: '8px 4px 4px', height: '100%' }}><BarChart data={pts} color={T.primary} height={180} /></div>
+      ? <div style={{ padding: '6px 4px 2px', height: '100%' }}><BarChart data={pts} color={T.primary} height={chartH} /></div>
       : empty('No data yet');
   }
 
@@ -629,7 +771,6 @@ function PageWidgetContent({ widget, data, T }: { widget: any; data: any; T: Tok
   }
 
   if (widget.type === 'map') {
-    // data may be { devices, geofences } (new format) or an array (old format)
     const mapData = Array.isArray(data) ? { devices: data, geofences: [] } : (data ?? { devices: [], geofences: [] });
     const devices: any[] = (mapData.devices ?? []).filter(Boolean);
     const geofences: any[] = mapData.geofences ?? [];
@@ -657,19 +798,24 @@ function ShareMap({ devices, geofences, mapTypeId: initialType, T }: {
   const center = { lat: withLoc[0].location.lat, lng: withLoc[0].location.lng ?? withLoc[0].location.lon ?? 0 };
 
   const MAP_TYPES: { key: MapTypeId; label: string }[] = [
-    { key: 'satellite', label: 'Satellite' }, { key: 'hybrid', label: 'Hybrid' },
-    { key: 'roadmap', label: 'Map' }, { key: 'terrain', label: 'Terrain' },
+    { key: 'satellite', label: 'SAT' }, { key: 'hybrid', label: 'HYB' },
+    { key: 'roadmap', label: 'MAP' }, { key: 'terrain', label: 'TRN' },
   ];
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', minHeight: 200 }}>
-      {/* Map type selector */}
-      <div style={{ position: 'absolute', top: 10, right: 10, zIndex: 10, display: 'flex', gap: 4, background: T.bg + 'ee', border: `1px solid ${T.border}`, padding: 3 }}>
+      {/* Map type pill */}
+      <div style={{
+        position: 'absolute', top: 10, right: 10, zIndex: 10,
+        display: 'flex', gap: 2, background: T.bg + 'e8', border: `1px solid ${T.border}`,
+        padding: 3, backdropFilter: 'blur(8px)',
+      }}>
         {MAP_TYPES.map(({ key, label }) => (
           <button key={key} onClick={() => setMapType(key)} style={{
-            padding: '3px 8px', border: 'none', cursor: 'pointer', fontSize: 9.5, fontFamily: T.fontMono,
+            padding: '4px 9px', border: 'none', cursor: 'pointer', fontSize: 9.5, fontFamily: T.fontMono, letterSpacing: '0.06em',
             background: mapType === key ? T.primary : 'transparent',
             color: mapType === key ? '#fff' : T.fgMuted,
+            transition: 'all 0.15s',
           }}>{label}</button>
         ))}
       </div>
@@ -699,18 +845,16 @@ function GeofenceLayer({ geofences }: { geofences: any[] }) {
     const shapes: any[] = [];
     for (const gf of geofences) {
       if (gf.type === 'polygon' && (gf.coordinates?.length ?? 0) >= 3) {
-        const poly = new win.google.maps.Polygon({
-          paths: gf.coordinates, strokeColor: gf.color, strokeOpacity: 0.9, strokeWeight: 2,
-          fillColor: gf.color, fillOpacity: 0.18, map,
-        });
-        shapes.push(poly);
+        shapes.push(new win.google.maps.Polygon({
+          paths: gf.coordinates, strokeColor: gf.color ?? '#FF5B1F', strokeOpacity: 0.9, strokeWeight: 2,
+          fillColor: gf.color ?? '#FF5B1F', fillOpacity: 0.15, map,
+        }));
       } else if (gf.type === 'circle' && gf.center) {
-        const circle = new win.google.maps.Circle({
+        shapes.push(new win.google.maps.Circle({
           center: gf.center, radius: gf.radius ?? 100,
-          strokeColor: gf.color, strokeOpacity: 0.9, strokeWeight: 2,
-          fillColor: gf.color, fillOpacity: 0.18, map,
-        });
-        shapes.push(circle);
+          strokeColor: gf.color ?? '#FF5B1F', strokeOpacity: 0.9, strokeWeight: 2,
+          fillColor: gf.color ?? '#FF5B1F', fillOpacity: 0.15, map,
+        }));
       }
     }
     return () => shapes.forEach(s => s.setMap(null));
@@ -719,17 +863,19 @@ function GeofenceLayer({ geofences }: { geofences: any[] }) {
   return null;
 }
 
-/* ── Device marker with hover tooltip ───────────────────────────────── */
+/* ── Device marker — Orion-themed concentric ring pin ────────────────── */
+const CAT_COLORS: Record<string, string> = {
+  tracker: '#FF5B1F', environmental: '#10B981', energy: '#FACC15', water: '#3B82F6',
+  industrial: '#F97316', gateway: '#06B6D4', research: '#EC4899', telemetry: '#8B5CF6',
+  pump: '#14B8A6', mobile: '#F59E0B', fixed: '#6366F1', custom: '#8B5CF6',
+};
+
 function DeviceMarker({ device, T }: { device: any; T: Tokens }) {
   const [hovered, setHovered] = useState(false);
   const loc = device.location;
   if (!loc?.lat) return null;
-  const CAT_COLORS: Record<string, string> = {
-    tracker: '#FF5B1F', environmental: '#10B981', energy: '#FACC15', water: '#3B82F6',
-    industrial: '#F97316', gateway: '#06B6D4', research: '#EC4899', telemetry: '#8B5CF6',
-    pump: '#14B8A6', mobile: '#F59E0B', fixed: '#6366F1', custom: '#8B5CF6',
-  };
   const color = CAT_COLORS[device.category] ?? T.primary;
+  const isOnline = device.status === 'online';
 
   return (
     <AdvancedMarker position={{ lat: loc.lat, lng: loc.lng ?? loc.lon ?? 0 }}>
@@ -738,42 +884,66 @@ function DeviceMarker({ device, T }: { device: any; T: Tokens }) {
         onMouseLeave={() => setHovered(false)}
         style={{ position: 'relative', cursor: 'pointer' }}
       >
-        {/* Tooltip */}
+        {/* Hover tooltip */}
         {hovered && (
           <div style={{
-            position: 'absolute', bottom: '100%', left: '50%', transform: 'translateX(-50%)',
-            marginBottom: 8, background: T.surface, border: `1px solid ${T.border}`,
-            padding: '8px 12px', whiteSpace: 'nowrap', boxShadow: T.shadowHover, minWidth: 140,
+            position: 'absolute', bottom: 'calc(100% + 8px)', left: '50%', transform: 'translateX(-50%)',
+            background: T.surface, border: `1px solid ${T.borderStrong}`,
+            padding: '10px 14px', whiteSpace: 'nowrap', boxShadow: T.shadowHover, minWidth: 150,
+            pointerEvents: 'none',
           }}>
-            <div style={{ fontSize: 12, fontWeight: 600, color: T.fg, marginBottom: 2 }}>{device.name}</div>
-            <div style={{ fontSize: 10, fontFamily: T.fontMono, color: T.fgMuted }}>{device.category}</div>
+            {/* Triangle pointer */}
             <div style={{
-              display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 9.5, fontFamily: T.fontMono,
-              marginTop: 5, padding: '2px 7px',
-              background: device.status === 'online' ? T.good + '22' : T.border,
-              color: device.status === 'online' ? T.good : T.fgMuted,
+              position: 'absolute', bottom: -5, left: '50%', transform: 'translateX(-50%)',
+              width: 8, height: 8, background: T.surface, border: `1px solid ${T.borderStrong}`,
+              borderTop: 'none', borderLeft: 'none', rotate: '45deg',
+            }} />
+            <div style={{ fontSize: 12, fontWeight: 600, color: T.fg, marginBottom: 3 }}>{device.name}</div>
+            <div style={{ fontSize: 9.5, fontFamily: T.fontMono, color: T.fgMuted, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{device.category}</div>
+            <span style={{
+              display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 9.5, fontFamily: T.fontMono,
+              padding: '2px 8px', letterSpacing: '0.06em',
+              background: isOnline ? T.good + '22' : T.border,
+              color: isOnline ? T.good : T.fgMuted,
             }}>
-              {device.status === 'online' && <span style={{ width: 5, height: 5, borderRadius: '50%', background: T.good, animation: 'pulse 2s infinite' }} />}
+              {isOnline && <span style={{ width: 5, height: 5, borderRadius: '50%', background: T.good, animation: 'pulse 2s infinite' }} />}
               {device.status?.toUpperCase()}
-            </div>
+            </span>
           </div>
         )}
-        {/* Dot */}
-        <div style={{
-          width: 16, height: 16, borderRadius: '50%', background: color,
-          border: '2.5px solid white', boxShadow: `0 0 0 3px ${color}44`,
-          transition: 'transform 0.15s',
-          transform: hovered ? 'scale(1.3)' : 'scale(1)',
-        }} />
+
+        {/* Pulsing ring for online devices */}
+        {isOnline && (
+          <div style={{
+            position: 'absolute', inset: -10,
+            borderRadius: '50%', border: `1.5px solid ${color}`,
+            animation: 'orion-pulse 2.5s ease-out infinite',
+            pointerEvents: 'none',
+          }} />
+        )}
+
+        {/* Orion-branded pin: concentric circles matching logo */}
+        <svg
+          width={28} height={28} viewBox="0 0 28 28" fill="none"
+          style={{ display: 'block', filter: `drop-shadow(0 2px 6px ${color}66)`, transition: 'transform 0.15s', transform: hovered ? 'scale(1.25)' : 'scale(1)' }}
+        >
+          {/* Outer ring */}
+          <circle cx="14" cy="14" r="12" stroke={color} strokeWidth="2" fill={T.surface} fillOpacity="0.92" />
+          {/* Middle ring */}
+          <circle cx="14" cy="14" r="7" stroke={color} strokeWidth="1.5" opacity="0.45" fill="none" />
+          {/* Center dot */}
+          <circle cx="14" cy="14" r="3" fill={color} />
+        </svg>
       </div>
     </AdvancedMarker>
   );
 }
 
 /* ── CSV download helper ─────────────────────────────────────────────── */
-function downloadCsv(filename: string, headers: string[], rows: (string | number)[]) {
-  const lines = [[...headers].map(h => `"${h}"`).join(','), ...rows].join('\n');
-  const blob = new Blob([lines], { type: 'text/csv;charset=utf-8;' });
+function downloadCsv(filename: string, headers: string[], rows: any[]) {
+  const header = headers.map(h => `"${h}"`).join(',');
+  const body = rows.join('\n');
+  const blob = new Blob([header + '\n' + body], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
   URL.revokeObjectURL(url);
@@ -784,15 +954,15 @@ function ExportBtn({ onClick, T }: { onClick: () => void; T: Tokens }) {
     <button
       onClick={onClick}
       style={{
-        display: 'inline-flex', alignItems: 'center', gap: 5,
-        padding: '4px 10px', border: `1px solid ${T.border}`, background: 'transparent',
-        color: T.fgMuted, fontSize: 10, fontFamily: T.fontMono, letterSpacing: '0.06em',
-        cursor: 'pointer', transition: 'color 0.15s, border-color 0.15s',
+        display: 'inline-flex', alignItems: 'center', gap: 4,
+        padding: '3px 8px', border: `1px solid ${T.border}`, background: 'transparent',
+        color: T.fgMuted, fontSize: 9.5, fontFamily: T.fontMono, letterSpacing: '0.06em',
+        cursor: 'pointer', transition: 'all 0.15s',
       }}
       onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = T.fg; (e.currentTarget as HTMLElement).style.borderColor = T.borderStrong; }}
       onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = T.fgMuted; (e.currentTarget as HTMLElement).style.borderColor = T.border; }}
     >
-      <Download size={10} />CSV
+      <Download size={9} />CSV
     </button>
   );
 }
@@ -809,17 +979,17 @@ function DeviceChart({ token, field, color, from, T }: { token: string; field: s
 
   const exportCsv = () => {
     const rows = raw.map(p => `"${new Date(p.ts).toISOString()}","${p.value}"`);
-    downloadCsv(`${field}-${new Date().toISOString().slice(0,10)}.csv`, ['timestamp', field], rows as any);
+    downloadCsv(`${field}-${new Date().toISOString().slice(0,10)}.csv`, ['timestamp', field], rows);
   };
 
-  if (isLoading) return <div style={{ height: 260, background: T.surfaceActive, animation: 'pulse 2s infinite' }} />;
-  if (pts.length === 0) return <div style={{ height: 260, display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.fgMuted, fontFamily: T.fontMono, fontSize: 12 }}>No data</div>;
+  if (isLoading) return <div style={{ height: 280, background: T.surfaceActive, animation: 'pulse 2s infinite' }} />;
+  if (pts.length === 0) return <div style={{ height: 280, display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.fgMuted, fontFamily: T.fontMono, fontSize: 12 }}>No data</div>;
   return (
     <div style={{ position: 'relative' }}>
-      <div style={{ position: 'absolute', top: 8, right: 8, zIndex: 5 }}>
+      <div style={{ position: 'absolute', top: 10, right: 10, zIndex: 5 }}>
         <ExportBtn onClick={exportCsv} T={T} />
       </div>
-      <LineChart series={[{ name: field, data: pts, color }]} height={260} showArea />
+      <LineChart series={[{ name: field, data: pts, color }]} height={280} showArea />
     </div>
   );
 }
@@ -837,22 +1007,22 @@ function DeviceTable({ token, field, schemaFields, from, T }: { token: string; f
 
   const exportCsv = () => {
     const csvRows = rows.map(r => `"${new Date(r.ts).toISOString()}","${r.value}"`);
-    downloadCsv(`${field}-${new Date().toISOString().slice(0,10)}.csv`, ['timestamp', field], csvRows as any);
+    downloadCsv(`${field}-${new Date().toISOString().slice(0,10)}.csv`, ['timestamp', field], csvRows);
   };
 
-  if (isLoading) return <div style={{ height: 260, background: T.surfaceActive, animation: 'pulse 2s infinite' }} />;
-  if (rows.length === 0) return <div style={{ height: 260, display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.fgMuted, fontFamily: T.fontMono, fontSize: 12 }}>No data in range</div>;
+  if (isLoading) return <div style={{ height: 280, background: T.surfaceActive, animation: 'pulse 2s infinite' }} />;
+  if (rows.length === 0) return <div style={{ height: 280, display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.fgMuted, fontFamily: T.fontMono, fontSize: 12 }}>No data in range</div>;
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '8px 14px 0' }}>
         <ExportBtn onClick={exportCsv} T={T} />
       </div>
-      <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 300 }}>
+      <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 320 }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: T.fontMono, fontSize: 11 }}>
           <thead style={{ position: 'sticky', top: 0, background: T.surfaceActive, zIndex: 1 }}>
             <tr>
-              <th style={{ padding: '9px 14px', textAlign: 'left', fontSize: 9.5, letterSpacing: '0.1em', textTransform: 'uppercase', color: T.fgMuted, borderBottom: `1px solid ${T.border}`, fontWeight: 600 }}>Timestamp</th>
-              <th style={{ padding: '9px 14px', textAlign: 'right', fontSize: 9.5, letterSpacing: '0.1em', textTransform: 'uppercase', color, borderBottom: `1px solid ${T.border}`, fontWeight: 600 }}>
+              <th style={{ padding: '9px 16px', textAlign: 'left', fontSize: 9.5, letterSpacing: '0.1em', textTransform: 'uppercase', color: T.fgMuted, borderBottom: `1px solid ${T.border}`, fontWeight: 600 }}>Timestamp</th>
+              <th style={{ padding: '9px 16px', textAlign: 'right', fontSize: 9.5, letterSpacing: '0.1em', textTransform: 'uppercase', color, borderBottom: `1px solid ${T.border}`, fontWeight: 600 }}>
                 {field.replace(/_/g, ' ')}{fm?.unit ? ` (${fm.unit})` : ''}
               </th>
             </tr>
@@ -860,8 +1030,8 @@ function DeviceTable({ token, field, schemaFields, from, T }: { token: string; f
           <tbody>
             {rows.map((row: any, i: number) => (
               <tr key={i} style={{ background: i % 2 === 0 ? 'transparent' : T.surfaceHover }}>
-                <td style={{ padding: '8px 14px', color: T.fgMuted, whiteSpace: 'nowrap', borderBottom: `1px solid ${T.border}` }}>{new Date(row.ts).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' })}</td>
-                <td style={{ padding: '8px 14px', textAlign: 'right', color, borderBottom: `1px solid ${T.border}`, fontVariantNumeric: 'tabular-nums' }}>{typeof row.value === 'number' ? row.value.toFixed(4) : String(row.value ?? '—')}</td>
+                <td style={{ padding: '8px 16px', color: T.fgMuted, whiteSpace: 'nowrap', borderBottom: `1px solid ${T.border}` }}>{new Date(row.ts).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' })}</td>
+                <td style={{ padding: '8px 16px', textAlign: 'right', color, borderBottom: `1px solid ${T.border}`, fontVariantNumeric: 'tabular-nums' }}>{typeof row.value === 'number' ? row.value.toFixed(4) : String(row.value ?? '—')}</td>
               </tr>
             ))}
           </tbody>
@@ -871,18 +1041,23 @@ function DeviceTable({ token, field, schemaFields, from, T }: { token: string; f
   );
 }
 
-/* ── Section heading ─────────────────────────────────────────────────── */
+/* ── Section heading — font mixing signature ─────────────────────────── */
 function SectionHeading({ label, T }: { label: string; T: Tokens }) {
+  const words = label.split(' ');
+  const rest = words.slice(0, -1).join(' ');
+  const last = words.slice(-1)[0];
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-      <span style={{ fontSize: 9.5, fontFamily: T.fontMono, letterSpacing: '0.14em', textTransform: 'uppercase', color: T.fgMuted }}>{label}</span>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 18 }}>
+      <div style={{ fontFamily: T.fontDisplay, fontSize: 22, fontWeight: 700, letterSpacing: '-0.03em', lineHeight: 1, flexShrink: 0, color: T.fg }}>
+        {rest ? <>{rest}{' '}<em style={{ fontStyle: 'italic', color: T.primary }}>{last}</em></> : <em style={{ fontStyle: 'italic', color: T.primary }}>{last}</em>}
+      </div>
       <div style={{ flex: 1, height: 1, background: T.border }} />
     </div>
   );
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
-   ROOT — resolves token, wraps in theme provider
+   ROOT — resolves token, wraps in ThemeProvider
    ═══════════════════════════════════════════════════════════════════════ */
 export function ShareViewPage() {
   const { token } = useParams<{ token: string }>();
@@ -901,48 +1076,100 @@ export function ShareViewPage() {
 
   const isLoading = loadingDevice || (deviceErr && loadingPage);
 
-  if (isLoading) {
-    return (
-      <ThemeProvider>
-        <LoadingScreen />
-      </ThemeProvider>
-    );
-  }
-
   return (
     <ThemeProvider>
-      {deviceData?.device
-        ? <DeviceShareView token={token!} data={deviceData} />
-        : pageData?.page
-          ? <PageShareView pageData={pageData} />
-          : <NotFoundScreen />}
+      {isLoading
+        ? <LoadingScreen />
+        : deviceData?.device
+          ? <DeviceShareView token={token!} data={deviceData} />
+          : pageData?.page
+            ? <PageShareView pageData={pageData} />
+            : <NotFoundScreen />}
     </ThemeProvider>
   );
 }
 
+/* ── Loading screen — animated Orion radar ───────────────────────────── */
 function LoadingScreen() {
   const { T } = useT();
   return (
-    <div style={{ minHeight: '100vh', background: T.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16 }}>
-      <div style={{ width: 36, height: 36, background: T.primary, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, fontFamily: T.fontDisplay, color: '#fff', fontWeight: 700 }}>O</div>
-      <div style={{ fontSize: 11, fontFamily: T.fontMono, letterSpacing: '0.14em', color: T.fgMuted, animation: 'pulse 2s infinite' }}>LOADING…</div>
-      <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }`}</style>
+    <div style={{
+      minHeight: '100vh', background: T.bg,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      flexDirection: 'column', gap: 0, position: 'relative', overflow: 'hidden',
+    }}>
+      <style>{`
+        @keyframes orion-spin { to { transform: rotate(360deg); } }
+        @keyframes orion-pulse { 0%{transform:scale(0.8);opacity:0.6} 100%{transform:scale(2.4);opacity:0} }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+        @keyframes fade-up { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:none} }
+      `}</style>
+
+      {/* Radial background glow */}
+      <div style={{
+        position: 'absolute', inset: 0, pointerEvents: 'none',
+        background: `radial-gradient(ellipse 60% 60% at 50% 48%, ${T.primaryMuted} 0%, transparent 70%)`,
+      }} />
+
+      {/* Animated logo stack */}
+      <div style={{ position: 'relative', width: 100, height: 100, marginBottom: 36 }}>
+        {/* Outer pulse ring 1 */}
+        <div style={{
+          position: 'absolute', inset: -16, borderRadius: '50%',
+          border: `1px solid ${T.primary}`,
+          animation: 'orion-pulse 2.6s ease-out infinite',
+        }} />
+        {/* Outer pulse ring 2 (offset) */}
+        <div style={{
+          position: 'absolute', inset: -16, borderRadius: '50%',
+          border: `1px solid ${T.primary}`,
+          animation: 'orion-pulse 2.6s ease-out 0.9s infinite',
+        }} />
+        {/* Spinning logo */}
+        <div style={{
+          position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          animation: 'orion-spin 10s linear infinite',
+        }}>
+          <OrionMark size={100} color={T.primary} />
+        </div>
+      </div>
+
+      {/* Wordmark */}
+      <div style={{ textAlign: 'center', zIndex: 1, animation: 'fade-up 0.6s ease both 0.2s' }}>
+        <div style={{
+          fontFamily: T.fontDisplay, fontSize: 52, fontWeight: 700,
+          letterSpacing: '-0.05em', lineHeight: 1, color: T.fg,
+        }}>
+          Orion<em style={{ color: T.primary, fontStyle: 'italic' }}>.</em>
+        </div>
+        <div style={{
+          fontFamily: T.fontMono, fontSize: 10, letterSpacing: '0.24em',
+          color: T.fgMuted, marginTop: 10, textTransform: 'uppercase',
+          animation: 'pulse 2s ease infinite',
+        }}>
+          Loading · Please wait
+        </div>
+      </div>
     </div>
   );
 }
 
+/* ── Not found screen ────────────────────────────────────────────────── */
 function NotFoundScreen() {
   const { T } = useT();
   return (
     <div style={{ minHeight: '100vh', background: T.bg, color: T.fg, display: 'flex', flexDirection: 'column' }}>
+      <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}} @keyframes orion-spin{to{transform:rotate(360deg)}}`}</style>
       <TopNav />
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, padding: 32 }}>
-        <div style={{ width: 1, height: 60, background: T.border, marginBottom: 8 }} />
-        <div style={{ fontFamily: T.fontDisplay, fontSize: 'clamp(28px,4vw,48px)', letterSpacing: '-0.03em', color: T.fg }}>Link expired</div>
-        <p style={{ fontSize: 14, color: T.fgMuted, maxWidth: 380, textAlign: 'center', lineHeight: 1.6 }}>
-          This share link has expired or doesn't exist. Ask the sender for a fresh link.
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 20, padding: 32 }}>
+        <OrionMark size={48} />
+        <div style={{ fontFamily: T.fontDisplay, fontSize: 'clamp(28px,4vw,48px)', letterSpacing: '-0.03em', color: T.fg }}>
+          Link <em style={{ color: T.primary, fontStyle: 'italic' }}>expired</em>
+        </div>
+        <p style={{ fontSize: 14, color: T.fgMuted, maxWidth: 380, textAlign: 'center', lineHeight: 1.7, margin: 0 }}>
+          This share link has expired or doesn't exist.<br />Ask the sender for a fresh link.
         </p>
-        <a href="https://orion.vortan.io" style={{ fontSize: 12, fontFamily: T.fontMono, color: T.primary, textDecoration: 'none', letterSpacing: '0.08em', marginTop: 8 }}>
+        <a href="https://orion.vortan.io" style={{ fontSize: 12, fontFamily: T.fontMono, color: T.primary, textDecoration: 'none', letterSpacing: '0.08em', marginTop: 4 }}>
           EXPLORE ORION →
         </a>
       </div>
