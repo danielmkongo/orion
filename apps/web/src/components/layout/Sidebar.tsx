@@ -2,7 +2,7 @@ import { NavLink, useLocation } from 'react-router-dom';
 import type { LucideIcon } from 'lucide-react';
 import {
   LayoutDashboard, Activity, Bell, Map, Cpu, Sliders,
-  Download, Zap, BarChart3, Users, Settings, LogOut, Sun, Moon,
+  Download, Zap, BarChart3, Users, Settings, LogOut, Sun, Moon, Layout,
 } from 'lucide-react';
 import { useUIStore } from '@/store/ui.store';
 import { useAuthStore } from '@/store/auth.store';
@@ -19,8 +19,9 @@ const NAV: Array<{
   { num: '07', href: '/ota',       label: 'Firmware',   icon: Download                          },
   { num: '08', href: '/rules',     label: 'Rules',      icon: Zap,       group: 'INTELLIGENCE' },
   { num: '09', href: '/reports',   label: 'Reports',    icon: BarChart3                         },
-  { num: '10', href: '/users',     label: 'Users',      icon: Users,     group: 'ADMIN'        },
-  { num: '11', href: '/settings',  label: 'Settings',   icon: Settings                          },
+  { num: '10', href: '/pages',     label: 'Pages',      icon: Layout,    group: 'PUBLISH'      },
+  { num: '11', href: '/users',     label: 'Users',      icon: Users,     group: 'ADMIN'        },
+  { num: '12', href: '/settings',  label: 'Settings',   icon: Settings                          },
 ];
 
 export function Sidebar() {

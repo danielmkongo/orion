@@ -1,13 +1,13 @@
 import { useParams, Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, type ReactNode } from 'react';
 import { devicesApi } from '@/api/devices';
 import { telemetryApi } from '@/api/telemetry';
 import apiClient from '@/api/client';
 import { timeAgo, formatDate as fmtDate, getCategoryIconInfo, copyText, formatPayloadStr, formatCommandStr } from '@/lib/utils';
 import { useSocket } from '@/hooks/useSocket';
 import { LineChart, BarChart } from '@/components/charts/Charts';
-import { ArrowLeft, Eye, EyeOff, Copy, RefreshCw, Terminal, Plus, Trash2, Check, ChevronDown, ChevronRight, Pencil, X } from 'lucide-react';
+import { ArrowLeft, Eye, EyeOff, Copy, RefreshCw, Terminal, Plus, Trash2, Check, ChevronDown, ChevronRight, Pencil, X, Share2, BarChart2, TableProperties } from 'lucide-react';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import toast from 'react-hot-toast';
 import { CommandWidget } from '@/components/devices/CommandWidget';
@@ -98,6 +98,10 @@ export function DeviceDetailPage() {
   const [showRegenConfirm, setShowRegenConfirm] = useState(false);
   const [showAddCmd, setShowAddCmd] = useState(false);
   const [showRawCmd, setShowRawCmd] = useState(false);
+  const [telemView, setTelemView] = useState<'chart' | 'table'>('chart');
+  const [shareMode, setShareMode] = useState(false);
+  const [selectedSections, setSelectedSections] = useState<string[]>([]);
+  const [creatingShare, setCreatingShare] = useState(false);
   const [newCmdName, setNewCmdName] = useState('');
   const [newCmdLabel, setNewCmdLabel] = useState('');
   const [newCmdType, setNewCmdType] = useState<'boolean' | 'number' | 'enum' | 'action' | 'string'>('action');
@@ -139,6 +143,13 @@ export function DeviceDetailPage() {
     queryKey: ['series', id, chartField, chartRange],
     queryFn: () => telemetryApi.series(id!, chartField, from, to, 500),
     enabled: !!id && !!chartField,
+    refetchInterval: 60_000,
+  });
+
+  const { data: tableData } = useQuery({
+    queryKey: ['telemetry-table', id, chartRange],
+    queryFn: () => telemetryApi.query({ deviceId: id!, from, to, limit: 200 }),
+    enabled: !!id && telemView === 'table',
     refetchInterval: 60_000,
   });
 
@@ -187,6 +198,39 @@ export function DeviceDetailPage() {
       toast.success(`Sent: ${name}`);
       queryClient.invalidateQueries({ queryKey: ['commands', id] });
     } catch { toast.error('Failed to send command'); }
+  };
+
+  const toggleSection = (key: string) =>
+    setSelectedSections(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]);
+
+  const generateShareLink = async () => {
+    if (!id || selectedSections.length === 0) return;
+    setCreatingShare(true);
+    try {
+      const res = await apiClient.post('/share', { type: 'device', resourceId: id, sections: selectedSections });
+      const url = `${window.location.origin}/s/${res.data.token}`;
+      await copyText(url);
+      toast.success('Share link copied to clipboard!');
+      setShareMode(false);
+    } catch { toast.error('Failed to create share link'); }
+    finally { setCreatingShare(false); }
+  };
+
+  const ss = (key: string, content: ReactNode): ReactNode => {
+    if (!shareMode) return content;
+    const selected = selectedSections.includes(key);
+    return (
+      <div style={{ position: 'relative', transition: 'filter 0.25s', filter: selected ? 'none' : 'blur(5px)', userSelect: selected ? 'auto' : 'none', pointerEvents: selected ? 'auto' : 'none' }}>
+        {content}
+        <label
+          onClick={e => { e.stopPropagation(); toggleSection(key); }}
+          style={{ position: 'absolute', top: 10, right: 10, zIndex: 20, display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', background: selected ? 'hsl(var(--primary))' : 'hsl(var(--surface))', border: `1px solid ${selected ? 'hsl(var(--primary))' : 'hsl(var(--border))'}`, padding: '4px 10px', fontSize: 10.5, fontFamily: 'var(--font-mono)', letterSpacing: '0.08em', color: selected ? '#fff' : 'hsl(var(--muted-fg))', pointerEvents: 'auto', userSelect: 'none', transition: 'all 0.15s' }}
+        >
+          <input type="checkbox" checked={selected} readOnly style={{ margin: 0, accentColor: 'hsl(var(--primary))', cursor: 'pointer' }} />
+          {key}
+        </label>
+      </div>
+    );
   };
 
   const sendCommand = async () => {
@@ -310,6 +354,9 @@ export function DeviceDetailPage() {
           <button className="btn btn-sm" style={{ gap: 6 }} onClick={() => { setShowRawCmd(true); }}>
             <Terminal size={13} /> Send command
           </button>
+          <button className="btn btn-sm btn-outline" style={{ gap: 6 }} onClick={() => { setShareMode(true); setSelectedSections([]); }}>
+            <Share2 size={13} /> Share
+          </button>
           <button className="btn btn-sm btn-outline" onClick={() => queryClient.invalidateQueries({ queryKey: ['device', id] })}>
             <RefreshCw size={13} />
           </button>
@@ -317,8 +364,7 @@ export function DeviceDetailPage() {
       </div>
 
       {/* ── Live metrics grid ── */}
-      {numericFields.length > 0 && (
-        <div style={{
+      {numericFields.length > 0 && ss('metrics', <div style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
           borderTop: '1px solid hsl(var(--fg))',
@@ -350,91 +396,159 @@ export function DeviceDetailPage() {
               </button>
             );
           })}
-        </div>
-      )}
+        </div>)}
 
       {/* ── Section I: Telemetry chart + device info ── */}
       <div className="detail-grid" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 32, marginBottom: 0 }}>
         {/* Chart */}
-        <div>
+        {ss('chart', <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12, gap: 12, flexWrap: 'wrap' }}>
             <div>
               <div className="eyebrow">Live telemetry</div>
               <div style={{ fontFamily: 'var(--font-display)', fontSize: 28, lineHeight: 1, marginTop: 4, textTransform: 'capitalize' }}>
-                {chartField.replace(/_/g, ' ')} <span style={{ fontStyle: 'italic', color: 'hsl(var(--primary))' }}>· {chartRange}</span>
+                {telemView === 'chart' ? (
+                  <>{chartField.replace(/_/g, ' ')} <span style={{ fontStyle: 'italic', color: 'hsl(var(--primary))' }}>· {chartRange}</span></>
+                ) : (
+                  <>All fields <span style={{ fontStyle: 'italic', color: 'hsl(var(--primary))' }}>· {chartRange}</span></>
+                )}
               </div>
             </div>
-            <div className="seg">
-              {['1h', '6h', '24h', '7d'].map(r => (
-                <button key={r} className={chartRange === r ? 'on' : ''} onClick={() => setChartRange(r)}>{r.toUpperCase()}</button>
-              ))}
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <div className="seg">
+                <button className={telemView === 'chart' ? 'on' : ''} onClick={() => setTelemView('chart')} title="Chart view">
+                  <BarChart2 size={12} style={{ marginRight: 4, verticalAlign: 'middle' }} />Chart
+                </button>
+                <button className={telemView === 'table' ? 'on' : ''} onClick={() => setTelemView('table')} title="Table view">
+                  <TableProperties size={12} style={{ marginRight: 4, verticalAlign: 'middle' }} />Table
+                </button>
+              </div>
+              <div className="seg">
+                {['1h', '6h', '24h', '7d'].map(r => (
+                  <button key={r} className={chartRange === r ? 'on' : ''} onClick={() => setChartRange(r)}>{r.toUpperCase()}</button>
+                ))}
+              </div>
             </div>
           </div>
-          <div className="panel" style={{ padding: '16px 12px 8px' }}>
-            {seriesPoints.length === 0 ? (
-              <div style={{ height: 280, display: 'flex', alignItems: 'center', justifyContent: 'center' }} className="dim">
-                No data for <strong style={{ marginLeft: 4, fontFamily: 'var(--font-mono)' }}>{chartField}</strong>
-              </div>
-            ) : (() => {
-              const ct = chartFieldMeta?.chartType ?? 'area';
-              const latestVal = seriesPoints[seriesPoints.length - 1]?.value ?? 0;
-              const minV = chartFieldMeta?.min ?? 0;
-              const maxV = chartFieldMeta?.max ?? 100;
-              if (ct === 'bar') {
-                const barData = seriesPoints.slice(-40).map(p => ({
-                  label: new Date(p.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                  value: p.value,
-                }));
-                return <BarChart data={barData} color={chartColor} height={280} />;
-              }
-              if (ct === 'gauge') {
-                const pct = Math.min(100, Math.max(0, ((latestVal - minV) / (maxV - minV)) * 100));
-                const r = 80; const cx = 110; const cy = 110;
-                const start = Math.PI * 0.75; const end = Math.PI * 2.25;
-                const arc = (angle: number) => ({ x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) });
-                const s = arc(start); const e = arc(end);
-                const a = arc(start + (end - start) * (pct / 100));
-                const large = pct > 50 ? 1 : 0;
+          <div className="panel" style={{ padding: telemView === 'table' ? 0 : '16px 12px 8px', overflow: 'hidden' }}>
+            {telemView === 'table' ? (() => {
+              const rows: any[] = tableData?.data ?? [];
+              const allFields = schemaFields.length > 0
+                ? schemaFields.map((f: any) => f.key)
+                : Array.from(new Set(rows.flatMap((r: any) => Object.keys(r.fields ?? {}))));
+              if (rows.length === 0) {
                 return (
-                  <div style={{ height: 280, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                    <svg viewBox="0 0 220 180" style={{ width: 220, height: 180 }}>
-                      <path d={`M ${s.x} ${s.y} A ${r} ${r} 0 1 1 ${e.x} ${e.y}`} fill="none" stroke="hsl(var(--border))" strokeWidth={14} strokeLinecap="round" />
-                      {pct > 0 && <path d={`M ${s.x} ${s.y} A ${r} ${r} 0 ${large} 1 ${a.x} ${a.y}`} fill="none" stroke={chartColor} strokeWidth={14} strokeLinecap="round" />}
-                      <text x={cx} y={cy - 6} textAnchor="middle" style={{ fontFamily: 'var(--font-display)', fontSize: 28, fill: 'hsl(var(--fg))' }}>{latestVal.toFixed(1)}</text>
-                      <text x={cx} y={cy + 18} textAnchor="middle" style={{ fontFamily: 'var(--font-mono)', fontSize: 10, fill: 'hsl(var(--muted-fg))', textTransform: 'uppercase' }}>{chartFieldMeta?.unit ?? chartField}</text>
-                      <text x={cx - r - 4} y={cy + 32} textAnchor="middle" style={{ fontFamily: 'var(--font-mono)', fontSize: 9, fill: 'hsl(var(--muted-fg))' }}>{minV}</text>
-                      <text x={cx + r + 4} y={cy + 32} textAnchor="middle" style={{ fontFamily: 'var(--font-mono)', fontSize: 9, fill: 'hsl(var(--muted-fg))' }}>{maxV}</text>
-                    </svg>
+                  <div style={{ height: 280, display: 'flex', alignItems: 'center', justifyContent: 'center' }} className="dim">
+                    No data in this range
                   </div>
                 );
               }
-              if (ct === 'level') {
-                const pct = Math.min(100, Math.max(0, ((latestVal - minV) / (maxV - minV)) * 100));
-                return (
-                  <div style={{ height: 280, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 32 }}>
-                    <svg viewBox="0 0 60 200" style={{ width: 60, height: 200 }}>
-                      <rect x={10} y={10} width={40} height={180} rx={4} fill="hsl(var(--border))" />
-                      <rect x={10} y={10 + 180 * (1 - pct / 100)} width={40} height={180 * (pct / 100)} rx={4} fill={chartColor} />
-                      <rect x={10} y={10} width={40} height={180} rx={4} fill="none" stroke="hsl(var(--border))" strokeWidth={1.5} />
-                    </svg>
-                    <div style={{ textAlign: 'center' }}>
-                      <div style={{ fontFamily: 'var(--font-display)', fontSize: 52, lineHeight: 1, color: chartColor }}>{latestVal.toFixed(1)}</div>
-                      <div className="mono faint" style={{ fontSize: 12, marginTop: 4 }}>{chartFieldMeta?.unit ?? chartField}</div>
-                      <div className="mono faint" style={{ fontSize: 10, marginTop: 8 }}>{pct.toFixed(0)}% of range</div>
+              return (
+                <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 320 }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--font-mono)', fontSize: 11 }}>
+                    <thead style={{ position: 'sticky', top: 0, background: 'hsl(var(--surface-raised))', zIndex: 1 }}>
+                      <tr>
+                        <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', fontSize: 9.5, color: 'hsl(var(--muted-fg))', borderBottom: '1px solid hsl(var(--border))', whiteSpace: 'nowrap' }}>
+                          Timestamp
+                        </th>
+                        {allFields.map((fk: string) => {
+                          const fm = schemaFields.find((f: any) => f.key === fk);
+                          const color = fm?.chartColor ?? 'hsl(var(--muted-fg))';
+                          return (
+                            <th key={fk} style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', fontSize: 9.5, color, borderBottom: '1px solid hsl(var(--border))', whiteSpace: 'nowrap' }}>
+                              {fk.replace(/_/g, ' ')}{fm?.unit ? ` (${fm.unit})` : ''}
+                            </th>
+                          );
+                        })}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rows.map((row: any, i: number) => (
+                        <tr key={row._id ?? i} style={{ background: i % 2 === 0 ? 'transparent' : 'hsl(var(--surface-raised) / 0.4)' }}>
+                          <td style={{ padding: '7px 12px', color: 'hsl(var(--muted-fg))', whiteSpace: 'nowrap', borderBottom: '1px solid hsl(var(--rule-ghost))' }}>
+                            {new Date(row.ts ?? row.createdAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                          </td>
+                          {allFields.map((fk: string) => {
+                            const val = row.fields?.[fk];
+                            const fm = schemaFields.find((f: any) => f.key === fk);
+                            const color = fm?.chartColor;
+                            return (
+                              <td key={fk} style={{ padding: '7px 12px', textAlign: 'right', color: color ?? 'hsl(var(--fg))', borderBottom: '1px solid hsl(var(--rule-ghost))' }}>
+                                {val === undefined || val === null ? <span className="dim">—</span> : typeof val === 'number' ? val.toFixed(2) : String(val)}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              );
+            })() : (
+              seriesPoints.length === 0 ? (
+                <div style={{ height: 280, display: 'flex', alignItems: 'center', justifyContent: 'center' }} className="dim">
+                  No data for <strong style={{ marginLeft: 4, fontFamily: 'var(--font-mono)' }}>{chartField}</strong>
+                </div>
+              ) : (() => {
+                const ct = chartFieldMeta?.chartType ?? 'area';
+                const latestVal = seriesPoints[seriesPoints.length - 1]?.value ?? 0;
+                const minV = chartFieldMeta?.min ?? 0;
+                const maxV = chartFieldMeta?.max ?? 100;
+                if (ct === 'bar') {
+                  const barData = seriesPoints.slice(-40).map(p => ({
+                    label: new Date(p.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                    value: p.value,
+                  }));
+                  return <BarChart data={barData} color={chartColor} height={280} />;
+                }
+                if (ct === 'gauge') {
+                  const pct = Math.min(100, Math.max(0, ((latestVal - minV) / (maxV - minV)) * 100));
+                  const r = 80; const cx = 110; const cy = 110;
+                  const start = Math.PI * 0.75; const end = Math.PI * 2.25;
+                  const arc = (angle: number) => ({ x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) });
+                  const s = arc(start); const e = arc(end);
+                  const a = arc(start + (end - start) * (pct / 100));
+                  const large = pct > 50 ? 1 : 0;
+                  return (
+                    <div style={{ height: 280, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                      <svg viewBox="0 0 220 180" style={{ width: 220, height: 180 }}>
+                        <path d={`M ${s.x} ${s.y} A ${r} ${r} 0 1 1 ${e.x} ${e.y}`} fill="none" stroke="hsl(var(--border))" strokeWidth={14} strokeLinecap="round" />
+                        {pct > 0 && <path d={`M ${s.x} ${s.y} A ${r} ${r} 0 ${large} 1 ${a.x} ${a.y}`} fill="none" stroke={chartColor} strokeWidth={14} strokeLinecap="round" />}
+                        <text x={cx} y={cy - 6} textAnchor="middle" style={{ fontFamily: 'var(--font-display)', fontSize: 28, fill: 'hsl(var(--fg))' }}>{latestVal.toFixed(1)}</text>
+                        <text x={cx} y={cy + 18} textAnchor="middle" style={{ fontFamily: 'var(--font-mono)', fontSize: 10, fill: 'hsl(var(--muted-fg))', textTransform: 'uppercase' }}>{chartFieldMeta?.unit ?? chartField}</text>
+                        <text x={cx - r - 4} y={cy + 32} textAnchor="middle" style={{ fontFamily: 'var(--font-mono)', fontSize: 9, fill: 'hsl(var(--muted-fg))' }}>{minV}</text>
+                        <text x={cx + r + 4} y={cy + 32} textAnchor="middle" style={{ fontFamily: 'var(--font-mono)', fontSize: 9, fill: 'hsl(var(--muted-fg))' }}>{maxV}</text>
+                      </svg>
                     </div>
-                  </div>
-                );
-              }
-              if (ct === 'scatter') {
-                return <LineChart series={[{ name: chartField, data: seriesPoints, color: chartColor }]} height={280} showArea={false} />;
-              }
-              return <LineChart series={[{ name: chartField, data: seriesPoints, color: chartColor }]} height={280} showArea={ct === 'area'} />;
-            })()}
+                  );
+                }
+                if (ct === 'level') {
+                  const pct = Math.min(100, Math.max(0, ((latestVal - minV) / (maxV - minV)) * 100));
+                  return (
+                    <div style={{ height: 280, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 32 }}>
+                      <svg viewBox="0 0 60 200" style={{ width: 60, height: 200 }}>
+                        <rect x={10} y={10} width={40} height={180} rx={4} fill="hsl(var(--border))" />
+                        <rect x={10} y={10 + 180 * (1 - pct / 100)} width={40} height={180 * (pct / 100)} rx={4} fill={chartColor} />
+                        <rect x={10} y={10} width={40} height={180} rx={4} fill="none" stroke="hsl(var(--border))" strokeWidth={1.5} />
+                      </svg>
+                      <div style={{ textAlign: 'center' }}>
+                        <div style={{ fontFamily: 'var(--font-display)', fontSize: 52, lineHeight: 1, color: chartColor }}>{latestVal.toFixed(1)}</div>
+                        <div className="mono faint" style={{ fontSize: 12, marginTop: 4 }}>{chartFieldMeta?.unit ?? chartField}</div>
+                        <div className="mono faint" style={{ fontSize: 10, marginTop: 8 }}>{pct.toFixed(0)}% of range</div>
+                      </div>
+                    </div>
+                  );
+                }
+                if (ct === 'scatter') {
+                  return <LineChart series={[{ name: chartField, data: seriesPoints, color: chartColor }]} height={280} showArea={false} />;
+                }
+                return <LineChart series={[{ name: chartField, data: seriesPoints, color: chartColor }]} height={280} showArea={ct === 'area'} />;
+              })()
+            )}
           </div>
-        </div>
+        </div>)}
 
         {/* Device info */}
-        <div>
+        {ss('info', <div>
           <div className="eyebrow" style={{ marginBottom: 12 }}>Device info</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
             {[
@@ -478,11 +592,11 @@ export function DeviceDetailPage() {
               <RefreshCw size={10} /> Regenerate
             </button>
           </div>
-        </div>
+        </div>)}
       </div>
 
       {/* ── Section IV: Location ── */}
-      <div className="section">
+      {ss('location', <div className="section">
         <div>
           <div className="ssh">Location</div>
           <p className="dim" style={{ fontSize: 13, marginTop: 8, maxWidth: '28ch' }}>
@@ -513,7 +627,7 @@ export function DeviceDetailPage() {
             </div>
           )}
         </div>
-      </div>
+      </div>)}
 
       {/* ── Section V: Controls ── */}
       <div className="section">
@@ -691,6 +805,7 @@ export function DeviceDetailPage() {
           </div>
 
           {/* Command history */}
+          {ss('history', <div>
           <div className="eyebrow" style={{ marginBottom: 8 }}>History</div>
           <div className="table-responsive">
             <table className="table">
@@ -749,6 +864,7 @@ export function DeviceDetailPage() {
               </tbody>
             </table>
           </div>
+          </div>)}
         </div>
       </div>
 
@@ -1018,6 +1134,44 @@ export function DeviceDetailPage() {
 
         </div>
       </div>
+
+      {/* ── Share mode overlay + bar ── */}
+      {shareMode && (
+        <>
+          <div
+            onClick={() => setShareMode(false)}
+            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 10, backdropFilter: 'blur(2px)' }}
+          />
+          <div style={{
+            position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 20,
+            background: 'hsl(var(--surface-raised))', borderTop: '1px solid hsl(var(--border))',
+            padding: '14px 24px', display: 'flex', alignItems: 'center', gap: 16,
+          }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: 16, lineHeight: 1 }}>
+                {selectedSections.length === 0 ? 'Select sections to share' : `${selectedSections.length} section${selectedSections.length > 1 ? 's' : ''} selected`}
+              </div>
+              {selectedSections.length > 0 && (
+                <div className="mono faint" style={{ fontSize: 10.5, marginTop: 4 }}>
+                  {selectedSections.join(' · ')}
+                </div>
+              )}
+            </div>
+            <button
+              onClick={generateShareLink}
+              disabled={selectedSections.length === 0 || creatingShare}
+              className="btn btn-primary"
+              style={{ gap: 6 }}
+            >
+              <Share2 size={13} />
+              {creatingShare ? 'Creating…' : 'Generate link'}
+            </button>
+            <button onClick={() => setShareMode(false)} className="btn btn-ghost">
+              Cancel
+            </button>
+          </div>
+        </>
+      )}
 
       {showRegenConfirm && (
         <ConfirmModal

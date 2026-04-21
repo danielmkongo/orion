@@ -26,7 +26,9 @@
       "Bash(wmic logicaldisk *)",
       "Bash(graphify update *)",
       "Bash(npx graphify *)",
-      "Bash(where graphify *)"
+      "Bash(where graphify *)",
+      "Bash(pnpm exec *)",
+      "Bash(pnpm --filter web add @dnd-kit/core @dnd-kit/sortable @dnd-kit/utilities)"
     ],
     "additionalDirectories": [
       "C:\\Users\\danie\\Downloads\\orion marketing"

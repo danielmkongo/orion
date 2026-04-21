@@ -16,6 +16,9 @@ import { OtaPage } from '@/pages/OtaPage';
 import { UsersPage } from '@/pages/UsersPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { ReportsPage } from '@/pages/ReportsPage';
+import { ShareViewPage } from '@/pages/ShareViewPage';
+import { PagesPage } from '@/pages/PagesPage';
+import { PageBuilderPage } from '@/pages/PageBuilderPage';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuthStore();
@@ -34,6 +37,7 @@ export default function App() {
     <Routes>
       <Route path="/login"    element={<PublicRoute><LoginPage /></PublicRoute>} />
       <Route path="/register" element={<PublicRoute><RegisterPage /></PublicRoute>} />
+      <Route path="/s/:token" element={<ShareViewPage />} />
 
       <Route path="/" element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
         <Route index element={<Navigate to="/dashboard" replace />} />
@@ -49,6 +53,8 @@ export default function App() {
         <Route path="reports"     element={<ReportsPage />} />
         <Route path="users"       element={<UsersPage />} />
         <Route path="settings"    element={<SettingsPage />} />
+        <Route path="pages"       element={<PagesPage />} />
+        <Route path="pages/:id"   element={<PageBuilderPage />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/dashboard" replace />} />

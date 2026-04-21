@@ -1,0 +1,141 @@
+import type { FastifyInstance } from 'fastify';
+import { nanoid } from 'nanoid';
+import { authenticate } from '../middleware/auth.js';
+import { Share } from '../models/Share.js';
+import { Page } from '../models/Page.js';
+import { deviceService } from '../services/device.service.js';
+import { telemetryService } from '../services/telemetry.service.js';
+import { commandService } from '../services/command.service.js';
+
+export async function shareRoutes(app: FastifyInstance) {
+
+  /* ── Authenticated: create a share ──────────────────────────── */
+  app.post('/share', { preHandler: authenticate }, async (req, reply) => {
+    const { type, resourceId, sections = [], label } = req.body as any;
+    if (!type || !resourceId) return reply.code(400).send({ error: 'type and resourceId required' });
+
+    const token = nanoid(21);
+    const share = await Share.create({
+      orgId: req.user.orgId,
+      type,
+      resourceId,
+      sections,
+      token,
+      label,
+      createdBy: req.user.sub,
+    });
+    return reply.code(201).send({ token, id: share._id });
+  });
+
+  /* ── Authenticated: list org shares ─────────────────────────── */
+  app.get('/share', { preHandler: authenticate }, async (req, reply) => {
+    const shares = await Share.find({ orgId: req.user.orgId }).sort({ createdAt: -1 }).lean();
+    return reply.send({ data: shares });
+  });
+
+  /* ── Authenticated: revoke a share ──────────────────────────── */
+  app.delete('/share/:token', { preHandler: authenticate }, async (req, reply) => {
+    const { token } = req.params as any;
+    const result = await Share.deleteOne({ token, orgId: req.user.orgId });
+    if (result.deletedCount === 0) return reply.code(404).send({ error: 'Not found' });
+    return reply.send({ ok: true });
+  });
+
+  /* ── Public: resolve share token → device data ───────────────── */
+  app.get('/public/device/:token', async (req, reply) => {
+    const { token } = req.params as any;
+    const share = await Share.findOne({ token, type: 'device' }).lean();
+    if (!share) return reply.code(404).send({ error: 'Share not found' });
+
+    const device = await deviceService.getById(String(share.resourceId), String(share.orgId));
+    if (!device) return reply.code(404).send({ error: 'Device not found' });
+
+    // Strip sensitive fields before returning
+    const { apiKey: _key, ...safeDevice } = (device as any).toObject?.() ?? device;
+
+    const result: Record<string, unknown> = { device: safeDevice, sections: share.sections };
+
+    if (share.sections.includes('metrics') || share.sections.includes('chart')) {
+      result.latest = await telemetryService.getLatest(String(share.resourceId), String(share.orgId));
+    }
+
+    if (share.sections.includes('history')) {
+      const cmds = await commandService.list(String(share.orgId), String(share.resourceId), 50);
+      result.commandHistory = (cmds as any[]).slice(0, 50).map(c => ({
+        _id: c._id, name: c.name, status: c.status,
+        createdAt: c.createdAt, completedAt: c.completedAt,
+      }));
+    }
+
+    return reply.send(result);
+  });
+
+  /* ── Public: telemetry series for shared device ──────────────── */
+  app.get('/public/device/:token/series', async (req, reply) => {
+    const { token } = req.params as any;
+    const { field, from, to, limit } = req.query as any;
+
+    const share = await Share.findOne({ token, type: 'device' }).lean();
+    if (!share) return reply.code(404).send({ error: 'Share not found' });
+    if (!share.sections.includes('chart')) return reply.code(403).send({ error: 'Chart not shared' });
+    if (!field) return reply.code(400).send({ error: 'field required' });
+
+    const series = await telemetryService.getSeries(
+      String(share.resourceId), String(share.orgId), field,
+      from ?? new Date(Date.now() - 24 * 3600_000).toISOString(),
+      to ?? new Date().toISOString(),
+      limit ? parseInt(limit) : 500
+    );
+    return reply.send({ field, data: series });
+  });
+
+  /* ── Public: resolve share token → page data ─────────────────── */
+  app.get('/public/page/:token', async (req, reply) => {
+    const { token } = req.params as any;
+
+    // Try Share model first (from page.routes publish), then Page.shareToken directly
+    const share = await Share.findOne({ token, type: 'page' }).lean();
+    const page = share
+      ? await Page.findOne({ _id: share.resourceId }).lean()
+      : await Page.findOne({ shareToken: token }).lean();
+
+    if (!page) return reply.code(404).send({ error: 'Page not found' });
+
+    // Fetch widget data in parallel
+    const widgetData: Record<string, unknown> = {};
+    await Promise.all(
+      page.widgets.map(async w => {
+        try {
+          if (w.type === 'kpi_card' || w.type === 'data_table') {
+            if (w.deviceId) {
+              widgetData[w.id] = await telemetryService.getLatest(w.deviceId, String(page.orgId));
+            }
+          } else if (w.type === 'line_chart' || w.type === 'bar_chart' || w.type === 'gauge') {
+            if (w.deviceId && w.field) {
+              const rangeMs = w.rangeMs ?? 24 * 3600_000;
+              widgetData[w.id] = await telemetryService.getSeries(
+                w.deviceId, String(page.orgId), w.field,
+                new Date(Date.now() - rangeMs).toISOString(),
+                new Date().toISOString(),
+                500
+              );
+            }
+          } else if (w.type === 'status_grid' || w.type === 'map') {
+            // deviceIds → list of device stubs
+            const ids = w.deviceIds ?? (w.deviceId ? [w.deviceId] : []);
+            widgetData[w.id] = await Promise.all(
+              ids.map(id => deviceService.getById(id, String(page.orgId)).then(d => {
+                if (!d) return null;
+                const obj = (d as any).toObject?.() ?? d;
+                const { apiKey: _k, ...safe } = obj;
+                return safe;
+              }))
+            );
+          }
+        } catch { /* widget data fetch failure is non-fatal */ }
+      })
+    );
+
+    return reply.send({ page, widgetData });
+  });
+}
