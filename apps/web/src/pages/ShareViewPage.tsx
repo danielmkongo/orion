@@ -4,7 +4,7 @@
  * Orion branding is the primary discovery surface for new users.
  */
 
-import { useState, useEffect, useRef, createContext, useContext } from 'react';
+import React, { useState, useEffect, useRef, createContext, useContext } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { publicClient } from '@/api/publicClient';
@@ -142,58 +142,68 @@ function ThemeToggle() {
 }
 
 /* ── Top navigation bar ──────────────────────────────────────────────── */
-function TopNav({ subtitle, logoUrl }: { subtitle?: string; logoUrl?: string }) {
+function TopNav({ subtitle, logoUrl, orgName, maxContentWidth = 1560 }: {
+  subtitle?: string; logoUrl?: string; orgName?: string; maxContentWidth?: number;
+}) {
   const { T } = useT();
   return (
     <nav style={{
       position: 'sticky', top: 0, zIndex: 50,
-      height: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-      padding: '0 24px', borderBottom: `1px solid ${T.border}`,
+      height: 56, borderBottom: `1px solid ${T.border}`,
       background: T.bg + 'f0', backdropFilter: 'blur(16px)',
     }}>
-      {/* Left: brand + page name */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-        {logoUrl ? (
-          <img src={logoUrl} alt="Logo" style={{ height: 28, objectFit: 'contain' }} />
-        ) : (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-            <OrionMark size={24} />
+      <div style={{
+        maxWidth: maxContentWidth, margin: '0 auto', width: 'calc(100% - 40px)',
+        height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      }}>
+        {/* Left: brand + page name */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          {logoUrl ? (
+            <img src={logoUrl} alt={orgName ?? 'Logo'} style={{ height: 28, objectFit: 'contain' }} />
+          ) : orgName ? (
             <span style={{ fontFamily: T.fontDisplay, fontSize: 17, fontWeight: 700, letterSpacing: '-0.04em', color: T.fg, lineHeight: 1 }}>
-              Orion<em style={{ color: T.primary, fontStyle: 'italic' }}>.</em>
+              {orgName}<em style={{ color: T.primary, fontStyle: 'italic' }}>.</em>
             </span>
-          </div>
-        )}
-        {subtitle && (
-          <>
-            <span style={{ width: 1, height: 18, background: T.border, flexShrink: 0 }} />
-            <span style={{ fontSize: 13, color: T.fgMuted, maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: T.fontMono }}>
-              {subtitle}
-            </span>
-          </>
-        )}
-      </div>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+              <OrionMark size={24} />
+              <span style={{ fontFamily: T.fontDisplay, fontSize: 17, fontWeight: 700, letterSpacing: '-0.04em', color: T.fg, lineHeight: 1 }}>
+                Orion<em style={{ color: T.primary, fontStyle: 'italic' }}>.</em>
+              </span>
+            </div>
+          )}
+          {subtitle && (
+            <>
+              <span style={{ width: 1, height: 18, background: T.border, flexShrink: 0 }} />
+              <span style={{ fontSize: 13, color: T.fgMuted, maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: T.fontMono }}>
+                {subtitle}
+              </span>
+            </>
+          )}
+        </div>
 
-      {/* Right: theme + ghost CTA */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <ThemeToggle />
-        <a
-          href="https://orion.vortan.io"
-          target="_blank"
-          rel="noreferrer"
-          style={{
-            display: 'inline-flex', alignItems: 'center',
-            padding: '5px 14px', background: 'none', color: T.fgMuted, fontSize: 11,
-            fontFamily: T.fontMono, letterSpacing: '0.07em', textDecoration: 'none',
-            border: `1px solid ${T.border}`, transition: 'border-color 0.15s, color 0.15s', flexShrink: 0,
-          }}
-          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = T.fg; (e.currentTarget as HTMLElement).style.borderColor = T.borderStrong; }}
-          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = T.fgMuted; (e.currentTarget as HTMLElement).style.borderColor = T.border; }}
-          className="orion-cta-nav"
-        >
-          GET ORION
-        </a>
+        {/* Right: theme + ghost CTA */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <ThemeToggle />
+          <a
+            href="https://orion.vortan.io"
+            target="_blank"
+            rel="noreferrer"
+            style={{
+              display: 'inline-flex', alignItems: 'center',
+              padding: '5px 14px', background: 'none', color: T.fgMuted, fontSize: 11,
+              fontFamily: T.fontMono, letterSpacing: '0.07em', textDecoration: 'none',
+              border: `1px solid ${T.border}`, transition: 'border-color 0.15s, color 0.15s', flexShrink: 0,
+            }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = T.fg; (e.currentTarget as HTMLElement).style.borderColor = T.borderStrong; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = T.fgMuted; (e.currentTarget as HTMLElement).style.borderColor = T.border; }}
+            className="orion-cta-nav"
+          >
+            GET ORION
+          </a>
+        </div>
+        <style>{`.orion-cta-nav{display:none}@media(min-width:540px){.orion-cta-nav{display:inline-flex}}`}</style>
       </div>
-      <style>{`.orion-cta-nav{display:none}@media(min-width:540px){.orion-cta-nav{display:inline-flex}}`}</style>
     </nav>
   );
 }
@@ -325,7 +335,7 @@ function DeviceShareView({ token, data }: { token: string; data: any }) {
 
   return (
     <div style={{ background: outerBg, color: T.fg, minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-      <TopNav subtitle={device.name} />
+      <TopNav subtitle={device.name} maxContentWidth={1120} />
       <style>{`
         @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
         @keyframes orion-spin { to { transform: rotate(360deg); } }
@@ -527,11 +537,12 @@ function DeviceShareView({ token, data }: { token: string; data: any }) {
    ═══════════════════════════════════════════════════════════════════════ */
 function PageShareView({ pageData }: { pageData: any }) {
   const { T, resolved } = useT();
-  const { page, widgetData = {} } = pageData;
+  const { page, widgetData = {}, org } = pageData;
   const allowExports: boolean = page.allowExports ?? false;
   const visibleWidgets = (page.widgets ?? []).filter((w: any) => w.type !== 'control_panel');
   const displayTitle = page.brandTitle?.trim() || page.name;
-  const brandLogoUrl = page.brandLogoUrl?.trim() || undefined;
+  const navLogoUrl = page.brandLogoUrl?.trim() || org?.logoUrl || undefined;
+  const navOrgName = !navLogoUrl ? (page.brandTitle?.trim() || org?.name || undefined) : undefined;
 
   const outerBg = resolved === 'dark' ? '#060605' : '#e4e4e2';
   const docShadow = resolved === 'dark'
@@ -540,7 +551,7 @@ function PageShareView({ pageData }: { pageData: any }) {
 
   return (
     <div style={{ background: outerBg, color: T.fg, minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-      <TopNav subtitle={displayTitle} logoUrl={brandLogoUrl} />
+      <TopNav subtitle={displayTitle} logoUrl={navLogoUrl} orgName={navOrgName} />
       <style>{`
         @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
         @keyframes orion-spin { to { transform: rotate(360deg); } }
@@ -604,8 +615,12 @@ function PageShareView({ pageData }: { pageData: any }) {
 
 /* ── Widget card shell ───────────────────────────────────────────────── */
 const WIDGET_ACCENT: Record<string, string> = {
-  kpi_card: '#ff5b1f', line_chart: '#6366f1', bar_chart: '#22d3ee',
-  gauge: '#f59e0b', data_table: '#10b981', map: '#3b82f6', status_grid: '#a855f7',
+  kpi_card: '#ff5b1f', stat_card: '#ff5b1f',
+  line_chart: '#6366f1', multi_line_chart: '#6366f1',
+  bar_chart: '#22d3ee', scatter_chart: '#f97316',
+  gauge: '#f59e0b', level: '#06b6d4', progress_bar: '#10b981',
+  data_table: '#10b981', map: '#3b82f6', status_grid: '#a855f7',
+  text: '#888880', separator: '#444444',
 };
 const EXPORTABLE_TYPES = new Set(['line_chart', 'bar_chart', 'data_table']);
 
@@ -685,10 +700,35 @@ function PageWidgetContent({ widget, data, T, contentH = 200 }: { widget: any; d
     );
   }
 
+  if (widget.type === 'stat_card') {
+    const val = data?.latest?.fields?.[widget.field];
+    const pts: number[] = (data?.series ?? []).map((p: any) => p.value);
+    const trend = pts.length >= 2 ? ((pts[pts.length - 1] - pts[0]) / (Math.abs(pts[0]) || 1)) * 100 : null;
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: '100%', padding: '10px 14px' }}>
+        <div>
+          <div style={{ fontSize: 9.5, fontFamily: T.fontMono, letterSpacing: '0.12em', textTransform: 'uppercase', color: T.fgMuted, marginBottom: 6 }}>
+            {(widget.field ?? 'value').replace(/_/g, ' ')}
+          </div>
+          <div style={{ fontFamily: T.fontDisplay, fontSize: `clamp(20px,${Math.max(3, contentH / 7)}px,52px)`, lineHeight: 1, color: T.primary, letterSpacing: '-0.02em' }}>
+            {val !== undefined ? Number(val).toFixed(2) : <span style={{ fontSize: 20, color: T.fgFaint }}>—</span>}
+          </div>
+          {trend !== null && (
+            <div style={{ fontSize: 11, fontFamily: T.fontMono, marginTop: 6, color: trend >= 0 ? T.good : T.bad }}>
+              {trend >= 0 ? '↑' : '↓'} {Math.abs(trend).toFixed(1)}%
+            </div>
+          )}
+        </div>
+        {pts.length >= 2 && <Sparkline points={pts} color={T.primary} height={36} />}
+      </div>
+    );
+  }
+
   if (widget.type === 'gauge') {
-    const pts: any[] = Array.isArray(data) ? data : [];
-    const lastVal = pts.length > 0 ? pts[pts.length - 1].value : undefined;
-    const pct = lastVal !== undefined ? Math.min(100, Math.max(0, lastVal)) : 0;
+    const val = data?.fields?.[widget.field];
+    const cfgMin = (widget.config?.min as number) ?? 0;
+    const cfgMax = (widget.config?.max as number) ?? 100;
+    const pct = val !== undefined ? Math.min(100, Math.max(0, ((val - cfgMin) / (cfgMax - cfgMin)) * 100)) : 0;
     const scale = Math.min(1, contentH / 150);
     const r = 56 * scale; const cx = 80; const cy = 76;
     const start = Math.PI * 0.75; const end = Math.PI * 2.25;
@@ -700,9 +740,53 @@ function PageWidgetContent({ widget, data, T, contentH = 200 }: { widget: any; d
         <svg viewBox="0 0 160 115" style={{ width: '100%', maxWidth: Math.min(160, contentH * 1.4), height: 'auto' }}>
           <path d={`M ${s.x} ${s.y} A ${r} ${r} 0 1 1 ${e.x} ${e.y}`} fill="none" stroke={T.border} strokeWidth={10} strokeLinecap="round" />
           {pct > 0 && <path d={`M ${s.x} ${s.y} A ${r} ${r} 0 ${large} 1 ${a.x} ${a.y}`} fill="none" stroke={T.primary} strokeWidth={10} strokeLinecap="round" />}
-          <text x={cx} y={cy} textAnchor="middle" fill={T.fg} style={{ fontFamily: T.fontDisplay, fontSize: 22 }}>{lastVal?.toFixed(1) ?? '—'}</text>
+          <text x={cx} y={cy} textAnchor="middle" fill={T.fg} style={{ fontFamily: T.fontDisplay, fontSize: 22 }}>{val?.toFixed(1) ?? '—'}</text>
           <text x={cx} y={cy + 16} textAnchor="middle" fill={T.fgMuted} style={{ fontFamily: T.fontMono, fontSize: 8.5, textTransform: 'uppercase' }}>{widget.field ?? ''}</text>
         </svg>
+      </div>
+    );
+  }
+
+  if (widget.type === 'level') {
+    const val = data?.fields?.[widget.field];
+    const cfgMin = (widget.config?.min as number) ?? 0;
+    const cfgMax = (widget.config?.max as number) ?? 100;
+    const pct = val !== undefined ? Math.min(100, Math.max(0, ((val - cfgMin) / (cfgMax - cfgMin)) * 100)) : 0;
+    const accent = WIDGET_ACCENT.level;
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', padding: 12, gap: 8 }}>
+        <div style={{ flex: 1, width: 44, border: `2px solid ${T.borderStrong}`, position: 'relative', overflow: 'hidden', borderRadius: 6 }}>
+          <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: accent, height: `${pct}%`, transition: 'height 0.8s ease', opacity: 0.85 }} />
+          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: pct > 50 ? '#fff' : T.fg, fontFamily: T.fontDisplay, fontSize: 15, fontWeight: 700 }}>
+            {pct.toFixed(0)}%
+          </div>
+        </div>
+        <div style={{ fontSize: 9.5, fontFamily: T.fontMono, color: T.fgMuted, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+          {(widget.field ?? '').replace(/_/g, ' ')}
+        </div>
+        {val !== undefined && <div style={{ fontSize: 11, fontFamily: T.fontMono, color: accent }}>{Number(val).toFixed(2)}</div>}
+      </div>
+    );
+  }
+
+  if (widget.type === 'progress_bar') {
+    const val = data?.fields?.[widget.field];
+    const cfgMin = (widget.config?.min as number) ?? 0;
+    const cfgMax = (widget.config?.max as number) ?? 100;
+    const pct = val !== undefined ? Math.min(100, Math.max(0, ((val - cfgMin) / (cfgMax - cfgMin)) * 100)) : 0;
+    const accent = WIDGET_ACCENT.progress_bar;
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', height: '100%', padding: '0 16px', gap: 10 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+          <span style={{ fontSize: 9.5, fontFamily: T.fontMono, color: T.fgMuted, textTransform: 'uppercase', letterSpacing: '0.1em' }}>{(widget.field ?? '').replace(/_/g, ' ')}</span>
+          <span style={{ fontFamily: T.fontDisplay, fontSize: 22, color: T.primary }}>{val !== undefined ? Number(val).toFixed(1) : '—'}</span>
+        </div>
+        <div style={{ height: 14, background: T.border, overflow: 'hidden', borderRadius: 3, position: 'relative' }}>
+          <div style={{ height: '100%', width: `${pct}%`, background: accent, transition: 'width 0.8s ease', borderRadius: 3 }} />
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, fontFamily: T.fontMono, color: T.fgFaint }}>
+          <span>{cfgMin}</span><span>{Math.round(pct)}%</span><span>{cfgMax}</span>
+        </div>
       </div>
     );
   }
@@ -714,6 +798,17 @@ function PageWidgetContent({ widget, data, T, contentH = 200 }: { widget: any; d
       : empty('No data yet');
   }
 
+  if (widget.type === 'multi_line_chart') {
+    const seriesArr: any[] = Array.isArray(data) ? data : [];
+    if (seriesArr.length === 0) return empty('No series data');
+    const chartSeries = seriesArr.map((s: any) => ({
+      name: s.name ?? s.field ?? '',
+      color: s.color || T.primary,
+      data: (s.data ?? []).map((p: any) => ({ ts: new Date(p.ts).getTime(), value: p.value })),
+    }));
+    return <div style={{ padding: '6px 4px 2px', height: '100%' }}><LineChart series={chartSeries} height={chartH} /></div>;
+  }
+
   if (widget.type === 'bar_chart') {
     const pts = (Array.isArray(data) ? data : []).slice(-24).map((p: any) => ({
       label: new Date(p.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
@@ -722,6 +817,37 @@ function PageWidgetContent({ widget, data, T, contentH = 200 }: { widget: any; d
     return pts.length > 0
       ? <div style={{ padding: '6px 4px 2px', height: '100%' }}><BarChart data={pts} color={T.primary} height={chartH} /></div>
       : empty('No data yet');
+  }
+
+  if (widget.type === 'scatter_chart') {
+    const xData: any[] = data?.xData ?? [];
+    const yData: any[] = data?.yData ?? [];
+    if (xData.length === 0 || yData.length === 0) return empty('No scatter data');
+    const pairs: { x: number; y: number }[] = [];
+    for (const xp of xData) {
+      const xt = new Date(xp.ts).getTime();
+      const best = yData.reduce((b: any, yp: any) =>
+        Math.abs(new Date(yp.ts).getTime() - xt) < Math.abs(new Date(b.ts).getTime() - xt) ? yp : b, yData[0]);
+      if (Math.abs(new Date(best.ts).getTime() - xt) < 120_000) pairs.push({ x: xp.value, y: best.value });
+    }
+    if (pairs.length === 0) return empty('No paired points');
+    const xs = pairs.map(p => p.x); const ys = pairs.map(p => p.y);
+    const minX = Math.min(...xs); const maxX = Math.max(...xs) || minX + 1;
+    const minY = Math.min(...ys); const maxY = Math.max(...ys) || minY + 1;
+    const W = 300; const H = Math.max(180, chartH); const pad = { t: 8, r: 8, b: 28, l: 40 };
+    const px = (v: number) => pad.l + ((v - minX) / (maxX - minX)) * (W - pad.l - pad.r);
+    const py = (v: number) => H - pad.b - ((v - minY) / (maxY - minY)) * (H - pad.t - pad.b);
+    return (
+      <div style={{ height: '100%', padding: '4px 0 0' }}>
+        <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: '100%' }} preserveAspectRatio="xMidYMid meet">
+          <line x1={pad.l} y1={H - pad.b} x2={W - pad.r} y2={H - pad.b} stroke={T.border} strokeWidth={1} />
+          <line x1={pad.l} y1={pad.t} x2={pad.l} y2={H - pad.b} stroke={T.border} strokeWidth={1} />
+          {pairs.map((p, i) => <circle key={i} cx={px(p.x)} cy={py(p.y)} r={3.5} fill={WIDGET_ACCENT.scatter_chart} fillOpacity={0.65} />)}
+          <text x={W / 2} y={H - 4} textAnchor="middle" style={{ fontSize: 8, fontFamily: T.fontMono, fill: T.fgMuted }}>{data?.xField ?? 'X'}</text>
+          <text x={8} y={H / 2} textAnchor="middle" transform={`rotate(-90,8,${H / 2})`} style={{ fontSize: 8, fontFamily: T.fontMono, fill: T.fgMuted }}>{data?.yField ?? 'Y'}</text>
+        </svg>
+      </div>
+    );
   }
 
   if (widget.type === 'data_table') {
@@ -770,7 +896,40 @@ function PageWidgetContent({ widget, data, T, contentH = 200 }: { widget: any; d
     return <ShareMap devices={devices} geofences={geofences} T={T} />;
   }
 
-  return empty(widget.type.replace('_', ' '));
+  if (widget.type === 'text') {
+    const text = (widget.config?.text as string) ?? '';
+    const fontSize = (widget.config?.fontSize as number) ?? 16;
+    const isDisplay = (widget.config?.font as string) !== 'mono';
+    const align = (widget.config?.align as string) ?? 'left';
+    const color = (widget.config?.color as string) ?? T.fg;
+    return (
+      <div style={{ padding: '12px 16px', height: '100%', overflowY: 'auto', display: 'flex', alignItems: 'center' }}>
+        <div style={{
+          fontFamily: isDisplay ? T.fontDisplay : T.fontMono,
+          fontSize, color, lineHeight: 1.55,
+          textAlign: align as React.CSSProperties['textAlign'],
+          whiteSpace: 'pre-wrap', width: '100%',
+        }}>
+          {text || <span style={{ opacity: 0.3 }}>No content</span>}
+        </div>
+      </div>
+    );
+  }
+
+  if (widget.type === 'separator') {
+    const orientation = (widget.config?.orientation as string) ?? 'horizontal';
+    const thickness = (widget.config?.thickness as number) ?? 1;
+    const color = (widget.config?.color as string) ?? T.border;
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', padding: '0 8px' }}>
+        {orientation === 'vertical'
+          ? <div style={{ width: thickness, height: '80%', background: color }} />
+          : <div style={{ height: thickness, width: '100%', background: color }} />}
+      </div>
+    );
+  }
+
+  return empty(widget.type.replace(/_/g, ' '));
 }
 
 /* ── Google Map with geofences ───────────────────────────────────────── */

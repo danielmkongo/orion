@@ -4,6 +4,7 @@ import { authenticate } from '../middleware/auth.js';
 import { Share } from '../models/Share.js';
 import { Page } from '../models/Page.js';
 import { Geofence } from '../models/Geofence.js';
+import { Organization } from '../models/Organization.js';
 import { deviceService } from '../services/device.service.js';
 import { telemetryService } from '../services/telemetry.service.js';
 import { commandService } from '../services/command.service.js';
@@ -102,30 +103,86 @@ export async function shareRoutes(app: FastifyInstance) {
 
     if (!page) return reply.code(404).send({ error: 'Page not found' });
 
+    // Fetch org info for branding
+    const org = await Organization.findById(page.orgId).select('name logoUrl').lean().catch(() => null);
+
     // Fetch widget data in parallel
     const widgetData: Record<string, unknown> = {};
     await Promise.all(
       page.widgets.map(async w => {
         try {
-          if (w.type === 'kpi_card' || w.type === 'data_table') {
+          const orgId = String(page.orgId);
+
+          // Single-device latest value
+          if (['kpi_card', 'data_table', 'level', 'progress_bar'].includes(w.type)) {
             if (w.deviceId) {
-              widgetData[w.id] = await telemetryService.getLatest(w.deviceId, String(page.orgId));
+              widgetData[w.id] = await telemetryService.getLatest(w.deviceId, orgId);
             }
-          } else if (w.type === 'line_chart' || w.type === 'bar_chart' || w.type === 'gauge') {
+
+          // Stat card: latest + sparkline series
+          } else if (w.type === 'stat_card') {
+            if (w.deviceId) {
+              const latest = await telemetryService.getLatest(w.deviceId, orgId);
+              let series = null;
+              if (w.field) {
+                const rangeMs = w.rangeMs ?? 86_400_000;
+                series = await telemetryService.getSeries(w.deviceId, orgId, w.field,
+                  new Date(Date.now() - rangeMs).toISOString(), new Date().toISOString(), 50);
+              }
+              widgetData[w.id] = { latest, series };
+            }
+
+          // Gauge: latest (same as kpi_card, consistent with builder)
+          } else if (w.type === 'gauge') {
+            if (w.deviceId) {
+              widgetData[w.id] = await telemetryService.getLatest(w.deviceId, orgId);
+            }
+
+          // Time-series charts
+          } else if (['line_chart', 'bar_chart'].includes(w.type)) {
             if (w.deviceId && w.field) {
               const rangeMs = w.rangeMs ?? 24 * 3600_000;
               widgetData[w.id] = await telemetryService.getSeries(
-                w.deviceId, String(page.orgId), w.field,
-                new Date(Date.now() - rangeMs).toISOString(),
-                new Date().toISOString(),
-                500
+                w.deviceId, orgId, w.field,
+                new Date(Date.now() - rangeMs).toISOString(), new Date().toISOString(), 500
               );
             }
+
+          // Scatter chart: two series paired by timestamp
+          } else if (w.type === 'scatter_chart') {
+            const xField = w.config?.xField as string;
+            const yField = w.config?.yField as string;
+            if (w.deviceId && xField && yField) {
+              const rangeMs = w.rangeMs ?? 24 * 3600_000;
+              const from = new Date(Date.now() - rangeMs).toISOString();
+              const to = new Date().toISOString();
+              const [xData, yData] = await Promise.all([
+                telemetryService.getSeries(w.deviceId, orgId, xField, from, to, 300),
+                telemetryService.getSeries(w.deviceId, orgId, yField, from, to, 300),
+              ]);
+              widgetData[w.id] = { xField, yField, xData, yData };
+            }
+
+          // Multi-line chart: fetch each configured series
+          } else if (w.type === 'multi_line_chart') {
+            const seriesCfg: any[] = (w.config?.series as any[]) ?? [];
+            const rangeMs = w.rangeMs ?? 24 * 3600_000;
+            const from = new Date(Date.now() - rangeMs).toISOString();
+            const to = new Date().toISOString();
+            const results = await Promise.all(
+              seriesCfg.map(async (s: any) => {
+                if (!s.deviceId || !s.field) return null;
+                const data = await telemetryService.getSeries(s.deviceId, orgId, s.field, from, to, 300);
+                return { name: s.label || s.field, color: s.color || '#3b82f6', data };
+              })
+            );
+            widgetData[w.id] = results.filter(Boolean);
+
+          // Map & status grid: device objects + geofences
           } else if (w.type === 'status_grid' || w.type === 'map') {
-            // Prefer non-empty deviceIds, fall back to single deviceId
             const ids = (w.deviceIds?.length ? w.deviceIds : null) ?? (w.deviceId ? [w.deviceId] : []);
             const devices = await Promise.all(
-              ids.map(id => deviceService.getById(id, String(page.orgId)).then(d => {
+              ids.map(id => deviceService.getById(id, orgId).then(d => {
                 if (!d) return null;
                 const obj = (d as any).toObject?.() ?? d;
                 const { apiKey: _k, ...safe } = obj;
@@ -133,7 +190,6 @@ export async function shareRoutes(app: FastifyInstance) {
               }))
             );
             if (w.type === 'map') {
-              // Include active geofences that target any of these devices
               const geofences = ids.length
                 ? await Geofence.find({ orgId: page.orgId, active: true, deviceIds: { $in: ids } }).lean()
                 : [];
@@ -141,11 +197,17 @@ export async function shareRoutes(app: FastifyInstance) {
             } else {
               widgetData[w.id] = devices;
             }
+
+          // text, separator: no data needed
           }
         } catch { /* widget data fetch failure is non-fatal */ }
       })
     );
 
-    return reply.send({ page, widgetData });
+    return reply.send({
+      page,
+      widgetData,
+      org: org ? { name: org.name, logoUrl: org.logoUrl } : null,
+    });
   });
 }

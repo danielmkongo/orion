@@ -19,6 +19,7 @@ import { ReportsPage } from '@/pages/ReportsPage';
 import { ShareViewPage } from '@/pages/ShareViewPage';
 import { PagesPage } from '@/pages/PagesPage';
 import { PageBuilderPage } from '@/pages/PageBuilderPage';
+import { PagePreviewPage } from '@/pages/PagePreviewPage';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuthStore();
@@ -53,8 +54,9 @@ export default function App() {
         <Route path="reports"     element={<ReportsPage />} />
         <Route path="users"       element={<UsersPage />} />
         <Route path="settings"    element={<SettingsPage />} />
-        <Route path="pages"       element={<PagesPage />} />
-        <Route path="pages/:id"   element={<PageBuilderPage />} />
+        <Route path="pages"              element={<PagesPage />} />
+        <Route path="pages/:id"         element={<PageBuilderPage />} />
+        <Route path="pages/:id/preview" element={<PagePreviewPage />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/dashboard" replace />} />

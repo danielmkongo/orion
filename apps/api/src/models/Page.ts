@@ -7,7 +7,15 @@ export type WidgetType =
   | 'gauge'
   | 'map'
   | 'data_table'
-  | 'status_grid';
+  | 'status_grid'
+  | 'control_panel'
+  | 'level'
+  | 'scatter_chart'
+  | 'multi_line_chart'
+  | 'text'
+  | 'separator'
+  | 'progress_bar'
+  | 'stat_card';
 
 export interface IWidget {
   id: string;
@@ -43,7 +51,7 @@ const PositionSchema = new Schema(
 const WidgetSchema = new Schema<IWidget>(
   {
     id:        { type: String, required: true },
-    type:      { type: String, enum: ['kpi_card','line_chart','bar_chart','gauge','map','data_table','status_grid','control_panel'], required: true },
+    type:      { type: String, enum: ['kpi_card','line_chart','bar_chart','gauge','map','data_table','status_grid','control_panel','level','scatter_chart','multi_line_chart','text','separator','progress_bar','stat_card'], required: true },
     title:     { type: String, required: true },
     deviceId:  String,
     deviceIds: [String],
