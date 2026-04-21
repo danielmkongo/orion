@@ -28,6 +28,8 @@ export interface IPage extends Document {
   widgets: IWidget[];
   shareToken?: string;
   allowExports: boolean;
+  brandTitle?: string;
+  brandLogoUrl?: string;
   createdBy: Schema.Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
@@ -61,6 +63,8 @@ const PageSchema = new Schema<IPage>(
     widgets:     { type: [WidgetSchema], default: [] },
     shareToken:    { type: String, index: true, sparse: true },
     allowExports:  { type: Boolean, default: false },
+    brandTitle:    String,
+    brandLogoUrl:  String,
     createdBy:     { type: Schema.Types.ObjectId, required: true, ref: 'User' },
   },
   { timestamps: true }

@@ -11,7 +11,6 @@ export function PagesPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [creating, setCreating] = useState(false);
-  const [newName, setNewName] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [revokingToken, setRevokingToken] = useState<string | null>(null);
 
@@ -28,14 +27,14 @@ export function PagesPage() {
   const deviceShares: any[] = (sharesData ?? []).filter((s: any) => s.type === 'device');
 
   const createPage = async () => {
-    if (!newName.trim()) return;
+    if (creating) return;
+    setCreating(true);
     try {
-      const res = await apiClient.post('/pages', { name: newName.trim() });
+      const res = await apiClient.post('/pages', { name: 'Untitled' });
       queryClient.invalidateQueries({ queryKey: ['pages'] });
-      setCreating(false);
-      setNewName('');
       navigate(`/pages/${res.data._id}`);
     } catch { toast.error('Failed to create page'); }
+    finally { setCreating(false); }
   };
 
   const deletePage = async (id: string) => {
@@ -69,34 +68,15 @@ export function PagesPage() {
       <div className="ph">
         <div>
           <div className="eyebrow" style={{ marginBottom: 8 }}>Page Builder</div>
-          <h1>Pages <em>& Dashboards</em></h1>
-          <p className="lede">Build custom dashboards with drag-and-drop widgets. Publish to a public link.</p>
+          <h1>Pages</h1>
+          <p className="lede">Build pages with drag-and-drop widgets and publish them as live public links.</p>
         </div>
         <div style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: 20 }}>
-          <button className="btn btn-primary" style={{ gap: 6 }} onClick={() => setCreating(true)}>
-            <Plus size={13} /> New page
+          <button className="btn btn-primary" style={{ gap: 6 }} onClick={createPage} disabled={creating}>
+            <Plus size={13} /> {creating ? 'Creating…' : 'New page'}
           </button>
         </div>
       </div>
-
-      {creating && (
-        <div className="panel" style={{ padding: 20, marginBottom: 24, borderTop: '2px solid hsl(var(--primary))' }}>
-          <div className="eyebrow" style={{ marginBottom: 12 }}>New page</div>
-          <div style={{ display: 'flex', gap: 10 }}>
-            <input
-              autoFocus
-              className="input"
-              placeholder="Fleet Overview"
-              value={newName}
-              onChange={e => setNewName(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') createPage(); if (e.key === 'Escape') { setCreating(false); setNewName(''); } }}
-              style={{ flex: 1 }}
-            />
-            <button onClick={createPage} disabled={!newName.trim()} className="btn btn-primary btn-sm">Create</button>
-            <button onClick={() => { setCreating(false); setNewName(''); }} className="btn btn-ghost btn-sm">Cancel</button>
-          </div>
-        </div>
-      )}
 
       {/* ── Builder pages ── */}
       <div className="eyebrow" style={{ marginBottom: 16, marginTop: 8 }}>Builder pages</div>
@@ -111,8 +91,31 @@ export function PagesPage() {
         </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16, marginBottom: 40 }}>
+          {/* New page card */}
+          <button
+            onClick={createPage}
+            disabled={creating}
+            style={{
+              padding: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+              gap: 10, minHeight: 140, border: '1px dashed hsl(var(--border))', background: 'transparent',
+              cursor: 'pointer', color: 'hsl(var(--muted-fg))', transition: 'border-color 0.15s, color 0.15s',
+            }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'hsl(var(--primary))'; (e.currentTarget as HTMLElement).style.color = 'hsl(var(--primary))'; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'hsl(var(--border))'; (e.currentTarget as HTMLElement).style.color = 'hsl(var(--muted-fg))'; }}
+          >
+            <Plus size={20} />
+            <span style={{ fontSize: 13, fontFamily: 'var(--font-mono)' }}>New page</span>
+          </button>
+
           {(pagesData ?? []).map((page: any) => (
-            <div key={page._id} className="panel" style={{ padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+            <div
+              key={page._id}
+              className="panel"
+              style={{
+                padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column',
+                borderLeft: `3px solid ${page.shareToken ? 'hsl(var(--good))' : 'hsl(var(--border))'}`,
+              }}
+            >
               <div style={{ padding: '20px 20px 16px', flex: 1 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
                   <div>
@@ -128,34 +131,19 @@ export function PagesPage() {
                   {page.widgets?.length ?? 0} widget{page.widgets?.length !== 1 ? 's' : ''} · {timeAgo(page.createdAt)}
                 </div>
 
-                {/* Published action row */}
                 {page.shareToken && (
                   <div style={{ display: 'flex', gap: 6, marginTop: 12 }}>
-                    <button
-                      onClick={() => copyShareLink(page.shareToken)}
-                      className="btn btn-ghost btn-sm"
-                      style={{ gap: 4, fontSize: 10.5 }}
-                    >
+                    <button onClick={() => copyShareLink(page.shareToken)} className="btn btn-ghost btn-sm" style={{ gap: 4, fontSize: 10.5 }}>
                       <Copy size={10} /> Copy link
                     </button>
-                    <a
-                      href={`/s/${page.shareToken}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="btn btn-ghost btn-sm"
-                      style={{ gap: 4, fontSize: 10.5 }}
-                    >
+                    <a href={`/s/${page.shareToken}`} target="_blank" rel="noreferrer" className="btn btn-ghost btn-sm" style={{ gap: 4, fontSize: 10.5 }}>
                       <ExternalLink size={10} /> View
                     </a>
                   </div>
                 )}
               </div>
               <div style={{ display: 'flex', borderTop: '1px solid hsl(var(--rule-ghost))' }}>
-                <Link
-                  to={`/pages/${page._id}`}
-                  className="btn btn-ghost btn-sm"
-                  style={{ flex: 1, justifyContent: 'center', gap: 4, borderRadius: 0 }}
-                >
+                <Link to={`/pages/${page._id}`} className="btn btn-ghost btn-sm" style={{ flex: 1, justifyContent: 'center', gap: 4, borderRadius: 0 }}>
                   <Pencil size={11} /> Edit
                 </Link>
                 <button

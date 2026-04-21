@@ -142,7 +142,7 @@ function ThemeToggle() {
 }
 
 /* ── Top navigation bar ──────────────────────────────────────────────── */
-function TopNav({ subtitle }: { subtitle?: string }) {
+function TopNav({ subtitle, logoUrl }: { subtitle?: string; logoUrl?: string }) {
   const { T } = useT();
   return (
     <nav style={{
@@ -153,12 +153,16 @@ function TopNav({ subtitle }: { subtitle?: string }) {
     }}>
       {/* Left: brand + page name */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-          <OrionMark size={24} />
-          <span style={{ fontFamily: T.fontDisplay, fontSize: 17, fontWeight: 700, letterSpacing: '-0.04em', color: T.fg, lineHeight: 1 }}>
-            Orion<em style={{ color: T.primary, fontStyle: 'italic' }}>.</em>
-          </span>
-        </div>
+        {logoUrl ? (
+          <img src={logoUrl} alt="Logo" style={{ height: 28, objectFit: 'contain' }} />
+        ) : (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+            <OrionMark size={24} />
+            <span style={{ fontFamily: T.fontDisplay, fontSize: 17, fontWeight: 700, letterSpacing: '-0.04em', color: T.fg, lineHeight: 1 }}>
+              Orion<em style={{ color: T.primary, fontStyle: 'italic' }}>.</em>
+            </span>
+          </div>
+        )}
         {subtitle && (
           <>
             <span style={{ width: 1, height: 18, background: T.border, flexShrink: 0 }} />
@@ -169,7 +173,7 @@ function TopNav({ subtitle }: { subtitle?: string }) {
         )}
       </div>
 
-      {/* Right: theme + CTA */}
+      {/* Right: theme + ghost CTA */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <ThemeToggle />
         <a
@@ -178,12 +182,12 @@ function TopNav({ subtitle }: { subtitle?: string }) {
           rel="noreferrer"
           style={{
             display: 'inline-flex', alignItems: 'center',
-            padding: '6px 16px', background: T.primary, color: '#fff', fontSize: 11,
+            padding: '5px 14px', background: 'none', color: T.fgMuted, fontSize: 11,
             fontFamily: T.fontMono, letterSpacing: '0.07em', textDecoration: 'none',
-            transition: 'opacity 0.15s', flexShrink: 0,
+            border: `1px solid ${T.border}`, transition: 'border-color 0.15s, color 0.15s', flexShrink: 0,
           }}
-          onMouseEnter={e => (e.currentTarget.style.opacity = '0.80')}
-          onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = T.fg; (e.currentTarget as HTMLElement).style.borderColor = T.borderStrong; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = T.fgMuted; (e.currentTarget as HTMLElement).style.borderColor = T.border; }}
           className="orion-cta-nav"
         >
           GET ORION
@@ -206,7 +210,7 @@ function PageFooter() {
         </div>
         <p style={{ fontSize: 15, color: T.fgMuted, maxWidth: 420, lineHeight: 1.7, margin: 0 }}>
           Connect, monitor, and control your IoT devices from anywhere.
-          Build dashboards like this one — no code required.
+          Build pages like this one — no code required.
         </p>
         <a
           href="https://orion.vortan.io"
@@ -285,7 +289,11 @@ function SideRail({ text, align = 'left', T }: { text: string; align?: 'left' | 
    DEVICE SHARE VIEW
    ═══════════════════════════════════════════════════════════════════════ */
 function DeviceShareView({ token, data }: { token: string; data: any }) {
-  const { T } = useT();
+  const { T, resolved } = useT();
+  const outerBg = resolved === 'dark' ? '#060605' : '#e4e4e2';
+  const docShadow = resolved === 'dark'
+    ? '0 0 0 1px rgba(255,255,255,0.055), 0 32px 80px rgba(0,0,0,0.65), 0 4px 20px rgba(0,0,0,0.45)'
+    : '0 0 0 1px rgba(0,0,0,0.07), 0 24px 60px rgba(0,0,0,0.12), 0 4px 12px rgba(0,0,0,0.06)';
   const { device, sections = [], latest } = data;
   const fields: Record<string, number> = latest?.fields ?? {};
   const numericFields = Object.entries(fields).filter(([, v]) => typeof v === 'number') as [string, number][];
@@ -316,7 +324,7 @@ function DeviceShareView({ token, data }: { token: string; data: any }) {
   const leftLabel = [device.category, device.protocol?.toUpperCase()].filter(Boolean).join(' · ');
 
   return (
-    <div style={{ background: T.bg, color: T.fg, minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ background: outerBg, color: T.fg, minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
       <TopNav subtitle={device.name} />
       <style>{`
         @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
@@ -324,27 +332,19 @@ function DeviceShareView({ token, data }: { token: string; data: any }) {
         @keyframes orion-pulse { 0%{transform:scale(0.9);opacity:0.7} 100%{transform:scale(2.2);opacity:0} }
       `}</style>
 
-      {/* Full-width hero accent gradient */}
-      <div style={{ position: 'relative', flex: 1 }}>
+      {/* Paper document */}
+      <div style={{
+        maxWidth: 1120, margin: '24px auto 48px', width: 'calc(100% - 40px)',
+        background: T.bg, boxShadow: docShadow, position: 'relative',
+      }}>
+        {/* Hero gradient inside document */}
         <div style={{
-          position: 'absolute', top: 0, left: 0, right: 0, height: 400, pointerEvents: 'none', zIndex: 0,
+          position: 'absolute', top: 0, left: 0, right: 0, height: 400, pointerEvents: 'none',
           background: `radial-gradient(ellipse 70% 50% at 50% 0%, ${T.primaryMuted} 0%, transparent 80%)`,
         }} />
 
-        {/* 3-col layout: rail | content | rail */}
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'minmax(0, 48px) minmax(0, 1fr) minmax(0, 48px)',
-          maxWidth: 1200,
-          margin: '0 auto',
-          width: '100%',
-          position: 'relative', zIndex: 1,
-        }}>
-          {/* Left rail */}
-          <SideRail text={leftLabel} align="left" T={T} />
-
           {/* Main content */}
-          <div style={{ padding: '52px 24px 0', minWidth: 0 }}>
+          <div style={{ padding: '52px 48px 60px', minWidth: 0, position: 'relative' }}>
             {/* Hero */}
             <div style={{ marginBottom: 44 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
@@ -515,12 +515,9 @@ function DeviceShareView({ token, data }: { token: string; data: any }) {
               </div>
             )}
           </div>
-
-          {/* Right rail */}
-          <SideRail text="Orion Platform · Live" align="right" T={T} />
-        </div>
       </div>
       <PageFooter />
+      <MadeWithBadge />
     </div>
   );
 }
@@ -529,83 +526,78 @@ function DeviceShareView({ token, data }: { token: string; data: any }) {
    PAGE SHARE VIEW
    ═══════════════════════════════════════════════════════════════════════ */
 function PageShareView({ pageData }: { pageData: any }) {
-  const { T } = useT();
+  const { T, resolved } = useT();
   const { page, widgetData = {} } = pageData;
   const allowExports: boolean = page.allowExports ?? false;
   const visibleWidgets = (page.widgets ?? []).filter((w: any) => w.type !== 'control_panel');
+  const displayTitle = page.brandTitle?.trim() || page.name;
+  const brandLogoUrl = page.brandLogoUrl?.trim() || undefined;
+
+  const outerBg = resolved === 'dark' ? '#060605' : '#e4e4e2';
+  const docShadow = resolved === 'dark'
+    ? '0 0 0 1px rgba(255,255,255,0.055), 0 32px 80px rgba(0,0,0,0.65), 0 4px 20px rgba(0,0,0,0.45)'
+    : '0 0 0 1px rgba(0,0,0,0.07), 0 24px 60px rgba(0,0,0,0.12), 0 4px 12px rgba(0,0,0,0.06)';
 
   return (
-    <div style={{ background: T.bg, color: T.fg, minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-      <TopNav subtitle={page.name} />
+    <div style={{ background: outerBg, color: T.fg, minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+      <TopNav subtitle={displayTitle} logoUrl={brandLogoUrl} />
       <style>{`
         @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
         @keyframes orion-spin { to { transform: rotate(360deg); } }
         @keyframes orion-pulse { 0%{transform:scale(0.9);opacity:0.7} 100%{transform:scale(2.2);opacity:0} }
       `}</style>
 
-      <div style={{ position: 'relative', flex: 1 }}>
-        {/* Hero accent */}
+      {/* Paper document */}
+      <div style={{
+        maxWidth: 1560, margin: '24px auto 48px', width: 'calc(100% - 40px)',
+        background: T.bg, boxShadow: docShadow, position: 'relative',
+      }}>
+        {/* Hero gradient inside document */}
         <div style={{
-          position: 'absolute', top: 0, left: 0, right: 0, height: 300, pointerEvents: 'none', zIndex: 0,
+          position: 'absolute', top: 0, left: 0, right: 0, height: 300, pointerEvents: 'none',
           background: `radial-gradient(ellipse 80% 60% at 50% 0%, ${T.primaryMuted} 0%, transparent 80%)`,
         }} />
 
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'minmax(0, 48px) minmax(0, 1fr) minmax(0, 48px)',
-          maxWidth: 1600,
-          margin: '0 auto',
-          width: '100%',
-          position: 'relative', zIndex: 1,
-        }}>
-          {/* Left rail */}
-          <SideRail text={`Dashboard · ${page.widgets?.length ?? 0} widgets`} align="left" T={T} />
-
-          {/* Main content */}
-          <div style={{ padding: '52px 20px 0', minWidth: 0 }}>
-            {/* Hero */}
-            <div style={{ marginBottom: 48, paddingBottom: 40, borderBottom: `1px solid ${T.border}` }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-                <span style={{ fontSize: 9.5, fontFamily: T.fontMono, letterSpacing: '0.14em', color: T.fgMuted, textTransform: 'uppercase' }}>Dashboard · Orion Platform</span>
-                <LiveBadge />
-              </div>
-              <h1 style={{ fontFamily: T.fontDisplay, fontSize: 'clamp(36px,5vw,64px)', lineHeight: 1, margin: '0 0 14px', letterSpacing: '-0.03em', color: T.fg }}>
-                {(() => {
-                  const words = page.name.split(' ');
-                  if (words.length === 1) return <em style={{ fontStyle: 'italic', color: T.primary }}>{page.name}</em>;
-                  return <>{words.slice(0, -1).join(' ')}{' '}<em style={{ fontStyle: 'italic', color: T.primary }}>{words.slice(-1)[0]}</em></>;
-                })()}
-              </h1>
-              {page.description && <p style={{ fontSize: 15, color: T.fgMuted, maxWidth: 560, lineHeight: 1.65, margin: 0 }}>{page.description}</p>}
+        <div style={{ padding: '52px 40px 60px', minWidth: 0, position: 'relative' }}>
+          {/* Hero */}
+          <div style={{ marginBottom: 48, paddingBottom: 40, borderBottom: `1px solid ${T.border}` }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+              <span style={{ fontSize: 9.5, fontFamily: T.fontMono, letterSpacing: '0.14em', color: T.fgMuted, textTransform: 'uppercase' }}>Page · Orion Platform</span>
+              <LiveBadge />
             </div>
-
-            {/* Widget grid — 12-col × 70px-row, exact match to builder */}
-            {visibleWidgets.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '80px 24px', opacity: 0.35 }}>
-                <div style={{ fontFamily: T.fontDisplay, fontSize: 28, marginBottom: 8, color: T.fg }}>Nothing here yet</div>
-                <p style={{ fontSize: 13, color: T.fgMuted }}>This page has no visible widgets.</p>
-              </div>
-            ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(12, 1fr)', gridAutoRows: '70px', gap: '12px' }}>
-                {visibleWidgets.map((w: any) => {
-                  const pos = w.position ?? { x: 0, y: 0, w: 4, h: 3 };
-                  // content height = rows × rowH + (rows-1) × gap − card-header
-                  const contentH = Math.max(80, pos.h * 70 + (pos.h - 1) * 12 - 50);
-                  return (
-                    <div key={w.id} style={{ gridColumn: `${pos.x + 1} / span ${pos.w}`, gridRow: `${pos.y + 1} / span ${pos.h}`, minWidth: 0, minHeight: 0 }}>
-                      <PageWidgetCard widget={w} data={widgetData[w.id]} T={T} allowExports={allowExports} contentH={contentH} />
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+            <h1 style={{ fontFamily: T.fontDisplay, fontSize: 'clamp(36px,5vw,64px)', lineHeight: 1, margin: '0 0 14px', letterSpacing: '-0.03em', color: T.fg }}>
+              {(() => {
+                const words = displayTitle.split(' ');
+                if (words.length === 1) return <em style={{ fontStyle: 'italic', color: T.primary }}>{displayTitle}</em>;
+                return <>{words.slice(0, -1).join(' ')}{' '}<em style={{ fontStyle: 'italic', color: T.primary }}>{words.slice(-1)[0]}</em></>;
+              })()}
+            </h1>
+            {page.description && <p style={{ fontSize: 15, color: T.fgMuted, maxWidth: 560, lineHeight: 1.65, margin: 0 }}>{page.description}</p>}
           </div>
 
-          {/* Right rail */}
-          <SideRail text="Orion Platform · Live" align="right" T={T} />
+          {/* Widget grid — 12-col × 70px-row, exact match to builder */}
+          {visibleWidgets.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '80px 24px', opacity: 0.35 }}>
+              <div style={{ fontFamily: T.fontDisplay, fontSize: 28, marginBottom: 8, color: T.fg }}>Nothing here yet</div>
+              <p style={{ fontSize: 13, color: T.fgMuted }}>This page has no visible widgets.</p>
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(12, 1fr)', gridAutoRows: '70px', gap: '12px' }}>
+              {visibleWidgets.map((w: any) => {
+                const pos = w.position ?? { x: 0, y: 0, w: 4, h: 3 };
+                const contentH = Math.max(80, pos.h * 82 - 55);
+                return (
+                  <div key={w.id} style={{ gridColumn: `${pos.x + 1} / span ${pos.w}`, gridRow: `${pos.y + 1} / span ${pos.h}`, minWidth: 0, minHeight: 0 }}>
+                    <PageWidgetCard widget={w} data={widgetData[w.id]} T={T} allowExports={allowExports} contentH={contentH} />
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
       <PageFooter />
+      <MadeWithBadge />
     </div>
   );
 }
@@ -1038,6 +1030,32 @@ function DeviceTable({ token, field, schemaFields, from, T }: { token: string; f
         </table>
       </div>
     </div>
+  );
+}
+
+/* ── Fixed "Made with Orion" badge (Framer-style) ───────────────────── */
+function MadeWithBadge() {
+  const { T } = useT();
+  return (
+    <a
+      href="https://orion.vortan.io"
+      target="_blank"
+      rel="noreferrer"
+      style={{
+        position: 'fixed', bottom: 20, right: 20, zIndex: 60,
+        display: 'flex', alignItems: 'center', gap: 6,
+        padding: '6px 10px',
+        background: T.surface, border: `1px solid ${T.border}`,
+        boxShadow: T.shadowCard,
+        fontSize: 10, fontFamily: T.fontMono, color: T.fgMuted,
+        textDecoration: 'none', transition: 'color 0.15s, border-color 0.15s',
+      }}
+      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = T.fg; (e.currentTarget as HTMLElement).style.borderColor = T.borderStrong; }}
+      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = T.fgMuted; (e.currentTarget as HTMLElement).style.borderColor = T.border; }}
+    >
+      <OrionMark size={12} />
+      Made with Orion
+    </a>
   );
 }
 

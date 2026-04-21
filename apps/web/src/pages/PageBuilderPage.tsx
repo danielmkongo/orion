@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import GridLayout, { WidthProvider } from 'react-grid-layout';
@@ -7,7 +7,7 @@ import { APIProvider, Map, AdvancedMarker } from '@vis.gl/react-google-maps';
 import apiClient from '@/api/client';
 import toast from 'react-hot-toast';
 import { copyText } from '@/lib/utils';
-import { ArrowLeft, Plus, Globe, Lock, Pencil, Trash2, GripVertical, X, Check, Copy, ExternalLink, Download } from 'lucide-react';
+import { ArrowLeft, Plus, Globe, Lock, Pencil, Trash2, GripVertical, X, Check, Copy, ExternalLink, Download, Settings, ChevronLeft } from 'lucide-react';
 import { LineChart, BarChart } from '@/components/charts/Charts';
 import { CommandWidget } from '@/components/devices/CommandWidget';
 import type { DeviceCommand } from '@/components/devices/CommandWidget';
@@ -19,15 +19,26 @@ const API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
 const MAP_ID  = import.meta.env.VITE_GOOGLE_MAP_ID || 'DEMO_MAP_ID';
 
 const WIDGET_TYPES = [
-  { type: 'kpi_card',       label: 'KPI Card',    icon: '▣', desc: 'Big number metric',         defaultW: 3, defaultH: 2 },
-  { type: 'line_chart',     label: 'Line Chart',  icon: '〜', desc: 'Time-series area chart',   defaultW: 6, defaultH: 4 },
-  { type: 'bar_chart',      label: 'Bar Chart',   icon: '▐', desc: 'Time-series bar chart',    defaultW: 6, defaultH: 4 },
-  { type: 'gauge',          label: 'Gauge',       icon: '◉', desc: 'Radial gauge, live value',  defaultW: 3, defaultH: 3 },
-  { type: 'data_table',     label: 'Data Table',  icon: '⊞', desc: 'Latest telemetry as table', defaultW: 5, defaultH: 4 },
-  { type: 'map',            label: 'Map',         icon: '⊕', desc: 'Device location on map',    defaultW: 6, defaultH: 5 },
-  { type: 'status_grid',    label: 'Status Grid', icon: '⬡', desc: 'Fleet status badges',       defaultW: 4, defaultH: 3 },
-  { type: 'control_panel',  label: 'Controls',    icon: '⌥', desc: 'Device command controls',   defaultW: 4, defaultH: 4 },
+  { type: 'kpi_card',      label: 'KPI Card',    icon: '▣', desc: 'Big number metric',         defaultW: 3, defaultH: 2 },
+  { type: 'line_chart',    label: 'Line Chart',  icon: '〜', desc: 'Time-series area chart',    defaultW: 6, defaultH: 4 },
+  { type: 'bar_chart',     label: 'Bar Chart',   icon: '▐', desc: 'Time-series bar chart',     defaultW: 6, defaultH: 4 },
+  { type: 'gauge',         label: 'Gauge',       icon: '◉', desc: 'Radial gauge, live value',   defaultW: 3, defaultH: 3 },
+  { type: 'data_table',    label: 'Data Table',  icon: '⊞', desc: 'Latest telemetry as table',  defaultW: 5, defaultH: 4 },
+  { type: 'map',           label: 'Map',         icon: '⊕', desc: 'Device location on map',     defaultW: 6, defaultH: 5 },
+  { type: 'status_grid',   label: 'Status Grid', icon: '⬡', desc: 'Fleet status badges',        defaultW: 4, defaultH: 3 },
+  { type: 'control_panel', label: 'Controls',    icon: '⌥', desc: 'Device command controls',    defaultW: 4, defaultH: 4 },
 ];
+
+const WIDGET_ACCENT: Record<string, string> = {
+  kpi_card:      'hsl(var(--primary))',
+  line_chart:    '#3b82f6',
+  bar_chart:     '#8b5cf6',
+  gauge:         '#f59e0b',
+  data_table:    '#10b981',
+  map:           '#06b6d4',
+  status_grid:   '#f97316',
+  control_panel: '#ec4899',
+};
 
 interface Widget {
   id: string;
@@ -43,6 +54,28 @@ interface Widget {
 
 function uid() {
   return Math.random().toString(36).slice(2, 10);
+}
+
+/* ── ResizeObserver-based height measurement ────────────────────────── */
+function useContainerHeight(ref: React.RefObject<HTMLDivElement>) {
+  const [h, setH] = useState(140);
+  useEffect(() => {
+    if (!ref.current) return;
+    const ro = new ResizeObserver(([e]) => setH(Math.floor(e.contentRect.height)));
+    ro.observe(ref.current);
+    return () => ro.disconnect();
+  }, []);
+  return h;
+}
+
+function ChartWrapper({ render }: { render: (h: number) => React.ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const h = useContainerHeight(ref);
+  return (
+    <div ref={ref} style={{ height: '100%', overflow: 'hidden' }}>
+      {render(Math.max(60, h - 8))}
+    </div>
+  );
 }
 
 /* ── Widget preview content ─────────────────────────────────────────── */
@@ -77,8 +110,16 @@ function WidgetContent({ widget }: { widget: Widget }) {
     enabled: !!widget.deviceId && widget.type === 'control_panel',
   });
 
+  // Moved unconditional — was inside if(type==='map') block which violates hooks rules
+  const { data: mapDeviceData } = useQuery({
+    queryKey: ['wmap-device', widget.deviceId],
+    queryFn: () => apiClient.get(`/devices/${widget.deviceId}`).then(r => r.data),
+    enabled: widget.type === 'map' && !!widget.deviceId,
+  });
+
   const fields: Record<string, number> = latest?.fields ?? {};
   const val = widget.field ? fields[widget.field] : undefined;
+  const dim = { display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', fontSize: 12 } as const;
 
   if (widget.type === 'kpi_card') {
     return (
@@ -114,9 +155,12 @@ function WidgetContent({ widget }: { widget: Widget }) {
 
   if (widget.type === 'line_chart') {
     const pts = (series?.data ?? []).map((p: any) => ({ ts: new Date(p.ts).getTime(), value: p.value }));
-    return pts.length > 0
-      ? <LineChart series={[{ name: widget.field ?? '', data: pts, color: 'hsl(var(--primary))' }]} height={140} showArea />
-      : <div className="dim" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', fontSize: 12 }}>No data yet</div>;
+    return (
+      <ChartWrapper render={h => pts.length > 0
+        ? <LineChart series={[{ name: widget.field ?? '', data: pts, color: 'hsl(var(--primary))' }]} height={h} showArea />
+        : <div className="dim" style={dim}>No data yet</div>}
+      />
+    );
   }
 
   if (widget.type === 'bar_chart') {
@@ -124,9 +168,12 @@ function WidgetContent({ widget }: { widget: Widget }) {
       label: new Date(p.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       value: p.value,
     }));
-    return pts.length > 0
-      ? <BarChart data={pts} color="hsl(var(--primary))" height={140} />
-      : <div className="dim" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', fontSize: 12 }}>No data yet</div>;
+    return (
+      <ChartWrapper render={h => pts.length > 0
+        ? <BarChart data={pts} color="hsl(var(--primary))" height={h} />
+        : <div className="dim" style={dim}>No data yet</div>}
+      />
+    );
   }
 
   if (widget.type === 'data_table') {
@@ -151,15 +198,9 @@ function WidgetContent({ widget }: { widget: Widget }) {
   }
 
   if (widget.type === 'map') {
-    const deviceId = widget.deviceId;
-    const { data: dData } = useQuery({
-      queryKey: ['wmap-device', deviceId],
-      queryFn: () => apiClient.get(`/devices/${deviceId}`).then(r => r.data),
-      enabled: !!deviceId,
-    });
-    const loc = dData?.location;
-    if (!API_KEY) return <div className="dim" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', fontSize: 12, textAlign: 'center', padding: 16 }}>Add VITE_GOOGLE_MAPS_API_KEY to enable maps</div>;
-    if (!loc?.lat) return <div className="dim" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', fontSize: 12 }}>No location data</div>;
+    const loc = mapDeviceData?.location;
+    if (!API_KEY) return <div className="dim" style={{ ...dim, textAlign: 'center', padding: 16 }}>Add VITE_GOOGLE_MAPS_API_KEY to enable maps</div>;
+    if (!loc?.lat) return <div className="dim" style={dim}>No location data</div>;
     return (
       <APIProvider apiKey={API_KEY}>
         <Map mapId={MAP_ID} defaultCenter={{ lat: loc.lat, lng: loc.lng ?? loc.lon ?? 0 }} defaultZoom={12}
@@ -200,13 +241,8 @@ function WidgetContent({ widget }: { widget: Widget }) {
         toast.success(`Sent: ${name}`);
       } catch { toast.error('Failed to send'); }
     };
-
-    if (!widget.deviceId) {
-      return <div className="dim" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', fontSize: 12, textAlign: 'center', padding: 16 }}>Select a device to show its controls</div>;
-    }
-    if (commands.length === 0) {
-      return <div className="dim" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', fontSize: 12, textAlign: 'center', padding: 16 }}>No commands defined for this device</div>;
-    }
+    if (!widget.deviceId) return <div className="dim" style={{ ...dim, textAlign: 'center', padding: 16 }}>Select a device to show its controls</div>;
+    if (commands.length === 0) return <div className="dim" style={{ ...dim, textAlign: 'center', padding: 16 }}>No commands defined for this device</div>;
     return (
       <div style={{ overflowY: 'auto', height: '100%' }}>
         {commands.map(cmd => (
@@ -216,23 +252,26 @@ function WidgetContent({ widget }: { widget: Widget }) {
     );
   }
 
-  return <div className="dim" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', fontSize: 12 }}>{widget.type}</div>;
+  return <div className="dim" style={dim}>{widget.type}</div>;
 }
 
-/* ── Widget config modal ─────────────────────────────────────────────── */
-function WidgetConfigModal({ initial, devices, onSave, onClose }: {
-  initial?: Partial<Widget>;
+/* ── Slide-in widget drawer ─────────────────────────────────────────── */
+function WidgetDrawer({ open, editing, devices, onSave, onClose }: {
+  open: boolean;
+  editing?: Partial<Widget>;
   devices: any[];
   onSave: (w: Widget) => void;
   onClose: () => void;
 }) {
-  const wtype = WIDGET_TYPES.find(t => t.type === initial?.type) ?? WIDGET_TYPES[0];
-  const [type, setType]       = useState(initial?.type ?? 'kpi_card');
-  const [title, setTitle]     = useState(initial?.title ?? '');
-  const [deviceId, setDeviceId] = useState(initial?.deviceId ?? '');
-  const [field, setField]     = useState(initial?.field ?? '');
-  const [rangeMs, setRangeMs] = useState(initial?.rangeMs ?? 24 * 3600_000);
-  const [deviceIds, setDeviceIds] = useState<string[]>(initial?.deviceIds ?? []);
+  const isEditing = !!(editing as any)?.id;
+  const [step, setStep]         = useState<'type-select' | 'config'>(isEditing ? 'config' : 'type-select');
+  const [type, setType]         = useState(editing?.type ?? 'kpi_card');
+  const [title, setTitle]       = useState(editing?.title ?? '');
+  const [deviceId, setDeviceId] = useState(editing?.deviceId ?? '');
+  const [field, setField]       = useState(editing?.field ?? '');
+  const [rangeMs, setRangeMs]   = useState(editing?.rangeMs ?? 24 * 3600_000);
+  const [deviceIds, setDeviceIds] = useState<string[]>(editing?.deviceIds ?? []);
+  const [hoveredType, setHoveredType] = useState<string | null>(null);
 
   const { data: latest } = useQuery({
     queryKey: ['wconfig-latest', deviceId],
@@ -243,127 +282,167 @@ function WidgetConfigModal({ initial, devices, onSave, onClose }: {
     .filter(([, v]) => typeof v === 'number')
     .map(([k]) => k);
 
-  const needsDevice   = !['status_grid', 'map'].includes(type) || type === 'map';
-  const needsField    = ['line_chart', 'bar_chart', 'gauge', 'kpi_card'].includes(type);
-  const needsRange    = ['line_chart', 'bar_chart'].includes(type);
+  const needsDevice    = !['status_grid'].includes(type);
+  const needsField     = ['line_chart', 'bar_chart', 'gauge', 'kpi_card'].includes(type);
+  const needsRange     = ['line_chart', 'bar_chart'].includes(type);
   const needsDeviceIds = type === 'status_grid';
 
   const toggleDeviceId = (id: string) =>
     setDeviceIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+
+  const pickType = (t: string) => { setType(t); setField(''); setStep('config'); };
 
   const save = () => {
     if (!title.trim()) { toast.error('Title required'); return; }
     const defW = WIDGET_TYPES.find(t => t.type === type)?.defaultW ?? 4;
     const defH = WIDGET_TYPES.find(t => t.type === type)?.defaultH ?? 3;
     onSave({
-      id: (initial as any)?.id ?? uid(),
+      id: (editing as any)?.id ?? uid(),
       type, title: title.trim(),
       deviceId: needsDevice ? (deviceId || undefined) : undefined,
       deviceIds: needsDeviceIds ? deviceIds : undefined,
       field: needsField ? (field || undefined) : undefined,
       rangeMs: needsRange ? rangeMs : undefined,
       config: {},
-      position: (initial as any)?.position ?? { x: 0, y: Infinity, w: defW, h: defH },
+      position: (editing as any)?.position ?? { x: 0, y: Infinity, w: defW, h: defH },
     });
   };
 
-  return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
-      onClick={onClose}>
-      <div className="panel" style={{ width: '100%', maxWidth: 520, padding: 28, maxHeight: '90vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-          <div style={{ fontFamily: 'var(--font-display)', fontSize: 22 }}>{initial?.type ? 'Edit' : 'Add'} <em style={{ color: 'hsl(var(--primary))' }}>widget</em></div>
-          <button onClick={onClose} className="btn btn-ghost btn-sm btn-icon"><X size={14} /></button>
-        </div>
+  const selectedMeta = WIDGET_TYPES.find(wt => wt.type === type);
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {/* Widget type grid */}
-          <div>
-            <label className="eyebrow" style={{ fontSize: 9, display: 'block', marginBottom: 8 }}>Widget type</label>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6 }}>
+  return (
+    <div style={{
+      position: 'fixed', top: 0, right: 0, bottom: 0, width: 420,
+      background: 'hsl(var(--surface))',
+      borderLeft: '1px solid hsl(var(--border))',
+      boxShadow: '-12px 0 48px rgba(0,0,0,0.3)',
+      transform: open ? 'translateX(0)' : 'translateX(100%)',
+      transition: 'transform 0.25s cubic-bezier(0.4,0,0.2,1)',
+      zIndex: 100, display: 'flex', flexDirection: 'column',
+    }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '16px 20px', borderBottom: '1px solid hsl(var(--border))', flexShrink: 0 }}>
+        {step === 'config' && !isEditing && (
+          <button onClick={() => setStep('type-select')} className="btn btn-ghost btn-sm btn-icon">
+            <ChevronLeft size={14} />
+          </button>
+        )}
+        <div style={{ flex: 1, fontFamily: 'var(--font-display)', fontSize: 18 }}>
+          {isEditing ? 'Edit ' : step === 'type-select' ? 'Add ' : 'Configure '}
+          <em style={{ color: 'hsl(var(--primary))' }}>
+            {step === 'config' && !isEditing ? (selectedMeta?.label ?? 'widget') : 'widget'}
+          </em>
+        </div>
+        <button onClick={onClose} className="btn btn-ghost btn-sm btn-icon"><X size={14} /></button>
+      </div>
+
+      {/* Body */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: 20 }}>
+        {step === 'type-select' ? (
+          <>
+            <p className="dim" style={{ fontSize: 12, marginBottom: 16 }}>Choose a widget type to add to your page.</p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
               {WIDGET_TYPES.map(wt => (
                 <button
                   key={wt.type}
-                  onClick={() => { setType(wt.type); setField(''); }}
+                  onClick={() => pickType(wt.type)}
+                  onMouseEnter={() => setHoveredType(wt.type)}
+                  onMouseLeave={() => setHoveredType(null)}
                   style={{
-                    padding: '10px 6px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
-                    border: `1px solid ${type === wt.type ? 'hsl(var(--primary))' : 'hsl(var(--border))'}`,
-                    background: type === wt.type ? 'hsl(var(--primary) / 0.08)' : 'transparent',
-                    cursor: 'pointer', fontSize: 10,
+                    padding: '18px 14px',
+                    display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 10,
+                    border: `1px solid ${hoveredType === wt.type ? 'hsl(var(--primary))' : 'hsl(var(--border))'}`,
+                    borderLeft: `3px solid ${WIDGET_ACCENT[wt.type] ?? 'hsl(var(--primary))'}`,
+                    background: hoveredType === wt.type ? 'hsl(var(--primary) / 0.06)' : 'transparent',
+                    cursor: 'pointer', transition: 'all 0.15s', textAlign: 'left',
                   }}
                 >
-                  <span style={{ fontSize: 18 }}>{wt.icon}</span>
-                  <span style={{ color: type === wt.type ? 'hsl(var(--primary))' : 'hsl(var(--muted-fg))' }}>{wt.label}</span>
+                  <span style={{ fontSize: 22, lineHeight: 1 }}>{wt.icon}</span>
+                  <div>
+                    <div style={{ fontSize: 12.5, fontWeight: 600, color: 'hsl(var(--fg))' }}>{wt.label}</div>
+                    <div style={{ fontSize: 11, color: 'hsl(var(--muted-fg))', marginTop: 3, lineHeight: 1.4 }}>{wt.desc}</div>
+                  </div>
                 </button>
               ))}
             </div>
-          </div>
-
-          <div>
-            <label className="eyebrow" style={{ fontSize: 9, display: 'block', marginBottom: 6 }}>Title</label>
-            <input className="input" value={title} onChange={e => setTitle(e.target.value)} placeholder="Temperature overview" />
-          </div>
-
-          {needsDevice && !needsDeviceIds && (
+          </>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
             <div>
-              <label className="eyebrow" style={{ fontSize: 9, display: 'block', marginBottom: 6 }}>Device</label>
-              <select className="select" value={deviceId} onChange={e => { setDeviceId(e.target.value); setField(''); }}>
-                <option value="">— select device —</option>
-                {devices.map((d: any) => <option key={d._id} value={d._id}>{d.name}</option>)}
-              </select>
+              <label className="eyebrow" style={{ fontSize: 9, display: 'block', marginBottom: 6 }}>Title</label>
+              <input
+                className="input" value={title}
+                onChange={e => setTitle(e.target.value)}
+                placeholder="e.g. Temperature overview"
+                autoFocus={!isEditing}
+                onKeyDown={e => e.key === 'Enter' && save()}
+              />
             </div>
-          )}
 
-          {needsDeviceIds && (
-            <div>
-              <label className="eyebrow" style={{ fontSize: 9, display: 'block', marginBottom: 8 }}>Devices to show <span className="faint">(leave empty for all)</span></label>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                {devices.map((d: any) => (
-                  <button
-                    key={d._id}
-                    onClick={() => toggleDeviceId(d._id)}
-                    style={{
-                      padding: '4px 10px', fontSize: 12, border: '1px solid',
-                      borderColor: deviceIds.includes(d._id) ? 'hsl(var(--primary))' : 'hsl(var(--border))',
-                      background: deviceIds.includes(d._id) ? 'hsl(var(--primary) / 0.1)' : 'transparent',
-                      color: deviceIds.includes(d._id) ? 'hsl(var(--primary))' : 'hsl(var(--muted-fg))',
-                      cursor: 'pointer',
-                    }}
-                  >{d.name}</button>
-                ))}
+            {needsDevice && !needsDeviceIds && (
+              <div>
+                <label className="eyebrow" style={{ fontSize: 9, display: 'block', marginBottom: 6 }}>Device</label>
+                <select className="select" value={deviceId} onChange={e => { setDeviceId(e.target.value); setField(''); }}>
+                  <option value="">— select device —</option>
+                  {devices.map((d: any) => <option key={d._id} value={d._id}>{d.name}</option>)}
+                </select>
               </div>
-            </div>
-          )}
+            )}
 
-          {needsField && deviceId && (
-            <div>
-              <label className="eyebrow" style={{ fontSize: 9, display: 'block', marginBottom: 6 }}>Field</label>
-              <select className="select" value={field} onChange={e => setField(e.target.value)}>
-                <option value="">— select field —</option>
-                {availableFields.map(f => <option key={f} value={f}>{f}</option>)}
-              </select>
-            </div>
-          )}
-
-          {needsRange && (
-            <div>
-              <label className="eyebrow" style={{ fontSize: 9, display: 'block', marginBottom: 6 }}>Time range</label>
-              <div className="seg">
-                {[['1h',3600_000],['6h',21600_000],['24h',86400_000],['7d',604800_000]].map(([l,v]) => (
-                  <button key={l} className={rangeMs === v ? 'on' : ''} onClick={() => setRangeMs(v as number)}>{l}</button>
-                ))}
+            {needsDeviceIds && (
+              <div>
+                <label className="eyebrow" style={{ fontSize: 9, display: 'block', marginBottom: 8 }}>
+                  Devices <span className="faint">(leave empty for all)</span>
+                </label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {devices.map((d: any) => (
+                    <button
+                      key={d._id} onClick={() => toggleDeviceId(d._id)}
+                      style={{
+                        padding: '4px 10px', fontSize: 12, border: '1px solid', cursor: 'pointer',
+                        borderColor: deviceIds.includes(d._id) ? 'hsl(var(--primary))' : 'hsl(var(--border))',
+                        background: deviceIds.includes(d._id) ? 'hsl(var(--primary) / 0.1)' : 'transparent',
+                        color: deviceIds.includes(d._id) ? 'hsl(var(--primary))' : 'hsl(var(--muted-fg))',
+                      }}
+                    >{d.name}</button>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
-        </div>
+            )}
 
-        <div style={{ display: 'flex', gap: 10, marginTop: 24, justifyContent: 'flex-end' }}>
-          <button onClick={onClose} className="btn btn-ghost btn-sm">Cancel</button>
-          <button onClick={save} className="btn btn-primary btn-sm" style={{ gap: 4 }}>
-            <Check size={11} /> Save widget
+            {needsField && deviceId && (
+              <div>
+                <label className="eyebrow" style={{ fontSize: 9, display: 'block', marginBottom: 6 }}>Field</label>
+                <select className="select" value={field} onChange={e => setField(e.target.value)}>
+                  <option value="">— select field —</option>
+                  {availableFields.map(f => <option key={f} value={f}>{f}</option>)}
+                </select>
+              </div>
+            )}
+
+            {needsRange && (
+              <div>
+                <label className="eyebrow" style={{ fontSize: 9, display: 'block', marginBottom: 6 }}>Time range</label>
+                <div className="seg">
+                  {[['1h', 3600_000], ['6h', 21600_000], ['24h', 86400_000], ['7d', 604800_000]].map(([l, v]) => (
+                    <button key={l} className={rangeMs === v ? 'on' : ''} onClick={() => setRangeMs(v as number)}>{l}</button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Footer — config step only */}
+      {step === 'config' && (
+        <div style={{ padding: '16px 20px', borderTop: '1px solid hsl(var(--border))', display: 'flex', gap: 10, flexShrink: 0 }}>
+          <button onClick={onClose} className="btn btn-ghost btn-sm" style={{ flex: 1 }}>Cancel</button>
+          <button onClick={save} className="btn btn-primary btn-sm" style={{ flex: 2, gap: 4 }}>
+            <Check size={11} /> {isEditing ? 'Update widget' : 'Add to canvas'}
           </button>
         </div>
-      </div>
+      )}
     </div>
   );
 }
@@ -373,8 +452,14 @@ export function PageBuilderPage() {
   const { id } = useParams<{ id: string }>();
   const queryClient = useQueryClient();
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [configModal, setConfigModal] = useState<{ open: boolean; widget?: Widget }>({ open: false });
-  const [publishing, setPublishing] = useState(false);
+  const [drawer, setDrawer]           = useState<{ open: boolean; widget?: Widget }>({ open: false });
+  const [publishing, setPublishing]   = useState(false);
+  const [hoveredCard, setHoveredCard] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState(false);
+  const [draftName, setDraftName]     = useState('');
+  const [showSettings, setShowSettings]           = useState(false);
+  const [settingsBrandTitle, setSettingsBrandTitle]     = useState('');
+  const [settingsBrandLogoUrl, setSettingsBrandLogoUrl] = useState('');
 
   const { data: page, isLoading } = useQuery({
     queryKey: ['page', id],
@@ -388,10 +473,17 @@ export function PageBuilderPage() {
   });
   const devices: any[] = devicesData?.devices ?? [];
 
-  const pageData = page as any;
+  const pageData       = page as any;
   const widgets: Widget[] = pageData?.widgets ?? [];
   const publishedToken: string | null = pageData?.shareToken ?? null;
   const allowExports: boolean = pageData?.allowExports ?? false;
+
+  useEffect(() => {
+    if (pageData) {
+      setSettingsBrandTitle(pageData.brandTitle ?? '');
+      setSettingsBrandLogoUrl(pageData.brandLogoUrl ?? '');
+    }
+  }, [pageData?.brandTitle, pageData?.brandLogoUrl]);
 
   const toggleExports = async () => {
     try {
@@ -399,6 +491,31 @@ export function PageBuilderPage() {
       queryClient.setQueryData(['page', id], (old: any) => ({ ...old, allowExports: res.data.allowExports }));
       toast.success(!allowExports ? 'Exports enabled for viewers' : 'Exports disabled');
     } catch { toast.error('Failed to update'); }
+  };
+
+  const saveSettings = async () => {
+    try {
+      await apiClient.patch(`/pages/${id}`, {
+        brandTitle: settingsBrandTitle,
+        brandLogoUrl: settingsBrandLogoUrl,
+      });
+      queryClient.setQueryData(['page', id], (old: any) => ({
+        ...old, brandTitle: settingsBrandTitle, brandLogoUrl: settingsBrandLogoUrl,
+      }));
+      toast.success('Branding saved');
+      setShowSettings(false);
+    } catch { toast.error('Failed to save settings'); }
+  };
+
+  const saveName = async () => {
+    const name = draftName.trim();
+    if (name && name !== pageData?.name) {
+      try {
+        await apiClient.patch(`/pages/${id}`, { name });
+        queryClient.setQueryData(['page', id], (old: any) => ({ ...old, name }));
+      } catch { toast.error('Failed to rename'); }
+    }
+    setEditingName(false);
   };
 
   const debouncedPatch = useCallback((newWidgets: Widget[]) => {
@@ -422,8 +539,7 @@ export function PageBuilderPage() {
     if (!widgets.length) return;
     const updated = widgets.map(w => {
       const pos = layout.find((l: any) => l.i === w.id);
-      if (!pos) return w;
-      return { ...w, position: { x: pos.x, y: pos.y, w: pos.w, h: pos.h } };
+      return pos ? { ...w, position: { x: pos.x, y: pos.y, w: pos.w, h: pos.h } } : w;
     });
     debouncedPatch(updated);
   };
@@ -434,7 +550,7 @@ export function PageBuilderPage() {
       ? widgets.map(x => x.id === w.id ? w : x)
       : [...widgets, w];
     await patchWidgetsImmediate(updated);
-    setConfigModal({ open: false });
+    setDrawer({ open: false });
   };
 
   const removeWidget = async (wid: string) => {
@@ -442,26 +558,22 @@ export function PageBuilderPage() {
   };
 
   const publish = async () => {
-    // Flush any pending debounced save so the public page sees latest widgets
     if (saveTimerRef.current) {
       clearTimeout(saveTimerRef.current);
       saveTimerRef.current = null;
       try { await apiClient.patch(`/pages/${id}`, { widgets }); } catch {}
     }
-
     setPublishing(true);
     try {
       const res = await apiClient.post(`/pages/${id}/publish`);
       queryClient.setQueryData(['page', id], (old: any) => ({ ...old, shareToken: res.data.token }));
       const url = `${window.location.origin}/s/${res.data.token}`;
-      await copyText(url); // has non-HTTPS fallback — won't throw
+      await copyText(url);
       toast.success('Published! Link copied.');
     } catch {
-      // Refetch so UI reflects actual server state even if response failed
       queryClient.invalidateQueries({ queryKey: ['page', id] });
       toast.error('Failed to publish');
-    }
-    finally { setPublishing(false); }
+    } finally { setPublishing(false); }
   };
 
   const unpublish = async () => {
@@ -486,16 +598,54 @@ export function PageBuilderPage() {
   }));
 
   return (
-    <div className="page" style={{ paddingBottom: 80 }}>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24, flexWrap: 'wrap' }}>
+    <div
+      className="page"
+      style={{ paddingBottom: 80, paddingRight: drawer.open ? 432 : 0, transition: 'padding-right 0.25s cubic-bezier(0.4,0,0.2,1)' }}
+    >
+      {/* ── Header ── */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
         <Link to="/pages" className="btn btn-ghost btn-sm" style={{ gap: 6 }}>
           <ArrowLeft size={13} /> Pages
         </Link>
-        <h1 style={{ flex: 1, fontFamily: 'var(--font-display)', fontSize: 26, margin: 0, lineHeight: 1 }}>
-          {pageData.name} {publishedToken && <span className="eyebrow" style={{ fontSize: 10, color: 'hsl(var(--good))', marginLeft: 8 }}>● LIVE</span>}
-        </h1>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+
+        <div style={{ flex: 1, minWidth: 200 }}>
+          {editingName ? (
+            <input
+              autoFocus
+              value={draftName}
+              onChange={e => setDraftName(e.target.value)}
+              onBlur={saveName}
+              onKeyDown={e => { if (e.key === 'Enter') saveName(); if (e.key === 'Escape') setEditingName(false); }}
+              style={{
+                fontFamily: 'var(--font-display)', fontSize: 24,
+                background: 'transparent', border: 'none',
+                borderBottom: '2px solid hsl(var(--primary))', outline: 'none',
+                color: 'hsl(var(--fg))', width: '100%', maxWidth: 400,
+              }}
+            />
+          ) : (
+            <h1
+              style={{ fontFamily: 'var(--font-display)', fontSize: 24, margin: 0, lineHeight: 1.2, cursor: 'text', display: 'inline-flex', alignItems: 'center', gap: 8 }}
+              onClick={() => { setEditingName(true); setDraftName(pageData.name); }}
+              title="Click to rename"
+            >
+              {pageData.name}
+              {publishedToken && (
+                <span className="eyebrow" style={{ fontSize: 10, color: 'hsl(var(--good))' }}>● LIVE</span>
+              )}
+            </h1>
+          )}
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <button
+            onClick={() => setShowSettings(s => !s)}
+            className="btn btn-ghost btn-sm btn-icon"
+            title="Page branding"
+            style={{ color: showSettings ? 'hsl(var(--primary))' : undefined }}
+          >
+            <Settings size={14} />
+          </button>
           <button
             onClick={toggleExports}
             className="btn btn-sm btn-ghost"
@@ -504,7 +654,7 @@ export function PageBuilderPage() {
           >
             <Download size={13} /> {allowExports ? 'Exports on' : 'Exports off'}
           </button>
-          <button className="btn btn-primary btn-sm" style={{ gap: 6 }} onClick={() => setConfigModal({ open: true })}>
+          <button className="btn btn-primary btn-sm" style={{ gap: 6 }} onClick={() => setDrawer({ open: true })}>
             <Plus size={13} /> Add widget
           </button>
           {publishedToken ? (
@@ -527,21 +677,63 @@ export function PageBuilderPage() {
         </div>
       </div>
 
-      {/* Hint */}
-      {widgets.length > 0 && (
-        <div className="mono faint" style={{ fontSize: 10.5, marginBottom: 12 }}>
-          Drag headers to move · drag bottom-right corner to resize
+      {/* ── Branding settings panel ── */}
+      {showSettings && (
+        <div className="panel" style={{ padding: '20px 24px', marginBottom: 20, borderTop: '2px solid hsl(var(--primary))' }}>
+          <div className="eyebrow" style={{ marginBottom: 14 }}>Page branding</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+            <div>
+              <label className="eyebrow" style={{ fontSize: 9, display: 'block', marginBottom: 6 }}>
+                Brand name <span className="faint">(overrides page title on public link)</span>
+              </label>
+              <input
+                className="input"
+                value={settingsBrandTitle}
+                onChange={e => setSettingsBrandTitle(e.target.value)}
+                placeholder={pageData.name}
+              />
+            </div>
+            <div>
+              <label className="eyebrow" style={{ fontSize: 9, display: 'block', marginBottom: 6 }}>
+                Logo URL <span className="faint">(shown top-left on public page)</span>
+              </label>
+              <input
+                className="input"
+                value={settingsBrandLogoUrl}
+                onChange={e => setSettingsBrandLogoUrl(e.target.value)}
+                placeholder="https://example.com/logo.png"
+              />
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={saveSettings} className="btn btn-primary btn-sm" style={{ gap: 4 }}>
+              <Check size={11} /> Save branding
+            </button>
+            <button onClick={() => setShowSettings(false)} className="btn btn-ghost btn-sm">Cancel</button>
+          </div>
         </div>
       )}
 
-      {/* Canvas */}
+      {/* ── Hint bar ── */}
+      {widgets.length > 0 && (
+        <div className="mono faint" style={{ fontSize: 10.5, marginBottom: 12 }}>
+          Drag headers to move · resize from corners · click title to rename page
+        </div>
+      )}
+
+      {/* ── Canvas ── */}
       {widgets.length === 0 ? (
-        <div className="panel" style={{ padding: '80px 24px', textAlign: 'center', border: '2px dashed hsl(var(--border))' }}>
-          <div style={{ fontFamily: 'var(--font-display)', fontSize: 24, marginBottom: 10 }}>
+        <div style={{ padding: '60px 24px', textAlign: 'center', border: '1px dashed hsl(var(--border))', background: 'hsl(var(--surface))' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 10, maxWidth: 420, margin: '0 auto 32px', opacity: 0.12, pointerEvents: 'none' }}>
+            <div style={{ height: 72, border: '1px dashed hsl(var(--fg))', borderRadius: 4 }} />
+            <div style={{ height: 72, border: '1px dashed hsl(var(--fg))', borderRadius: 4 }} />
+            <div style={{ height: 100, gridColumn: '1/-1', border: '1px dashed hsl(var(--fg))', borderRadius: 4 }} />
+          </div>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: 28, marginBottom: 10 }}>
             Empty <em style={{ color: 'hsl(var(--primary))' }}>canvas</em>
           </div>
-          <p className="dim" style={{ fontSize: 13, marginBottom: 20 }}>Add widgets to build your dashboard. Drag to move, resize from corners.</p>
-          <button className="btn btn-primary" style={{ gap: 6 }} onClick={() => setConfigModal({ open: true })}>
+          <p className="dim" style={{ fontSize: 13, marginBottom: 24 }}>Add widgets to build your page. Drag to rearrange, resize from any edge.</p>
+          <button className="btn btn-primary" style={{ gap: 6 }} onClick={() => setDrawer({ open: true })}>
             <Plus size={14} /> Add first widget
           </button>
         </div>
@@ -558,51 +750,71 @@ export function PageBuilderPage() {
           resizeHandles={['se', 'sw', 'ne', 'nw', 'e', 'w', 's']}
           style={{ minHeight: 400 }}
         >
-          {widgets.map(w => (
-            <div key={w.id} style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }} className="panel">
-              {/* Card header — drag handle */}
-              <div className="drag-handle" style={{
-                display: 'flex', alignItems: 'center', gap: 6,
-                padding: '8px 12px', borderBottom: '1px solid hsl(var(--rule-ghost))',
-                cursor: 'grab', flexShrink: 0, userSelect: 'none',
-                background: 'hsl(var(--surface-raised))',
-              }}>
-                <GripVertical size={13} style={{ color: 'hsl(var(--muted-fg))', flexShrink: 0 }} />
-                <span style={{ flex: 1, fontSize: 12, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{w.title}</span>
-                <span className="mono faint" style={{ fontSize: 9, textTransform: 'uppercase', flexShrink: 0 }}>{w.type.replace('_', ' ')}</span>
-                <button
-                  onMouseDown={e => e.stopPropagation()}
-                  onClick={() => setConfigModal({ open: true, widget: w })}
-                  className="btn btn-ghost btn-sm btn-icon" style={{ flexShrink: 0 }}
-                >
-                  <Pencil size={11} />
-                </button>
-                <button
-                  onMouseDown={e => e.stopPropagation()}
-                  onClick={() => removeWidget(w.id)}
-                  className="btn btn-ghost btn-sm btn-icon" style={{ color: 'hsl(var(--bad))', flexShrink: 0 }}
-                >
-                  <Trash2 size={11} />
-                </button>
+          {widgets.map(w => {
+            const accent = WIDGET_ACCENT[w.type] ?? 'hsl(var(--primary))';
+            const needsSetup = !['status_grid'].includes(w.type) && !w.deviceId;
+            const isHovered = hoveredCard === w.id;
+            return (
+              <div
+                key={w.id}
+                className="panel"
+                onMouseEnter={() => setHoveredCard(w.id)}
+                onMouseLeave={() => setHoveredCard(null)}
+                style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', borderLeft: `3px solid ${accent}` }}
+              >
+                <div className="drag-handle" style={{
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  padding: '7px 10px', borderBottom: '1px solid hsl(var(--rule-ghost))',
+                  cursor: 'grab', flexShrink: 0, userSelect: 'none',
+                  background: 'hsl(var(--surface-raised))',
+                }}>
+                  <GripVertical size={12} style={{ color: 'hsl(var(--muted-fg))', flexShrink: 0 }} />
+                  <span style={{ flex: 1, fontSize: 12, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {w.title}
+                    {needsSetup && (
+                      <span style={{ color: '#f59e0b', fontSize: 9, marginLeft: 6, fontFamily: 'var(--font-mono)', fontWeight: 400 }}>
+                        · setup needed
+                      </span>
+                    )}
+                  </span>
+                  <span className="mono faint" style={{ fontSize: 9, textTransform: 'uppercase', flexShrink: 0 }}>
+                    {WIDGET_TYPES.find(t => t.type === w.type)?.icon} {w.type.replace('_', ' ')}
+                  </span>
+                  <button
+                    onMouseDown={e => e.stopPropagation()}
+                    onClick={() => setDrawer({ open: true, widget: w })}
+                    className="btn btn-ghost btn-sm btn-icon"
+                    style={{ flexShrink: 0, opacity: isHovered ? 1 : 0, transition: 'opacity 0.15s' }}
+                  >
+                    <Pencil size={11} />
+                  </button>
+                  <button
+                    onMouseDown={e => e.stopPropagation()}
+                    onClick={() => removeWidget(w.id)}
+                    className="btn btn-ghost btn-sm btn-icon"
+                    style={{ color: 'hsl(var(--bad))', flexShrink: 0, opacity: isHovered ? 1 : 0, transition: 'opacity 0.15s' }}
+                  >
+                    <Trash2 size={11} />
+                  </button>
+                </div>
+                <div style={{ flex: 1, padding: w.type === 'map' ? 0 : '10px 12px', overflow: 'hidden', minHeight: 0 }}>
+                  <WidgetContent widget={w} />
+                </div>
               </div>
-
-              {/* Widget body */}
-              <div style={{ flex: 1, padding: w.type === 'map' ? 0 : '10px 12px', overflow: 'hidden', minHeight: 0 }}>
-                <WidgetContent widget={w} />
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </ResponsiveGridLayout>
       )}
 
-      {configModal.open && (
-        <WidgetConfigModal
-          initial={configModal.widget}
-          devices={devices}
-          onSave={addOrUpdateWidget}
-          onClose={() => setConfigModal({ open: false })}
-        />
-      )}
+      {/* ── Drawer (always mounted for smooth transition) ── */}
+      <WidgetDrawer
+        key={drawer.widget?.id ?? 'new'}
+        open={drawer.open}
+        editing={drawer.widget}
+        devices={devices}
+        onSave={addOrUpdateWidget}
+        onClose={() => setDrawer({ open: false })}
+      />
     </div>
   );
 }
