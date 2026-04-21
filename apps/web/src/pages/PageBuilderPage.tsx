@@ -467,9 +467,9 @@ function WidgetContent({ widget }: { widget: Widget }) {
 
   // ── Text ──
   if (widget.type === 'text') {
-    const { content = '', fontSize = 18, fontFamily = 'display', align = 'left', color: textColor } = widget.config as any;
+    const { content = '', fontSize = 18, fontFamily = 'display', align = 'left', color: textColor, padding: textPad = 0 } = widget.config as any;
     return (
-      <div style={{ height:'100%',display:'flex',alignItems:'center',overflow:'hidden' }}>
+      <div style={{ height:'100%',display:'flex',alignItems:'center',overflow:'hidden',padding:Number(textPad),boxSizing:'border-box' }}>
         <div style={{
           fontFamily: fontFamily === 'mono' ? 'var(--font-mono)' : 'var(--font-display)',
           fontSize: Number(fontSize), textAlign: align as any,
@@ -525,6 +525,7 @@ function WidgetDrawer({ open, editing, devices, onSave, onClose }: {
   const [textFont, setTextFont]     = useState((editing?.config?.fontFamily as string) ?? 'display');
   const [textAlign, setTextAlign]   = useState((editing?.config?.align as string) ?? 'left');
   const [textColor, setTextColor]   = useState((editing?.config?.color as string) ?? '');
+  const [textPadding, setTextPadding] = useState(Number((editing?.config?.padding) ?? 0));
   const [sepOrientation, setSepOrientation] = useState((editing?.config?.orientation as string) ?? 'horizontal');
   const [sepThickness, setSepThickness]     = useState(Number((editing?.config?.thickness) ?? 1));
   const [sepColor, setSepColor]     = useState((editing?.config?.color as string) ?? '');
@@ -569,7 +570,7 @@ function WidgetDrawer({ open, editing, devices, onSave, onClose }: {
     const config: Record<string, unknown> = {};
     if (needsXYFields) { config.xField = xField; config.yField = yField; }
     if (needsMinMax)   { config.min = Number(cfgMin); config.max = Number(cfgMax); }
-    if (isText)        { config.content = textContent; config.fontSize = textSize; config.fontFamily = textFont; config.align = textAlign; if (textColor) config.color = textColor; }
+    if (isText)        { config.content = textContent; config.fontSize = textSize; config.fontFamily = textFont; config.align = textAlign; config.padding = textPadding; if (textColor) config.color = textColor; }
     if (isSeparator)   { config.orientation = sepOrientation; config.thickness = sepThickness; if (sepColor) config.color = sepColor; }
     if (isMultiLine)   { config.series = multiSeries; }
     if (isDataTable)   { config.fields = tableFields; }
@@ -811,6 +812,11 @@ function WidgetDrawer({ open, editing, devices, onSave, onClose }: {
                     <input type="color" value={textColor || '#eeebe6'} onChange={e => setTextColor(e.target.value)}
                       style={{ width:'100%',height:34,border:'1px solid hsl(var(--border))',cursor:'pointer',padding:2 }} />
                   </div>
+                </div>
+                <div>
+                  {inputLabel('Padding', `(${textPadding}px)`)}
+                  <input type="range" min={0} max={48} value={textPadding} onChange={e => setTextPadding(Number(e.target.value))}
+                    style={{ width:'100%' }} />
                 </div>
                 <div style={{ padding:12,background:'hsl(var(--surface-raised))',border:'1px solid hsl(var(--border))' }}>
                   <div style={{ fontFamily:textFont==='mono'?'var(--font-mono)':'var(--font-display)',fontSize:Math.min(textSize,24),color:textColor||'hsl(var(--fg))',textAlign:textAlign as any }}>

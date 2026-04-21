@@ -901,20 +901,21 @@ function PageWidgetContent({ widget, data, T, contentH = 200 }: { widget: any; d
   }
 
   if (widget.type === 'text') {
-    const text = (widget.config?.text as string) ?? '';
-    const fontSize = (widget.config?.fontSize as number) ?? 16;
-    const isDisplay = (widget.config?.font as string) !== 'mono';
+    const text = (widget.config?.content as string) ?? '';
+    const fontSize = (widget.config?.fontSize as number) ?? 18;
+    const isDisplay = (widget.config?.fontFamily as string) !== 'mono';
     const align = (widget.config?.align as string) ?? 'left';
     const color = (widget.config?.color as string) ?? T.fg;
+    const pad = (widget.config?.padding as number) ?? 0;
     return (
-      <div style={{ padding: '12px 16px', height: '100%', overflowY: 'auto', display: 'flex', alignItems: 'center' }}>
+      <div style={{ padding: pad, height: '100%', overflowY: 'auto', display: 'flex', alignItems: 'center', boxSizing: 'border-box' }}>
         <div style={{
           fontFamily: isDisplay ? T.fontDisplay : T.fontMono,
-          fontSize, color, lineHeight: 1.55,
+          fontSize, color, lineHeight: 1.45,
           textAlign: align as React.CSSProperties['textAlign'],
           whiteSpace: 'pre-wrap', width: '100%',
         }}>
-          {text || <span style={{ opacity: 0.3 }}>No content</span>}
+          {text}
         </div>
       </div>
     );
@@ -925,9 +926,9 @@ function PageWidgetContent({ widget, data, T, contentH = 200 }: { widget: any; d
     const thickness = (widget.config?.thickness as number) ?? 1;
     const color = (widget.config?.color as string) ?? T.border;
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', padding: '0 8px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
         {orientation === 'vertical'
-          ? <div style={{ width: thickness, height: '80%', background: color }} />
+          ? <div style={{ width: thickness, height: '100%', background: color }} />
           : <div style={{ height: thickness, width: '100%', background: color }} />}
       </div>
     );
