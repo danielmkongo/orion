@@ -298,9 +298,9 @@ export function PageBuilderPage() {
 
   const { data: devicesData } = useQuery({
     queryKey: ['devices-all'],
-    queryFn: () => apiClient.get('/devices', { params: { limit: 200 } }).then(r => r.data.data ?? r.data),
+    queryFn: () => devicesApi.list({ limit: 200 }),
   });
-  const devices: any[] = devicesData ?? [];
+  const devices: any[] = devicesData?.devices ?? [];
 
   const widgets: Widget[] = (page as any)?.widgets ?? [];
 

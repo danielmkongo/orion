@@ -179,3 +179,60 @@ export function downloadCSV(filename: string, rows: Record<string, unknown>[]) {
   a.href = url; a.download = filename; a.click();
   URL.revokeObjectURL(url);
 }
+
+// ── Premium multi-sheet Excel export ─────────────────────────────────
+export interface XLSXSheet {
+  name: string;
+  rows: Record<string, unknown>[];
+  /** Optional column-width hints (characters). Keys match row object keys. */
+  colWidths?: Record<string, number>;
+}
+
+export async function downloadXLSX(filename: string, sheets: XLSXSheet[], meta?: { title?: string; generatedBy?: string }) {
+  const XLSX = await import('xlsx');
+
+  const wb = XLSX.utils.book_new();
+  wb.Props = {
+    Title: meta?.title ?? filename,
+    Author: meta?.generatedBy ?? 'Orion Platform',
+    CreatedDate: new Date(),
+  };
+
+  for (const sheet of sheets) {
+    if (!sheet.rows.length) continue;
+    const keys = Object.keys(sheet.rows[0]);
+
+    // Header row + data rows as array-of-arrays so we control ordering
+    const aoa: unknown[][] = [
+      keys.map(k => k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())), // pretty headers
+      ...sheet.rows.map(r => keys.map(k => {
+        const v = r[k];
+        // Keep numbers as numbers, dates as JS Date (SheetJS converts them)
+        if (v instanceof Date) return v;
+        if (typeof v === 'number') return v;
+        if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(v)) return new Date(v);
+        return v ?? '';
+      })),
+    ];
+
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+
+    // Column widths — use hint or auto-detect from data
+    ws['!cols'] = keys.map(k => {
+      const hint = sheet.colWidths?.[k];
+      if (hint) return { wch: hint };
+      const maxLen = Math.max(
+        k.length,
+        ...sheet.rows.map(r => String(r[k] ?? '').length)
+      );
+      return { wch: Math.min(Math.max(maxLen + 2, 10), 50) };
+    });
+
+    // Freeze header row
+    ws['!freeze'] = { xSplit: 0, ySplit: 1 };
+
+    XLSX.utils.book_append_sheet(wb, ws, sheet.name.slice(0, 31));
+  }
+
+  XLSX.writeFile(wb, filename.endsWith('.xlsx') ? filename : `${filename}.xlsx`);
+}

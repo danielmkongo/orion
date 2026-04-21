@@ -1,9 +1,10 @@
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Download, Plus, X, Printer } from 'lucide-react';
 import { devicesApi } from '@/api/devices';
-import { downloadCSV } from '@/lib/utils';
+import { downloadXLSX } from '@/lib/utils';
+import toast from 'react-hot-toast';
 
 interface Device {
   _id: string;
@@ -37,8 +38,6 @@ export function ReportsPage() {
   const [newDevices, setNewDevices]   = useState<string[]>([]);
   const [newMetrics, setNewMetrics]   = useState<string[]>(['uptime', 'error_rate']);
   const [allDevicesSel, setAllDevicesSel] = useState(true);
-
-  const printRef = useRef<HTMLDivElement>(null);
 
   const { data } = useQuery({
     queryKey: ['devices'],
@@ -84,56 +83,212 @@ export function ReportsPage() {
     setNewTitle(''); setNewRange('7d'); setNewDevices([]); setNewMetrics(['uptime', 'error_rate']); setAllDevicesSel(true);
   }
 
-  function exportDeviceCSV(report?: SavedReport) {
+  async function exportDeviceXLSX(report?: SavedReport) {
     const targetDevices = report && !report.devices.length
       ? devices
       : report
         ? devices.filter(d => report.devices.includes(d._id))
         : devices;
-    const rows = targetDevices.map(d => ({
-      name:       d.name,
-      status:     d.status,
-      category:   d.category,
-      error:      d.status === 'error' ? 'yes' : 'no',
-      lastSeen:   d.lastSeenAt ?? '—',
-      uptime_pct: d.status === 'online' ? 100 : d.status === 'idle' ? 60 : 0,
+
+    const dateStr = new Date().toISOString().slice(0, 10);
+    const title = report?.title ?? `Orion Device Report · ${report?.range ?? range}`;
+
+    const summaryRows = [
+      { metric: 'Platform uptime',  value: `${uptime}%`,    note: 'Percentage of fleet currently online' },
+      { metric: 'Error rate',       value: `${errorRate}%`, note: 'Percentage of fleet in error state' },
+      { metric: 'Devices online',   value: online,           note: 'Count of online devices' },
+      { metric: 'Devices total',    value: total,            note: 'Total registered devices' },
+      { metric: 'Incidents',        value: incidents,        note: 'Devices currently in error state' },
+      { metric: 'Generated',        value: new Date().toLocaleString(), note: '' },
+      { metric: 'Range',            value: report?.range ?? range, note: '' },
+    ];
+
+    const deviceRows = targetDevices.map(d => ({
+      name:         d.name,
+      status:       d.status,
+      category:     d.category,
+      estimated_uptime_pct: d.status === 'online' ? 100 : d.status === 'idle' ? 60 : 0,
+      is_error:     d.status === 'error' ? 'Yes' : 'No',
+      last_seen:    d.lastSeenAt ? new Date(d.lastSeenAt) : '',
     }));
-    const fname = `orion-report-${report?.range ?? range}-${new Date().toISOString().slice(0, 10)}.csv`;
-    downloadCSV(fname, rows);
+
+    const catRows = catBreakdown.map(([cat, count]) => ({
+      category: cat,
+      count,
+      pct_of_fleet: total > 0 ? `${Math.round((count / total) * 100)}%` : '—',
+    }));
+
+    await downloadXLSX(
+      `orion-report-${dateStr}`,
+      [
+        {
+          name: 'Summary',
+          rows: summaryRows,
+          colWidths: { metric: 22, value: 18, note: 46 },
+        },
+        {
+          name: 'Devices',
+          rows: deviceRows,
+          colWidths: { name: 28, status: 12, category: 18, estimated_uptime_pct: 20, is_error: 10, last_seen: 24 },
+        },
+        {
+          name: 'By Category',
+          rows: catRows,
+          colWidths: { category: 22, count: 10, pct_of_fleet: 16 },
+        },
+      ],
+      { title, generatedBy: 'Orion Platform' }
+    );
   }
 
   function printReport(report?: SavedReport) {
-    if (!printRef.current) return;
     const targetDevices = report && report.devices.length
       ? devices.filter(d => report.devices.includes(d._id))
       : devices;
-    printRef.current.innerHTML = `
-      <h1 style="font-family:serif;font-size:28px;margin-bottom:12px">${report?.title ?? 'Device Report'}</h1>
-      <p style="font-size:13px;color:#666;margin-bottom:24px">Range: ${report?.range ?? range} · Generated ${new Date().toLocaleString()}</p>
-      <table style="width:100%;border-collapse:collapse;font-size:13px">
-        <thead><tr style="border-bottom:2px solid #000">
-          <th style="text-align:left;padding:6px 8px">Device</th>
-          <th style="text-align:left;padding:6px 8px">Status</th>
-          <th style="text-align:left;padding:6px 8px">Category</th>
-          <th style="text-align:left;padding:6px 8px">Error</th>
-        </tr></thead>
-        <tbody>${targetDevices.map(d => `
-          <tr style="border-bottom:1px solid #eee">
-            <td style="padding:6px 8px">${d.name}</td>
-            <td style="padding:6px 8px">${d.status}</td>
-            <td style="padding:6px 8px">${d.category}</td>
-            <td style="padding:6px 8px">${d.status === 'error' ? 'yes' : 'no'}</td>
-          </tr>`).join('')}
-        </tbody>
-      </table>`;
-    window.print();
+
+    const statusStyle: Record<string, string> = {
+      online:  'background:#0a2e1a;color:#4ade80;border:1px solid #166534',
+      offline: 'background:#1a1a1a;color:#9ca3af;border:1px solid #374151',
+      idle:    'background:#2a1f00;color:#fbbf24;border:1px solid #854d0e',
+      error:   'background:#2a0a0a;color:#f87171;border:1px solid #991b1b',
+    };
+
+    const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>${report?.title ?? 'Device Report'}</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:'Inter',system-ui,sans-serif;background:#0B0B0A;color:#EDEDED;font-size:13px;min-height:100vh}
+    .page{max-width:960px;margin:0 auto;padding:48px 40px}
+    /* Header */
+    .header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:48px;padding-bottom:24px;border-bottom:1px solid #1e1e1e}
+    .wordmark{font-size:22px;font-weight:800;letter-spacing:-.04em;color:#FF5B1F}
+    .meta-right{text-align:right;font-family:'JetBrains Mono',monospace;font-size:10px;color:#555;line-height:1.8}
+    /* Title */
+    h1{font-size:40px;font-weight:800;letter-spacing:-.04em;line-height:1;margin-bottom:6px}
+    h1 em{color:#FF5B1F;font-style:italic}
+    .subtitle{font-size:13px;color:#666;margin-bottom:40px}
+    /* KPIs */
+    .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:0;border:1px solid #1e1e1e;margin-bottom:48px}
+    .kpi{padding:20px 24px;border-right:1px solid #1e1e1e}
+    .kpi:last-child{border-right:none}
+    .kpi-label{font-family:'JetBrains Mono',monospace;font-size:9px;text-transform:uppercase;letter-spacing:.14em;color:#555;margin-bottom:8px}
+    .kpi-value{font-size:40px;font-weight:800;letter-spacing:-.03em;line-height:1}
+    .kpi-unit{font-family:'JetBrains Mono',monospace;font-size:18px;opacity:.7}
+    /* Section */
+    .section-label{font-family:'JetBrains Mono',monospace;font-size:9px;text-transform:uppercase;letter-spacing:.16em;color:#555;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid #1e1e1e}
+    /* Table */
+    table{width:100%;border-collapse:collapse}
+    thead tr{border-bottom:1px solid #FF5B1F}
+    th{text-align:left;padding:10px 12px;font-family:'JetBrains Mono',monospace;font-size:9px;text-transform:uppercase;letter-spacing:.12em;color:#FF5B1F;font-weight:600}
+    td{padding:10px 12px;border-bottom:1px solid #141414;vertical-align:middle;font-size:12.5px}
+    tbody tr:hover{background:#0f0f0f}
+    .badge{display:inline-block;padding:3px 9px;font-family:'JetBrains Mono',monospace;font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em}
+    .device-name{font-weight:600;color:#EDEDED}
+    .mono{font-family:'JetBrains Mono',monospace;font-size:11px;color:#666}
+    /* Category bars */
+    .cats{display:grid;grid-template-columns:1fr 1fr;gap:0 32px;margin-bottom:48px}
+    .cat-row{padding:9px 0;border-bottom:1px solid #141414}
+    .cat-name{font-size:12px;text-transform:capitalize;margin-bottom:5px}
+    .cat-bar-bg{height:3px;background:#1a1a1a;position:relative}
+    .cat-bar-fill{position:absolute;inset:0;background:#FF5B1F}
+    /* Footer */
+    .footer{margin-top:56px;padding-top:20px;border-top:1px solid #1e1e1e;display:flex;justify-content:space-between;font-family:'JetBrains Mono',monospace;font-size:9.5px;color:#333}
+    @media print{
+      body{background:#0B0B0A!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+      .page{padding:24px 20px}
+    }
+  </style>
+</head>
+<body>
+<div class="page">
+  <div class="header">
+    <div class="wordmark">Orion</div>
+    <div class="meta-right">
+      ${new Date().toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' })}<br/>
+      Range · ${(report?.range ?? range).toUpperCase()}<br/>
+      ${targetDevices.length} device${targetDevices.length !== 1 ? 's' : ''}
+    </div>
+  </div>
+
+  <h1>${(report?.title ?? 'Device <em>Report</em>').replace(/^(.+)(\s\S+)$/, '$1<em>$2</em>')}</h1>
+  <div class="subtitle">Operational snapshot · Orion IoT Platform</div>
+
+  <div class="kpis">
+    <div class="kpi">
+      <div class="kpi-label">Platform uptime</div>
+      <div class="kpi-value" style="color:#4ade80">${uptime}<span class="kpi-unit">%</span></div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Error rate</div>
+      <div class="kpi-value" style="color:#f87171">${errorRate}<span class="kpi-unit">%</span></div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Online now</div>
+      <div class="kpi-value" style="color:#FF5B1F">${online}</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Incidents</div>
+      <div class="kpi-value">${incidents}</div>
+    </div>
+  </div>
+
+  ${catBreakdown.length > 0 ? `
+  <div class="section-label">By category</div>
+  <div class="cats" style="margin-bottom:48px">
+    ${catBreakdown.map(([cat, count]) => `
+    <div class="cat-row">
+      <div style="display:flex;justify-content:space-between;margin-bottom:5px">
+        <span class="cat-name">${cat}</span>
+        <span class="mono">${count}</span>
+      </div>
+      <div class="cat-bar-bg"><div class="cat-bar-fill" style="width:${Math.round((count / maxCount) * 100)}%"></div></div>
+    </div>`).join('')}
+  </div>` : ''}
+
+  <div class="section-label">Device breakdown</div>
+  <table>
+    <thead>
+      <tr>
+        <th>Device</th>
+        <th>Status</th>
+        <th>Category</th>
+        <th>Est. uptime</th>
+        <th>Last seen</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${targetDevices.map(d => `<tr>
+        <td class="device-name">${d.name}</td>
+        <td><span class="badge" style="${statusStyle[d.status] ?? statusStyle.offline}">${d.status}</span></td>
+        <td style="text-transform:capitalize;color:#aaa">${d.category ?? '—'}</td>
+        <td class="mono">${d.status === 'online' ? '100%' : d.status === 'idle' ? '~60%' : '0%'}</td>
+        <td class="mono">${d.lastSeenAt ? new Date(d.lastSeenAt).toLocaleString() : '—'}</td>
+      </tr>`).join('')}
+    </tbody>
+  </table>
+
+  <div class="footer">
+    <span>Orion IoT Platform</span>
+    <span>Generated ${new Date().toLocaleString()}</span>
+  </div>
+</div>
+</body>
+</html>`;
+
+    const win = window.open('', '_blank');
+    if (!win) { toast.error('Pop-up blocked — allow pop-ups for this site'); return; }
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+    setTimeout(() => win.print(), 600);
   }
 
   return (
     <div className="page">
-      {/* ── Print zone (hidden except during print) ── */}
-      <div id="orion-print-zone" ref={printRef} style={{ display: 'none' }} />
-
       {/* ── Page header ── */}
       <div className="ph">
         <div>
@@ -149,8 +304,8 @@ export function ReportsPage() {
               <button key={it.v} className={range === it.v ? 'on' : ''} onClick={() => setRange(it.v)}>{it.l}</button>
             ))}
           </div>
-          <button className="btn btn-sm" style={{ gap: '6px' }} onClick={() => exportDeviceCSV()}>
-            <Download size={13} /> Export CSV
+          <button className="btn btn-sm" style={{ gap: '6px' }} onClick={() => exportDeviceXLSX()}>
+            <Download size={13} /> Export Excel
           </button>
           <button className="btn btn-primary btn-sm" style={{ gap: '6px' }} onClick={() => setShowNewReport(true)}>
             <Plus size={13} /> New report
@@ -161,15 +316,20 @@ export function ReportsPage() {
       {/* ── KPI ticker ── */}
       <div className="ticker">
         {([
-          { label: 'Platform uptime',  value: hasDevices ? `${uptime}%`      : '—', color: '#0F7A3D' },
-          { label: 'Error rate',        value: hasDevices ? `${errorRate}%`   : '—', color: '#EF4444' },
-          { label: 'Devices online',   value: hasDevices ? String(online)    : '—', color: '#FF5B1F' },
-          { label: 'Incidents · now',  value: hasDevices ? String(incidents) : '—', color: '#0B0B0A' },
-        ]).map(({ label, value, color }) => (
+          { label: 'Platform uptime', num: hasDevices ? uptime     : null, unit: '%', color: '#0F7A3D' },
+          { label: 'Error rate',      num: hasDevices ? errorRate  : null, unit: '%', color: '#EF4444' },
+          { label: 'Devices online',  num: hasDevices ? online     : null, unit: '',  color: '#FF5B1F' },
+          { label: 'Incidents · now', num: hasDevices ? incidents  : null, unit: '',  color: '#0B0B0A' },
+        ] as { label: string; num: number | null; unit: string; color: string }[]).map(({ label, num, unit, color }) => (
           <div key={label}>
             <div className="eyebrow">{label}</div>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: '44px', lineHeight: 1, letterSpacing: '-.03em', fontVariantNumeric: 'tabular-nums', marginTop: '8px', color }}>
-              {value}
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 2, marginTop: '8px' }}>
+              <span style={{ fontFamily: 'var(--font-display)', fontSize: '44px', lineHeight: 1, letterSpacing: '-.03em', color }}>
+                {num !== null ? num : '—'}
+              </span>
+              {num !== null && unit && (
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: '20px', color, opacity: 0.8 }}>{unit}</span>
+              )}
             </div>
           </div>
         ))}
@@ -286,8 +446,8 @@ export function ReportsPage() {
                       <button className="btn btn-sm" style={{ gap: '6px' }} onClick={() => printReport(r)}>
                         <Printer size={12} /> PDF
                       </button>
-                      <button className="btn btn-sm" style={{ gap: '6px' }} onClick={() => exportDeviceCSV(r)}>
-                        <Download size={12} /> CSV
+                      <button className="btn btn-sm" style={{ gap: '6px' }} onClick={() => exportDeviceXLSX(r)}>
+                        <Download size={12} /> Excel
                       </button>
                     </div>
                   </div>

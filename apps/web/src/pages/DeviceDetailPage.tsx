@@ -220,15 +220,32 @@ export function DeviceDetailPage() {
     if (!shareMode) return content;
     const selected = selectedSections.includes(key);
     return (
-      <div style={{ position: 'relative', transition: 'filter 0.25s', filter: selected ? 'none' : 'blur(5px)', userSelect: selected ? 'auto' : 'none', pointerEvents: selected ? 'auto' : 'none' }}>
-        {content}
-        <label
-          onClick={e => { e.stopPropagation(); toggleSection(key); }}
-          style={{ position: 'absolute', top: 10, right: 10, zIndex: 20, display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', background: selected ? 'hsl(var(--primary))' : 'hsl(var(--surface))', border: `1px solid ${selected ? 'hsl(var(--primary))' : 'hsl(var(--border))'}`, padding: '4px 10px', fontSize: 10.5, fontFamily: 'var(--font-mono)', letterSpacing: '0.08em', color: selected ? '#fff' : 'hsl(var(--muted-fg))', pointerEvents: 'auto', userSelect: 'none', transition: 'all 0.15s' }}
+      <div style={{ position: 'relative', zIndex: 11 }}>
+        <div style={{ transition: 'filter 0.25s', filter: selected ? 'none' : 'blur(6px)', pointerEvents: selected ? 'auto' : 'none' }}>
+          {content}
+        </div>
+        {/* Clickable overlay for unselected; badge for selected */}
+        <div
+          onClick={() => toggleSection(key)}
+          style={{
+            position: 'absolute', inset: 0, zIndex: 12, cursor: 'pointer',
+            display: 'flex', alignItems: 'flex-start', justifyContent: 'flex-end',
+            padding: 10,
+            pointerEvents: 'auto',
+          }}
         >
-          <input type="checkbox" checked={selected} readOnly style={{ margin: 0, accentColor: 'hsl(var(--primary))', cursor: 'pointer' }} />
-          {key}
-        </label>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            background: selected ? 'hsl(var(--primary))' : 'hsl(var(--surface) / 0.9)',
+            border: `1px solid ${selected ? 'hsl(var(--primary))' : 'hsl(var(--border))'}`,
+            padding: '5px 11px', fontSize: 10.5, fontFamily: 'var(--font-mono)',
+            letterSpacing: '0.08em', color: selected ? '#fff' : 'hsl(var(--fg))',
+            transition: 'all 0.15s', userSelect: 'none',
+          }}>
+            <input type="checkbox" checked={selected} readOnly style={{ margin: 0, accentColor: 'hsl(var(--primary))', pointerEvents: 'none' }} />
+            {key}
+          </div>
+        </div>
       </div>
     );
   };
@@ -1140,7 +1157,7 @@ export function DeviceDetailPage() {
         <>
           <div
             onClick={() => setShareMode(false)}
-            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 10, backdropFilter: 'blur(2px)' }}
+            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 10 }}
           />
           <div style={{
             position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 20,
