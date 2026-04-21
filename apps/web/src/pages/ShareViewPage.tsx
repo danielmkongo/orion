@@ -1,9 +1,11 @@
+import { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { publicClient } from '@/api/publicClient';
 import { LineChart, BarChart } from '@/components/charts/Charts';
 import { APIProvider, Map, AdvancedMarker } from '@vis.gl/react-google-maps';
 import { timeAgo } from '@/lib/utils';
+import { BarChart2, TableProperties } from 'lucide-react';
 
 const API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
 const MAP_ID  = import.meta.env.VITE_GOOGLE_MAP_ID || 'DEMO_MAP_ID';
@@ -60,10 +62,25 @@ export function ShareViewPage() {
     );
   }
 
+  return <DeviceShareView token={token!} data={data} />;
+}
+
+/* ── Interactive device share view ───────────────────────────────────── */
+function DeviceShareView({ token, data }: { token: string; data: any }) {
   const { device, sections = [], latest } = data;
   const fields: Record<string, number> = latest?.fields ?? {};
   const numericFields = Object.entries(fields).filter(([, v]) => typeof v === 'number') as [string, number][];
   const schemaFields: any[] = device?.meta?.dataSchema?.fields ?? [];
+
+  const [telemView, setTelemView] = useState<'chart' | 'table'>('chart');
+  const [chartField, setChartField] = useState(numericFields[0]?.[0] ?? '');
+  const [chartRange, setChartRange] = useState('24h');
+
+  const hoursMap: Record<string, number> = { '1h': 1, '6h': 6, '24h': 24, '7d': 168 };
+  const fromTs = new Date(Date.now() - (hoursMap[chartRange] ?? 24) * 3600_000).toISOString();
+
+  const fm = schemaFields.find((f: any) => f.key === chartField);
+  const chartColor = fm?.chartColor ?? 'hsl(var(--primary))';
 
   return (
     <div style={{ minHeight: '100vh', background: 'hsl(var(--bg))', display: 'flex', flexDirection: 'column' }}>
@@ -83,19 +100,91 @@ export function ShareViewPage() {
           {device.description && <p className="lede" style={{ marginTop: 8 }}>{device.description}</p>}
         </div>
 
-        {/* Metrics */}
+        {/* Metrics — interactive field selector */}
         {sections.includes('metrics') && numericFields.length > 0 && (
           <div style={{ borderTop: '1px solid hsl(var(--fg))', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', marginBottom: 32 }}>
             {numericFields.map(([k, v], i) => {
-              const fm = schemaFields.find((f: any) => f.key === k);
-              return <KpiTile key={k} label={k} value={v} color={fm?.chartColor ?? COLORS[i % COLORS.length]} />;
+              const fmeta = schemaFields.find((f: any) => f.key === k);
+              const color = fmeta?.chartColor ?? COLORS[i % COLORS.length];
+              return (
+                <button
+                  key={k}
+                  onClick={() => { setChartField(k); }}
+                  style={{
+                    padding: '18px 20px',
+                    borderBottom: '1px solid hsl(var(--border))',
+                    borderRight: '1px solid hsl(var(--border))',
+                    textAlign: 'left',
+                    background: chartField === k && sections.includes('chart') ? 'hsl(var(--surface-raised))' : 'transparent',
+                    cursor: sections.includes('chart') ? 'pointer' : 'default',
+                    outline: chartField === k && sections.includes('chart') ? `1px solid ${color}` : 'none',
+                    outlineOffset: -1,
+                    transition: 'background 0.1s',
+                  }}
+                >
+                  <div className="eyebrow" style={{ fontSize: 9.5 }}>{k.replace(/_/g, ' ')}</div>
+                  <div style={{ fontFamily: 'var(--font-display)', fontSize: 32, lineHeight: 1, marginTop: 4, color }} className="num">
+                    {v.toFixed(2)}
+                  </div>
+                  {fmeta?.unit && <div className="mono faint" style={{ fontSize: 10, marginTop: 2 }}>{fmeta.unit}</div>}
+                </button>
+              );
             })}
           </div>
         )}
 
-        {/* Chart */}
+        {/* Chart — with interactive controls */}
         {sections.includes('chart') && numericFields.length > 0 && (
-          <SharedChart token={token!} fields={numericFields.map(([k]) => k)} schemaFields={schemaFields} />
+          <div style={{ marginBottom: 32 }}>
+            {/* Controls row */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12, gap: 12, flexWrap: 'wrap' }}>
+              <div>
+                <div className="eyebrow">Live telemetry</div>
+                <div style={{ fontFamily: 'var(--font-display)', fontSize: 24, lineHeight: 1, marginTop: 4, textTransform: 'capitalize' }}>
+                  {telemView === 'chart'
+                    ? <>{chartField.replace(/_/g, ' ')} <span style={{ fontStyle: 'italic', color: 'hsl(var(--primary))' }}>· {chartRange}</span></>
+                    : <>All fields <span style={{ fontStyle: 'italic', color: 'hsl(var(--primary))' }}>· {chartRange}</span></>
+                  }
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                {/* Field selector */}
+                {telemView === 'chart' && numericFields.length > 1 && (
+                  <select
+                    className="input"
+                    value={chartField}
+                    onChange={e => setChartField(e.target.value)}
+                    style={{ fontSize: 11, padding: '4px 8px', height: 28 }}
+                  >
+                    {numericFields.map(([k]) => (
+                      <option key={k} value={k}>{k.replace(/_/g, ' ')}</option>
+                    ))}
+                  </select>
+                )}
+                {/* View toggle */}
+                <div className="seg">
+                  <button className={telemView === 'chart' ? 'on' : ''} onClick={() => setTelemView('chart')} title="Chart view">
+                    <BarChart2 size={12} style={{ marginRight: 4, verticalAlign: 'middle' }} />Chart
+                  </button>
+                  <button className={telemView === 'table' ? 'on' : ''} onClick={() => setTelemView('table')} title="Table view">
+                    <TableProperties size={12} style={{ marginRight: 4, verticalAlign: 'middle' }} />Table
+                  </button>
+                </div>
+                {/* Range selector */}
+                <div className="seg">
+                  {['1h', '6h', '24h', '7d'].map(r => (
+                    <button key={r} className={chartRange === r ? 'on' : ''} onClick={() => setChartRange(r)}>{r.toUpperCase()}</button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {telemView === 'chart' ? (
+              <SharedChart token={token} field={chartField} color={chartColor} from={fromTs} />
+            ) : (
+              <SharedTable token={token} field={chartField} schemaFields={schemaFields} from={fromTs} />
+            )}
+          </div>
         )}
 
         {/* Info */}
@@ -190,17 +279,14 @@ export function ShareViewPage() {
   );
 }
 
-function SharedChart({ token, fields, schemaFields }: { token: string; fields: string[]; schemaFields: any[] }) {
-  const firstField = fields[0];
-  const fm = schemaFields.find((f: any) => f.key === firstField);
-  const color = fm?.chartColor ?? 'hsl(var(--primary))';
-
-  const { data } = useQuery({
-    queryKey: ['share-series', token, firstField],
+/* ── Chart subcomponent ───────────────────────────────────────────────── */
+function SharedChart({ token, field, color, from }: { token: string; field: string; color: string; from: string }) {
+  const { data, isLoading } = useQuery({
+    queryKey: ['share-series', token, field, from],
     queryFn: () => publicClient.get(`/public/device/${token}/series`, {
-      params: { field: firstField, from: new Date(Date.now() - 24 * 3600_000).toISOString() },
+      params: { field, from },
     }).then(r => r.data),
-    enabled: !!firstField,
+    enabled: !!field,
   });
 
   const points = (data?.data ?? []).map((p: any) => ({
@@ -208,22 +294,77 @@ function SharedChart({ token, fields, schemaFields }: { token: string; fields: s
     value: typeof p.value === 'number' ? p.value : 0,
   }));
 
+  if (isLoading) return <div className="skeleton" style={{ height: 260 }} />;
+
   return (
-    <div style={{ marginBottom: 32 }}>
-      <div className="eyebrow" style={{ marginBottom: 12 }}>
-        {firstField.replace(/_/g, ' ')} · 24h
+    <div className="panel" style={{ padding: '16px 12px 8px', overflow: 'hidden' }}>
+      {points.length === 0 ? (
+        <div style={{ height: 240, display: 'flex', alignItems: 'center', justifyContent: 'center' }} className="dim">No data</div>
+      ) : (
+        <LineChart series={[{ name: field, data: points, color }]} height={240} showArea />
+      )}
+    </div>
+  );
+}
+
+/* ── Table subcomponent ─ shows selected field points as rows ─────────── */
+function SharedTable({ token, field, schemaFields, from }: { token: string; field: string; schemaFields: any[]; from: string }) {
+  const fm = schemaFields.find((f: any) => f.key === field);
+  const color = fm?.chartColor ?? 'hsl(var(--primary))';
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['share-table', token, field, from],
+    queryFn: () => publicClient.get(`/public/device/${token}/series`, {
+      params: { field, from, limit: 200 },
+    }).then(r => r.data),
+    enabled: !!field,
+  });
+
+  const rows: any[] = data?.data ?? [];
+
+  if (isLoading) return <div className="skeleton" style={{ height: 260 }} />;
+
+  if (rows.length === 0) {
+    return (
+      <div className="panel" style={{ padding: 0, overflow: 'hidden' }}>
+        <div style={{ height: 240, display: 'flex', alignItems: 'center', justifyContent: 'center' }} className="dim">No data in this range</div>
       </div>
-      <div className="panel" style={{ padding: '16px 12px 8px' }}>
-        {points.length === 0 ? (
-          <div style={{ height: 240, display: 'flex', alignItems: 'center', justifyContent: 'center' }} className="dim">No data</div>
-        ) : (
-          <LineChart series={[{ name: firstField, data: points, color }]} height={240} showArea />
-        )}
+    );
+  }
+
+  return (
+    <div className="panel" style={{ padding: 0, overflow: 'hidden' }}>
+      <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 320 }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--font-mono)', fontSize: 11 }}>
+          <thead style={{ position: 'sticky', top: 0, background: 'hsl(var(--surface-raised))', zIndex: 1 }}>
+            <tr>
+              <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', fontSize: 9.5, color: 'hsl(var(--muted-fg))', borderBottom: '1px solid hsl(var(--border))' }}>
+                Timestamp
+              </th>
+              <th style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', fontSize: 9.5, color, borderBottom: '1px solid hsl(var(--border))' }}>
+                {field.replace(/_/g, ' ')}{fm?.unit ? ` (${fm.unit})` : ''}
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row: any, i: number) => (
+              <tr key={i} style={{ background: i % 2 === 0 ? 'transparent' : 'hsl(var(--surface-raised) / 0.4)' }}>
+                <td style={{ padding: '7px 12px', color: 'hsl(var(--muted-fg))', whiteSpace: 'nowrap', borderBottom: '1px solid hsl(var(--rule-ghost))' }}>
+                  {new Date(row.ts ?? row.createdAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                </td>
+                <td style={{ padding: '7px 12px', textAlign: 'right', color, borderBottom: '1px solid hsl(var(--rule-ghost))' }}>
+                  {typeof row.value === 'number' ? row.value.toFixed(4) : String(row.value ?? '—')}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );
 }
 
+/* ── Page share view ─────────────────────────────────────────────────── */
 function PageShareView({ token: _token, pageData }: { token: string; pageData: any }) {
   const { page, widgetData = {} } = pageData;
 

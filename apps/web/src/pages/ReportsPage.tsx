@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Download, Plus, X, Printer } from 'lucide-react';
+import { Download, Plus, X, Printer, Trash2 } from 'lucide-react';
 import { devicesApi } from '@/api/devices';
 import { downloadXLSX } from '@/lib/utils';
 import toast from 'react-hot-toast';
@@ -31,7 +31,10 @@ const RANGE_ITEMS = [
 export function ReportsPage() {
   const [range, setRange] = useState('7d');
   const [showNewReport, setShowNewReport] = useState(false);
-  const [savedReports, setSavedReports] = useState<SavedReport[]>([]);
+  const [savedReports, setSavedReports] = useState<SavedReport[]>(() => {
+    try { return JSON.parse(localStorage.getItem('orion_saved_reports') ?? '[]'); } catch { return []; }
+  });
+  const [xlsxPreview, setXlsxPreview] = useState<{ report?: SavedReport; rows: Record<string, unknown>[] } | null>(null);
 
   const [newTitle, setNewTitle]       = useState('');
   const [newRange, setNewRange]       = useState('7d');
@@ -71,74 +74,67 @@ export function ReportsPage() {
 
   function saveReport() {
     if (!newTitle) return;
-    setSavedReports(prev => [...prev, {
+    const next = [...savedReports, {
       id: (crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`),
       title: newTitle,
       range: newRange,
       devices: allDevicesSel ? [] : newDevices,
       metrics: newMetrics,
       createdAt: new Date().toISOString(),
-    }]);
+    }];
+    setSavedReports(next);
+    localStorage.setItem('orion_saved_reports', JSON.stringify(next));
     setShowNewReport(false);
     setNewTitle(''); setNewRange('7d'); setNewDevices([]); setNewMetrics(['uptime', 'error_rate']); setAllDevicesSel(true);
   }
 
-  async function exportDeviceXLSX(report?: SavedReport) {
+  function deleteReport(id: string) {
+    const next = savedReports.filter(r => r.id !== id);
+    setSavedReports(next);
+    localStorage.setItem('orion_saved_reports', JSON.stringify(next));
+  }
+
+  function exportDeviceXLSX(report?: SavedReport) {
     const targetDevices = report && !report.devices.length
       ? devices
       : report
         ? devices.filter(d => report.devices.includes(d._id))
         : devices;
-
-    const dateStr = new Date().toISOString().slice(0, 10);
-    const title = report?.title ?? `Orion Device Report · ${report?.range ?? range}`;
-
-    const summaryRows = [
-      { metric: 'Platform uptime',  value: `${uptime}%`,    note: 'Percentage of fleet currently online' },
-      { metric: 'Error rate',       value: `${errorRate}%`, note: 'Percentage of fleet in error state' },
-      { metric: 'Devices online',   value: online,           note: 'Count of online devices' },
-      { metric: 'Devices total',    value: total,            note: 'Total registered devices' },
-      { metric: 'Incidents',        value: incidents,        note: 'Devices currently in error state' },
-      { metric: 'Generated',        value: new Date().toLocaleString(), note: '' },
-      { metric: 'Range',            value: report?.range ?? range, note: '' },
-    ];
-
-    const deviceRows = targetDevices.map(d => ({
+    const rows = targetDevices.map(d => ({
       name:         d.name,
       status:       d.status,
       category:     d.category,
-      estimated_uptime_pct: d.status === 'online' ? 100 : d.status === 'idle' ? 60 : 0,
+      estimated_uptime: d.status === 'online' ? '100%' : d.status === 'idle' ? '~60%' : '0%',
       is_error:     d.status === 'error' ? 'Yes' : 'No',
-      last_seen:    d.lastSeenAt ? new Date(d.lastSeenAt) : '',
+      last_seen:    d.lastSeenAt ? new Date(d.lastSeenAt).toLocaleString() : '—',
     }));
+    setXlsxPreview({ report, rows });
+  }
 
+  async function confirmXLSXDownload() {
+    if (!xlsxPreview) return;
+    const { report, rows } = xlsxPreview;
+    const dateStr = new Date().toISOString().slice(0, 10);
+    const title = report?.title ?? `Orion Device Report · ${report?.range ?? range}`;
+    const summaryRows = [
+      { metric: 'Platform uptime',  value: `${uptime}%`,    note: 'Percentage of fleet currently online' },
+      { metric: 'Error rate',       value: `${errorRate}%`, note: 'Percentage of fleet in error state' },
+      { metric: 'Devices online',   value: online,           note: '' },
+      { metric: 'Devices total',    value: total,            note: '' },
+      { metric: 'Incidents',        value: incidents,        note: '' },
+      { metric: 'Generated',        value: new Date().toLocaleString(), note: '' },
+      { metric: 'Range',            value: report?.range ?? range, note: '' },
+    ];
     const catRows = catBreakdown.map(([cat, count]) => ({
-      category: cat,
-      count,
+      category: cat, count,
       pct_of_fleet: total > 0 ? `${Math.round((count / total) * 100)}%` : '—',
     }));
-
-    await downloadXLSX(
-      `orion-report-${dateStr}`,
-      [
-        {
-          name: 'Summary',
-          rows: summaryRows,
-          colWidths: { metric: 22, value: 18, note: 46 },
-        },
-        {
-          name: 'Devices',
-          rows: deviceRows,
-          colWidths: { name: 28, status: 12, category: 18, estimated_uptime_pct: 20, is_error: 10, last_seen: 24 },
-        },
-        {
-          name: 'By Category',
-          rows: catRows,
-          colWidths: { category: 22, count: 10, pct_of_fleet: 16 },
-        },
-      ],
-      { title, generatedBy: 'Orion Platform' }
-    );
+    await downloadXLSX(`orion-report-${dateStr}`, [
+      { name: 'Summary',     rows: summaryRows, colWidths: { metric: 22, value: 18, note: 46 } },
+      { name: 'Devices',     rows,              colWidths: { name: 28, status: 12, category: 18, estimated_uptime: 16, is_error: 10, last_seen: 24 } },
+      { name: 'By Category', rows: catRows,     colWidths: { category: 22, count: 10, pct_of_fleet: 16 } },
+    ], { title, generatedBy: 'Orion Platform' });
+    setXlsxPreview(null);
   }
 
   function printReport(report?: SavedReport) {
@@ -279,12 +275,16 @@ export function ReportsPage() {
 </body>
 </html>`;
 
-    const win = window.open('', '_blank');
-    if (!win) { toast.error('Pop-up blocked — allow pop-ups for this site'); return; }
-    win.document.write(html);
-    win.document.close();
-    win.focus();
-    setTimeout(() => win.print(), 600);
+    const iframe = document.createElement('iframe');
+    iframe.style.cssText = 'position:fixed;width:0;height:0;border:0;opacity:0;pointer-events:none';
+    document.body.appendChild(iframe);
+    const doc = iframe.contentDocument!;
+    doc.open(); doc.write(html); doc.close();
+    setTimeout(() => {
+      iframe.contentWindow?.focus();
+      iframe.contentWindow?.print();
+      setTimeout(() => document.body.removeChild(iframe), 2000);
+    }, 500);
   }
 
   return (
@@ -449,6 +449,9 @@ export function ReportsPage() {
                       <button className="btn btn-sm" style={{ gap: '6px' }} onClick={() => exportDeviceXLSX(r)}>
                         <Download size={12} /> Excel
                       </button>
+                      <button className="btn btn-sm btn-ghost" style={{ gap: '6px', color: 'hsl(var(--bad))' }} onClick={() => deleteReport(r.id)}>
+                        <Trash2 size={12} />
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -569,6 +572,64 @@ export function ReportsPage() {
                 <button className="btn btn-ghost" onClick={() => setShowNewReport(false)}>Cancel</button>
                 <button className="btn btn-primary" disabled={!newTitle} onClick={saveReport}>
                   Save report
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Excel Preview Modal ── */}
+      <AnimatePresence>
+        {xlsxPreview && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9001, padding: 16 }}
+            onClick={() => setXlsxPreview(null)}
+          >
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 12 }}
+              onClick={e => e.stopPropagation()}
+              className="panel"
+              style={{ width: '100%', maxWidth: 720, maxHeight: '80vh', display: 'flex', flexDirection: 'column', borderTop: '2px solid hsl(var(--primary))' }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', borderBottom: '1px solid hsl(var(--rule-ghost))' }}>
+                <div>
+                  <div style={{ fontFamily: 'var(--font-display)', fontSize: 20 }}>
+                    {xlsxPreview.report?.title ?? 'Device Report'} <em style={{ color: 'hsl(var(--primary))' }}>· Excel</em>
+                  </div>
+                  <div className="mono faint" style={{ fontSize: 10.5, marginTop: 4 }}>
+                    {xlsxPreview.rows.length} device{xlsxPreview.rows.length !== 1 ? 's' : ''} · 3 sheets: Summary, Devices, By Category
+                  </div>
+                </div>
+                <button onClick={() => setXlsxPreview(null)} style={{ background: 'none', border: 0, cursor: 'pointer', color: 'hsl(var(--muted-fg))' }}><X size={16} /></button>
+              </div>
+              <div style={{ overflow: 'auto', flex: 1 }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--font-mono)', fontSize: 11.5 }}>
+                  <thead style={{ position: 'sticky', top: 0, background: 'hsl(var(--surface-raised))' }}>
+                    <tr>
+                      {Object.keys(xlsxPreview.rows[0] ?? {}).map(k => (
+                        <th key={k} style={{ padding: '10px 14px', textAlign: 'left', fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'hsl(var(--primary))', borderBottom: '1px solid hsl(var(--border))', whiteSpace: 'nowrap' }}>
+                          {k.replace(/_/g, ' ')}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {xlsxPreview.rows.map((row, i) => (
+                      <tr key={i} style={{ background: i % 2 === 0 ? 'transparent' : 'hsl(var(--surface-raised) / 0.4)' }}>
+                        {Object.values(row).map((v, j) => (
+                          <td key={j} style={{ padding: '9px 14px', borderBottom: '1px solid hsl(var(--rule-ghost))', whiteSpace: 'nowrap' }}>
+                            {String(v ?? '—')}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div style={{ padding: '16px 24px', borderTop: '1px solid hsl(var(--rule-ghost))', display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+                <button onClick={() => setXlsxPreview(null)} className="btn btn-ghost btn-sm">Cancel</button>
+                <button onClick={confirmXLSXDownload} className="btn btn-primary btn-sm" style={{ gap: 6 }}>
+                  <Download size={13} /> Download .xlsx
                 </button>
               </div>
             </motion.div>

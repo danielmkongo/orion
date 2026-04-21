@@ -7,7 +7,7 @@ import apiClient from '@/api/client';
 import { timeAgo, formatDate as fmtDate, getCategoryIconInfo, copyText, formatPayloadStr, formatCommandStr } from '@/lib/utils';
 import { useSocket } from '@/hooks/useSocket';
 import { LineChart, BarChart } from '@/components/charts/Charts';
-import { ArrowLeft, Eye, EyeOff, Copy, RefreshCw, Terminal, Plus, Trash2, Check, ChevronDown, ChevronRight, Pencil, X, Share2, BarChart2, TableProperties } from 'lucide-react';
+import { ArrowLeft, Eye, EyeOff, Copy, RefreshCw, Terminal, Plus, Trash2, Check, ChevronDown, ChevronRight, Pencil, X, Share2, BarChart2, TableProperties, Globe, ExternalLink, LinkIcon } from 'lucide-react';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import toast from 'react-hot-toast';
 import { CommandWidget } from '@/components/devices/CommandWidget';
@@ -102,6 +102,7 @@ export function DeviceDetailPage() {
   const [shareMode, setShareMode] = useState(false);
   const [selectedSections, setSelectedSections] = useState<string[]>([]);
   const [creatingShare, setCreatingShare] = useState(false);
+  const [showSharePanel, setShowSharePanel] = useState(false);
   const [newCmdName, setNewCmdName] = useState('');
   const [newCmdLabel, setNewCmdLabel] = useState('');
   const [newCmdType, setNewCmdType] = useState<'boolean' | 'number' | 'enum' | 'action' | 'string'>('action');
@@ -152,6 +153,23 @@ export function DeviceDetailPage() {
     enabled: !!id && telemView === 'table',
     refetchInterval: 60_000,
   });
+
+  useEffect(() => {
+    if (!showSharePanel) return;
+    const close = (e: MouseEvent) => {
+      const target = e.target as Element;
+      if (!target.closest('[data-share-panel]')) setShowSharePanel(false);
+    };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [showSharePanel]);
+
+  const { data: sharesData, refetch: refetchShares } = useQuery({
+    queryKey: ['device-shares', id],
+    queryFn: () => apiClient.get('/share').then(r => (r.data.data ?? r.data) as any[]),
+    enabled: !!id,
+  });
+  const existingShare = (sharesData ?? []).find((s: any) => s.type === 'device' && (s.resourceId === id || s.resourceId?._id === id || s.resourceId?.toString() === id));
 
   useEffect(() => {
     if (!id) return;
@@ -207,13 +225,28 @@ export function DeviceDetailPage() {
     if (!id || selectedSections.length === 0) return;
     setCreatingShare(true);
     try {
+      // Revoke existing share first so we don't accumulate stale links
+      if (existingShare?.token) {
+        await apiClient.delete(`/share/${existingShare.token}`).catch(() => {});
+      }
       const res = await apiClient.post('/share', { type: 'device', resourceId: id, sections: selectedSections });
       const url = `${window.location.origin}/s/${res.data.token}`;
       await copyText(url);
       toast.success('Share link copied to clipboard!');
       setShareMode(false);
+      refetchShares();
     } catch { toast.error('Failed to create share link'); }
     finally { setCreatingShare(false); }
+  };
+
+  const revokeShareLink = async () => {
+    if (!existingShare?.token) return;
+    try {
+      await apiClient.delete(`/share/${existingShare.token}`);
+      toast.success('Share link revoked');
+      refetchShares();
+      setShowSharePanel(false);
+    } catch { toast.error('Failed to revoke share'); }
   };
 
   const ss = (key: string, content: ReactNode): ReactNode => {
@@ -371,9 +404,76 @@ export function DeviceDetailPage() {
           <button className="btn btn-sm" style={{ gap: 6 }} onClick={() => { setShowRawCmd(true); }}>
             <Terminal size={13} /> Send command
           </button>
-          <button className="btn btn-sm btn-outline" style={{ gap: 6 }} onClick={() => { setShareMode(true); setSelectedSections([]); }}>
-            <Share2 size={13} /> Share
-          </button>
+          {existingShare ? (
+            <div style={{ position: 'relative' }}>
+              <button
+                data-share-panel
+                className="btn btn-sm btn-outline"
+                style={{ gap: 6, color: 'hsl(var(--good))' }}
+                onClick={() => setShowSharePanel(v => !v)}
+              >
+                <Globe size={13} /> Shared
+              </button>
+              {showSharePanel && (
+                <div data-share-panel style={{
+                  position: 'absolute', top: '100%', right: 0, marginTop: 6, zIndex: 100,
+                  background: 'hsl(var(--surface))', border: '1px solid hsl(var(--border))',
+                  minWidth: 220, boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
+                }}>
+                  <div style={{ padding: '10px 14px', borderBottom: '1px solid hsl(var(--rule-ghost))' }}>
+                    <div className="eyebrow" style={{ fontSize: 9 }}>Active share</div>
+                    <div className="mono" style={{ fontSize: 10.5, marginTop: 4, wordBreak: 'break-all', color: 'hsl(var(--muted-fg))' }}>
+                      {`${window.location.origin}/s/${existingShare.token}`.slice(0, 44)}…
+                    </div>
+                    <div className="mono faint" style={{ fontSize: 9, marginTop: 4 }}>
+                      Sections: {(existingShare.sections ?? []).join(', ')}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    <button
+                      className="btn btn-ghost btn-sm"
+                      style={{ justifyContent: 'flex-start', gap: 6, borderRadius: 0, borderBottom: '1px solid hsl(var(--rule-ghost))' }}
+                      onClick={async () => {
+                        await copyText(`${window.location.origin}/s/${existingShare.token}`);
+                        toast.success('Link copied!');
+                        setShowSharePanel(false);
+                      }}
+                    >
+                      <Copy size={11} /> Copy link
+                    </button>
+                    <a
+                      href={`/s/${existingShare.token}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="btn btn-ghost btn-sm"
+                      style={{ justifyContent: 'flex-start', gap: 6, borderRadius: 0, borderBottom: '1px solid hsl(var(--rule-ghost))' }}
+                      onClick={() => setShowSharePanel(false)}
+                    >
+                      <ExternalLink size={11} /> View public page
+                    </a>
+                    <button
+                      className="btn btn-ghost btn-sm"
+                      style={{ justifyContent: 'flex-start', gap: 6, borderRadius: 0, borderBottom: '1px solid hsl(var(--rule-ghost))' }}
+                      onClick={() => { setShareMode(true); setSelectedSections(existingShare.sections ?? []); setShowSharePanel(false); }}
+                    >
+                      <LinkIcon size={11} /> Update sections
+                    </button>
+                    <button
+                      className="btn btn-ghost btn-sm"
+                      style={{ justifyContent: 'flex-start', gap: 6, borderRadius: 0, color: 'hsl(var(--bad))' }}
+                      onClick={revokeShareLink}
+                    >
+                      <Trash2 size={11} /> Revoke link
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <button className="btn btn-sm btn-outline" style={{ gap: 6 }} onClick={() => { setShareMode(true); setSelectedSections([]); setShowSharePanel(false); }}>
+              <Share2 size={13} /> Share
+            </button>
+          )}
           <button className="btn btn-sm btn-outline" onClick={() => queryClient.invalidateQueries({ queryKey: ['device', id] })}>
             <RefreshCw size={13} />
           </button>
