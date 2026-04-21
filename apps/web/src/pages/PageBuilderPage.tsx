@@ -1133,6 +1133,25 @@ export function PageBuilderPage() {
             })();
             const isHovered  = hoveredCard === w.id;
             const isSelected = selectedCard === w.id;
+            if (w.type === 'separator' || w.type === 'text') {
+              return (
+                <div key={w.id}
+                  onMouseEnter={() => setHoveredCard(w.id)}
+                  onMouseLeave={() => setHoveredCard(null)}
+                  onClick={() => setSelectedCard(id => id === w.id ? null : w.id)}
+                  style={{ position:'relative', outline: isSelected ? '2px solid hsl(var(--border))' : 'none', outlineOffset: -1 }}>
+                  <div className="drag-handle" style={{ position:'absolute',inset:0,cursor:'grab',zIndex:1 }} />
+                  <div style={{ opacity: isHovered ? 1 : 0, transition:'opacity 0.15s', position:'absolute',top:'50%',right:8,transform:'translateY(-50%)',display:'flex',gap:4,zIndex:2 }}>
+                    <button onMouseDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); setDrawer({ open:true,widget:w }); }}
+                      className="btn btn-ghost btn-sm btn-icon"><Pencil size={10} /></button>
+                    <button onMouseDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); removeWidget(w.id); }}
+                      className="btn btn-ghost btn-sm btn-icon" style={{ color:'hsl(var(--bad))' }}><Trash2 size={10} /></button>
+                  </div>
+                  <WidgetContent widget={w} />
+                </div>
+              );
+            }
+
             return (
               <div key={w.id} className="panel"
                 onMouseEnter={() => setHoveredCard(w.id)}

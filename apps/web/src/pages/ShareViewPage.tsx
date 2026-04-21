@@ -631,6 +631,10 @@ function PageWidgetCard({ widget, data, T, allowExports, contentH }: {
   const accent = WIDGET_ACCENT[widget.type] ?? T.primary;
   const canExport = allowExports && EXPORTABLE_TYPES.has(widget.type);
 
+  if (widget.type === 'separator' || widget.type === 'text') {
+    return <PageWidgetContent widget={widget} data={data} T={T} contentH={contentH} />;
+  }
+
   const handleExport = () => {
     if (widget.type === 'data_table') {
       const entries = Object.entries(data?.fields ?? {}).filter(([, v]) => typeof v === 'number');

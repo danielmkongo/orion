@@ -285,7 +285,7 @@ const ACCENT: Record<string, string> = {
 
 function PreviewWidgetCard({ widget, data, contentH }: { widget: any; data: any; contentH: number }) {
   const accent = ACCENT[widget.type] ?? 'hsl(var(--primary))';
-  if (widget.type === 'separator') {
+  if (widget.type === 'separator' || widget.type === 'text') {
     return <PreviewWidgetContent widget={widget} data={data} contentH={contentH} />;
   }
   return (
