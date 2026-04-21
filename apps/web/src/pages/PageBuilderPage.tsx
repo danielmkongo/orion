@@ -6,8 +6,11 @@ import '@/styles/grid-layout.css';
 import { APIProvider, Map, AdvancedMarker } from '@vis.gl/react-google-maps';
 import apiClient from '@/api/client';
 import toast from 'react-hot-toast';
+import { copyText } from '@/lib/utils';
 import { ArrowLeft, Plus, Globe, Lock, Pencil, Trash2, GripVertical, X, Check, Copy, ExternalLink } from 'lucide-react';
 import { LineChart, BarChart } from '@/components/charts/Charts';
+import { CommandWidget } from '@/components/devices/CommandWidget';
+import type { DeviceCommand } from '@/components/devices/CommandWidget';
 import { telemetryApi } from '@/api/telemetry';
 import { devicesApi } from '@/api/devices';
 
@@ -16,13 +19,14 @@ const API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
 const MAP_ID  = import.meta.env.VITE_GOOGLE_MAP_ID || 'DEMO_MAP_ID';
 
 const WIDGET_TYPES = [
-  { type: 'kpi_card',    label: 'KPI Card',    icon: '▣', desc: 'Big number metric', defaultW: 3, defaultH: 2 },
-  { type: 'line_chart',  label: 'Line Chart',  icon: '〜', desc: 'Time-series area chart', defaultW: 6, defaultH: 4 },
-  { type: 'bar_chart',   label: 'Bar Chart',   icon: '▐', desc: 'Time-series bar chart', defaultW: 6, defaultH: 4 },
-  { type: 'gauge',       label: 'Gauge',       icon: '◉', desc: 'Radial gauge, current value', defaultW: 3, defaultH: 3 },
-  { type: 'data_table',  label: 'Data Table',  icon: '⊞', desc: 'Latest telemetry as table', defaultW: 5, defaultH: 4 },
-  { type: 'map',         label: 'Map',         icon: '⊕', desc: 'Device location on map', defaultW: 6, defaultH: 5 },
-  { type: 'status_grid', label: 'Status Grid', icon: '⬡', desc: 'Fleet online/offline grid', defaultW: 4, defaultH: 3 },
+  { type: 'kpi_card',       label: 'KPI Card',    icon: '▣', desc: 'Big number metric',         defaultW: 3, defaultH: 2 },
+  { type: 'line_chart',     label: 'Line Chart',  icon: '〜', desc: 'Time-series area chart',   defaultW: 6, defaultH: 4 },
+  { type: 'bar_chart',      label: 'Bar Chart',   icon: '▐', desc: 'Time-series bar chart',    defaultW: 6, defaultH: 4 },
+  { type: 'gauge',          label: 'Gauge',       icon: '◉', desc: 'Radial gauge, live value',  defaultW: 3, defaultH: 3 },
+  { type: 'data_table',     label: 'Data Table',  icon: '⊞', desc: 'Latest telemetry as table', defaultW: 5, defaultH: 4 },
+  { type: 'map',            label: 'Map',         icon: '⊕', desc: 'Device location on map',    defaultW: 6, defaultH: 5 },
+  { type: 'status_grid',    label: 'Status Grid', icon: '⬡', desc: 'Fleet status badges',       defaultW: 4, defaultH: 3 },
+  { type: 'control_panel',  label: 'Controls',    icon: '⌥', desc: 'Device command controls',   defaultW: 4, defaultH: 4 },
 ];
 
 interface Widget {
@@ -65,6 +69,12 @@ function WidgetContent({ widget }: { widget: Widget }) {
     queryKey: ['wpreview-devices', widget.deviceIds],
     queryFn: () => devicesApi.list({ limit: 200 }),
     enabled: ['status_grid', 'map'].includes(widget.type),
+  });
+
+  const { data: deviceMeta } = useQuery({
+    queryKey: ['wcontrol-device', widget.deviceId],
+    queryFn: () => apiClient.get(`/devices/${widget.deviceId}`).then(r => r.data),
+    enabled: !!widget.deviceId && widget.type === 'control_panel',
   });
 
   const fields: Record<string, number> = latest?.fields ?? {};
@@ -175,6 +185,32 @@ function WidgetContent({ widget }: { widget: Widget }) {
             <div style={{ fontSize: 10.5, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.name}</div>
             <span className={`tag tag-${d.status === 'online' ? 'online' : d.status === 'error' ? 'error' : 'offline'}`} style={{ marginTop: 3, display: 'inline-block' }}>{d.status}</span>
           </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (widget.type === 'control_panel') {
+    const commands: DeviceCommand[] = deviceMeta?.meta?.commands ?? [];
+    const sendCmd = async (name: string, formattedPayload: string) => {
+      try {
+        let parsed: Record<string, unknown> = {};
+        try { parsed = JSON.parse(formattedPayload); } catch {}
+        await apiClient.post('/commands', { deviceId: widget.deviceId, name, payload: parsed });
+        toast.success(`Sent: ${name}`);
+      } catch { toast.error('Failed to send'); }
+    };
+
+    if (!widget.deviceId) {
+      return <div className="dim" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', fontSize: 12, textAlign: 'center', padding: 16 }}>Select a device to show its controls</div>;
+    }
+    if (commands.length === 0) {
+      return <div className="dim" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', fontSize: 12, textAlign: 'center', padding: 16 }}>No commands defined for this device</div>;
+    }
+    return (
+      <div style={{ overflowY: 'auto', height: '100%' }}>
+        {commands.map(cmd => (
+          <CommandWidget key={cmd.name} cmd={cmd} payloadFormat={deviceMeta?.payloadFormat} onSend={sendCmd} compact />
         ))}
       </div>
     );
@@ -397,14 +433,25 @@ export function PageBuilderPage() {
   };
 
   const publish = async () => {
+    // Flush any pending debounced save so the public page sees latest widgets
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+      try { await apiClient.patch(`/pages/${id}`, { widgets }); } catch {}
+    }
+
     setPublishing(true);
     try {
       const res = await apiClient.post(`/pages/${id}/publish`);
       queryClient.setQueryData(['page', id], (old: any) => ({ ...old, shareToken: res.data.token }));
       const url = `${window.location.origin}/s/${res.data.token}`;
-      await navigator.clipboard.writeText(url).catch(() => {});
+      await copyText(url); // has non-HTTPS fallback — won't throw
       toast.success('Published! Link copied.');
-    } catch { toast.error('Failed to publish'); }
+    } catch {
+      // Refetch so UI reflects actual server state even if response failed
+      queryClient.invalidateQueries({ queryKey: ['page', id] });
+      toast.error('Failed to publish');
+    }
     finally { setPublishing(false); }
   };
 
@@ -417,8 +464,7 @@ export function PageBuilderPage() {
   };
 
   const copyLink = async () => {
-    const url = `${window.location.origin}/s/${publishedToken}`;
-    await navigator.clipboard.writeText(url).catch(() => {});
+    await copyText(`${window.location.origin}/s/${publishedToken}`);
     toast.success('Link copied!');
   };
 
