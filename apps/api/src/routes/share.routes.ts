@@ -3,6 +3,7 @@ import { nanoid } from 'nanoid';
 import { authenticate } from '../middleware/auth.js';
 import { Share } from '../models/Share.js';
 import { Page } from '../models/Page.js';
+import { Geofence } from '../models/Geofence.js';
 import { deviceService } from '../services/device.service.js';
 import { telemetryService } from '../services/telemetry.service.js';
 import { commandService } from '../services/command.service.js';
@@ -121,9 +122,9 @@ export async function shareRoutes(app: FastifyInstance) {
               );
             }
           } else if (w.type === 'status_grid' || w.type === 'map') {
-            // deviceIds → list of device stubs
-            const ids = w.deviceIds ?? (w.deviceId ? [w.deviceId] : []);
-            widgetData[w.id] = await Promise.all(
+            // Prefer non-empty deviceIds, fall back to single deviceId
+            const ids = (w.deviceIds?.length ? w.deviceIds : null) ?? (w.deviceId ? [w.deviceId] : []);
+            const devices = await Promise.all(
               ids.map(id => deviceService.getById(id, String(page.orgId)).then(d => {
                 if (!d) return null;
                 const obj = (d as any).toObject?.() ?? d;
@@ -131,6 +132,15 @@ export async function shareRoutes(app: FastifyInstance) {
                 return safe;
               }))
             );
+            if (w.type === 'map') {
+              // Include active geofences that target any of these devices
+              const geofences = ids.length
+                ? await Geofence.find({ orgId: page.orgId, active: true, deviceIds: { $in: ids } }).lean()
+                : [];
+              widgetData[w.id] = { devices: devices.filter(Boolean), geofences };
+            } else {
+              widgetData[w.id] = devices;
+            }
           }
         } catch { /* widget data fetch failure is non-fatal */ }
       })

@@ -1,66 +1,232 @@
-import { useState } from 'react';
+/**
+ * ShareViewPage — public, unauthenticated viewer for shared device pages and builder pages.
+ * Completely self-contained design system; independent of the app theme.
+ * Orion branding woven throughout as a discovery surface.
+ */
+
+import { useState, useEffect, useRef, createContext, useContext } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { publicClient } from '@/api/publicClient';
 import { LineChart, BarChart } from '@/components/charts/Charts';
-import { APIProvider, Map, AdvancedMarker } from '@vis.gl/react-google-maps';
-import { timeAgo } from '@/lib/utils';
-import { BarChart2, TableProperties } from 'lucide-react';
+import { APIProvider, Map, AdvancedMarker, useMap } from '@vis.gl/react-google-maps';
+import { BarChart2, TableProperties, Sun, Moon, Monitor, Download } from 'lucide-react';
 
-const API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
-const MAP_ID  = import.meta.env.VITE_GOOGLE_MAP_ID || 'DEMO_MAP_ID';
-const COLORS  = ['hsl(var(--primary))', '#22d3ee', '#a3e635', '#f97316', '#e879f9', '#facc15'];
+const GMAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
+const GMAPS_ID  = import.meta.env.VITE_GOOGLE_MAP_ID || 'DEMO_MAP_ID';
 
-const WIDGET_LABELS: Record<string, string> = {
-  kpi_card: 'KPI', line_chart: 'Chart', bar_chart: 'Bar', gauge: 'Gauge',
-  data_table: 'Table', map: 'Map', status_grid: 'Status', control_panel: 'Controls',
+/* ── Design tokens ───────────────────────────────────────────────────── */
+type Theme = 'light' | 'dark' | 'system';
+
+interface Tokens {
+  bg: string; surface: string; surfaceHover: string; surfaceActive: string;
+  border: string; borderStrong: string;
+  fg: string; fgMuted: string; fgFaint: string;
+  primary: string; primaryHover: string; primaryMuted: string;
+  good: string; warn: string; bad: string;
+  shadow: string; shadowCard: string; shadowHover: string;
+  fontDisplay: string; fontMono: string;
+}
+
+const DARK: Tokens = {
+  bg: '#0c0c0b', surface: '#161614', surfaceHover: '#1e1e1c', surfaceActive: '#252522',
+  border: 'rgba(255,255,255,0.07)', borderStrong: 'rgba(255,255,255,0.14)',
+  fg: '#f0ede8', fgMuted: '#8a8a82', fgFaint: '#44443e',
+  primary: '#ff5b1f', primaryHover: '#ff7040', primaryMuted: 'rgba(255,91,31,0.14)',
+  good: '#22c55e', warn: '#f59e0b', bad: '#ef4444',
+  shadow: 'none', shadowCard: '0 1px 3px rgba(0,0,0,0.4)', shadowHover: '0 4px 20px rgba(0,0,0,0.6)',
+  fontDisplay: 'var(--font-display, "Satoshi", system-ui, sans-serif)',
+  fontMono: 'var(--font-mono, "JetBrains Mono", monospace)',
 };
 
-/* ── Slim top bar shared by all share views ──────────────────────────── */
-function ShareTopBar({ subtitle }: { subtitle?: string }) {
+const LIGHT: Tokens = {
+  bg: '#f5f5f3', surface: '#ffffff', surfaceHover: '#fafaf8', surfaceActive: '#f2f2f0',
+  border: 'rgba(0,0,0,0.07)', borderStrong: 'rgba(0,0,0,0.14)',
+  fg: '#0c0c0b', fgMuted: '#6b6b67', fgFaint: '#b8b8b2',
+  primary: '#ff5b1f', primaryHover: '#e64e15', primaryMuted: 'rgba(255,91,31,0.08)',
+  good: '#16a34a', warn: '#d97706', bad: '#dc2626',
+  shadow: 'none', shadowCard: '0 1px 4px rgba(0,0,0,0.08)', shadowHover: '0 4px 20px rgba(0,0,0,0.14)',
+  fontDisplay: 'var(--font-display, "Satoshi", system-ui, sans-serif)',
+  fontMono: 'var(--font-mono, "JetBrains Mono", monospace)',
+};
+
+const ThemeCtx = createContext<{ T: Tokens; theme: Theme; setTheme: (t: Theme) => void }>({
+  T: DARK, theme: 'dark', setTheme: () => {},
+});
+const useT = () => useContext(ThemeCtx);
+
+function ThemeProvider({ children }: { children: React.ReactNode }) {
+  const [theme, setThemeRaw] = useState<Theme>(() => (localStorage.getItem('orion_share_theme') as Theme) ?? 'system');
+  const [resolved, setResolved] = useState<'light' | 'dark'>('dark');
+
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-color-scheme: light)');
+    const resolve = () => setResolved(theme === 'system' ? (mq.matches ? 'light' : 'dark') : theme as 'light' | 'dark');
+    resolve();
+    if (theme === 'system') { mq.addEventListener('change', resolve); return () => mq.removeEventListener('change', resolve); }
+  }, [theme]);
+
+  const setTheme = (t: Theme) => { setThemeRaw(t); localStorage.setItem('orion_share_theme', t); };
+  const T = resolved === 'light' ? LIGHT : DARK;
+
+  return <ThemeCtx.Provider value={{ T, theme, setTheme }}>{children}</ThemeCtx.Provider>;
+}
+
+/* ── Theme toggle pill ───────────────────────────────────────────────── */
+function ThemeToggle() {
+  const { T, theme, setTheme } = useT();
+  const options: { key: Theme; Icon: typeof Sun; label: string }[] = [
+    { key: 'light', Icon: Sun, label: 'Light' },
+    { key: 'system', Icon: Monitor, label: 'Auto' },
+    { key: 'dark', Icon: Moon, label: 'Dark' },
+  ];
   return (
-    <div style={{
-      height: 52, borderBottom: '1px solid hsl(var(--border))',
-      background: 'hsl(var(--surface))',
-      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-      padding: '0 32px', flexShrink: 0, gap: 16,
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <span style={{ fontFamily: 'var(--font-display)', fontSize: 19, letterSpacing: '-0.03em', lineHeight: 1 }}>Orion</span>
-        {subtitle && (
-          <>
-            <span style={{ width: 1, height: 16, background: 'hsl(var(--border))' }} />
-            <span style={{ fontFamily: 'var(--font-display)', fontSize: 14, opacity: 0.55, lineHeight: 1 }}>{subtitle}</span>
-          </>
-        )}
-      </div>
-      <span className="mono faint" style={{ fontSize: 9.5 }}>Powered by Orion</span>
+    <div style={{ display: 'flex', background: T.surfaceActive, border: `1px solid ${T.border}`, borderRadius: 24, padding: 3, gap: 2 }}>
+      {options.map(({ key, Icon, label }) => (
+        <button
+          key={key}
+          title={label}
+          onClick={() => setTheme(key)}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 20, border: 'none', cursor: 'pointer', fontSize: 11, fontFamily: T.fontMono,
+            background: theme === key ? T.surface : 'transparent',
+            color: theme === key ? T.fg : T.fgMuted,
+            boxShadow: theme === key ? T.shadowCard : 'none',
+            transition: 'all 0.15s',
+          }}
+        >
+          <Icon size={11} />
+          <span style={{ display: 'none' }}>{label}</span>
+        </button>
+      ))}
     </div>
   );
 }
 
-/* ── KPI tile (device share) ─────────────────────────────────────────── */
-function KpiTile({ label, value, color, unit }: { label: string; value: number; color: string; unit?: string }) {
+/* ── Top navigation bar ──────────────────────────────────────────────── */
+function TopNav({ subtitle }: { subtitle?: string }) {
+  const { T } = useT();
   return (
-    <button style={{
-      padding: '18px 20px',
-      borderRight: '1px solid hsl(var(--border))',
-      borderBottom: '1px solid hsl(var(--border))',
-      textAlign: 'left', background: 'transparent', cursor: 'default',
+    <nav style={{
+      position: 'sticky', top: 0, zIndex: 50,
+      height: 54, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      padding: '0 24px', borderBottom: `1px solid ${T.border}`,
+      background: T.bg + 'ee', backdropFilter: 'blur(12px)',
     }}>
-      <div className="eyebrow" style={{ fontSize: 9.5 }}>{label.replace(/_/g, ' ')}</div>
-      <div style={{ fontFamily: 'var(--font-display)', fontSize: 32, lineHeight: 1, marginTop: 4, color }} className="num">
-        {value.toFixed(2)}
+      {/* Left: brand + page name */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {/* Orion mark — square with O */}
+          <div style={{
+            width: 26, height: 26, background: T.primary, display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 12, fontFamily: T.fontDisplay, color: '#fff', fontWeight: 700, letterSpacing: '-0.03em', flexShrink: 0,
+          }}>O</div>
+          <span style={{ fontFamily: T.fontDisplay, fontSize: 16, fontWeight: 700, letterSpacing: '-0.04em', color: T.fg, lineHeight: 1 }}>
+            Orion
+          </span>
+        </div>
+        {subtitle && (
+          <>
+            <span style={{ width: 1, height: 16, background: T.border }} />
+            <span style={{ fontSize: 13, color: T.fgMuted, maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {subtitle}
+            </span>
+          </>
+        )}
       </div>
-      {unit && <div className="mono faint" style={{ fontSize: 9.5, marginTop: 2 }}>{unit}</div>}
-    </button>
+
+      {/* Right: theme toggle + CTA */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <ThemeToggle />
+        <a
+          href="https://orion.vortan.io"
+          target="_blank"
+          rel="noreferrer"
+          className="orion-cta-nav"
+          style={{
+            padding: '6px 14px', background: T.primary, color: '#fff', fontSize: 11,
+            fontFamily: T.fontMono, letterSpacing: '0.06em', textDecoration: 'none',
+            border: 'none', cursor: 'pointer', transition: 'opacity 0.15s',
+          }}
+          onMouseEnter={e => (e.currentTarget.style.opacity = '0.82')}
+          onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
+        >
+          GET ORION
+        </a>
+        <style>{`.orion-cta-nav { display: none; } @media (min-width: 600px) { .orion-cta-nav { display: inline-flex; } }`}</style>
+      </div>
+    </nav>
   );
 }
 
-/* ══════════════════════════════════════════════════════════════════════
-   DEVICE SHARE VIEW — interactive, with chart/table toggle
-   ══════════════════════════════════════════════════════════════════════ */
+/* ── Page footer ─────────────────────────────────────────────────────── */
+function PageFooter() {
+  const { T } = useT();
+  return (
+    <footer style={{ borderTop: `1px solid ${T.border}`, padding: '40px 32px', marginTop: 80 }}>
+      <div style={{ maxWidth: 1200, margin: '0 auto', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20, textAlign: 'center' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+          <div style={{ width: 28, height: 28, background: T.primary, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontFamily: T.fontDisplay, color: '#fff', fontWeight: 700 }}>O</div>
+          <span style={{ fontFamily: T.fontDisplay, fontSize: 20, fontWeight: 700, letterSpacing: '-0.04em', color: T.fg }}>Orion</span>
+        </div>
+        <p style={{ fontSize: 14, color: T.fgMuted, maxWidth: 400, lineHeight: 1.6 }}>
+          Connect, monitor, and control your IoT devices from anywhere.
+          Build dashboards like this one — no code required.
+        </p>
+        <a
+          href="https://orion.vortan.io"
+          target="_blank"
+          rel="noreferrer"
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 8,
+            padding: '10px 24px', background: T.primary, color: '#fff',
+            fontSize: 13, fontFamily: T.fontMono, letterSpacing: '0.06em',
+            textDecoration: 'none', border: 'none', cursor: 'pointer',
+            transition: 'opacity 0.15s',
+          }}
+          onMouseEnter={e => (e.currentTarget.style.opacity = '0.85')}
+          onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
+        >
+          START BUILDING FREE →
+        </a>
+        <div style={{ fontSize: 11, fontFamily: T.fontMono, color: T.fgFaint, letterSpacing: '0.08em' }}>
+          Powered by Orion Platform · orion.vortan.io
+        </div>
+      </div>
+    </footer>
+  );
+}
+
+/* ── Live badge ──────────────────────────────────────────────────────── */
+function LiveBadge() {
+  const { T } = useT();
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 9px', background: T.primaryMuted, border: `1px solid ${T.primary}22`, fontSize: 9.5, fontFamily: T.fontMono, letterSpacing: '0.12em', color: T.primary }}>
+      <span style={{ width: 5, height: 5, borderRadius: '50%', background: T.primary, animation: 'pulse 2s infinite' }} />
+      LIVE
+    </span>
+  );
+}
+
+/* ── Tiny sparkline (inline SVG, no deps) ────────────────────────────── */
+function Sparkline({ points, color, height = 32 }: { points: number[]; color: string; height?: number }) {
+  if (points.length < 2) return null;
+  const min = Math.min(...points); const max = Math.max(...points);
+  const range = max - min || 1;
+  const w = 80;
+  const coords = points.map((v, i) => `${(i / (points.length - 1)) * w},${height - ((v - min) / range) * height}`).join(' ');
+  return (
+    <svg viewBox={`0 0 ${w} ${height}`} style={{ width: '100%', maxWidth: 80, height }} preserveAspectRatio="none">
+      <polyline points={coords} fill="none" stroke={color} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   DEVICE SHARE VIEW
+   ═══════════════════════════════════════════════════════════════════════ */
 function DeviceShareView({ token, data }: { token: string; data: any }) {
+  const { T } = useT();
   const { device, sections = [], latest } = data;
   const fields: Record<string, number> = latest?.fields ?? {};
   const numericFields = Object.entries(fields).filter(([, v]) => typeof v === 'number') as [string, number][];
@@ -73,43 +239,64 @@ function DeviceShareView({ token, data }: { token: string; data: any }) {
   const hoursMap: Record<string, number> = { '1h': 1, '6h': 6, '24h': 24, '7d': 168 };
   const fromTs = new Date(Date.now() - (hoursMap[chartRange] ?? 24) * 3600_000).toISOString();
   const fm = schemaFields.find((f: any) => f.key === chartField);
-  const chartColor = fm?.chartColor ?? 'hsl(var(--primary))';
+  const chartColor = fm?.chartColor ?? T.primary;
+
+  const fieldColors = Object.fromEntries(
+    numericFields.map(([k], i) => [k, schemaFields.find((f: any) => f.key === k)?.chartColor ?? [T.primary, '#22d3ee', '#a3e635', '#f97316'][i % 4]])
+  );
+
+  const seg: React.CSSProperties = {
+    display: 'flex', background: T.surfaceActive, border: `1px solid ${T.border}`, borderRadius: 20, padding: 3, gap: 2,
+  };
+  const segBtn = (active: boolean): React.CSSProperties => ({
+    padding: '4px 12px', border: 'none', borderRadius: 16, cursor: 'pointer', fontSize: 11, fontFamily: T.fontMono,
+    background: active ? T.surface : 'transparent', color: active ? T.fg : T.fgMuted,
+    boxShadow: active ? T.shadowCard : 'none', transition: 'all 0.15s',
+  });
 
   return (
-    <div style={{ minHeight: '100vh', background: 'hsl(var(--bg))', display: 'flex', flexDirection: 'column' }}>
-      <ShareTopBar subtitle={device.name} />
+    <div style={{ background: T.bg, color: T.fg, minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+      <TopNav subtitle={device.name} />
+      <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }`}</style>
 
-      <div className="page" style={{ maxWidth: 1100, margin: '0 auto', width: '100%' }}>
-        <div style={{ marginBottom: 32 }}>
-          <div className="eyebrow" style={{ marginBottom: 8 }}>{device.category} · {device.protocol?.toUpperCase()}</div>
-          <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 40, lineHeight: 1, margin: 0 }}>
-            {device.name.split(' ').slice(0, -1).join(' ')} <em>{device.name.split(' ').slice(-1)[0]}</em>
+      <div style={{ maxWidth: 1060, margin: '0 auto', width: '100%', padding: '48px 24px 0' }}>
+        {/* Hero */}
+        <div style={{ marginBottom: 40 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+            <span style={{ fontSize: 10, fontFamily: T.fontMono, letterSpacing: '0.14em', color: T.fgMuted, textTransform: 'uppercase' }}>
+              {device.category} · {device.protocol?.toUpperCase()}
+            </span>
+            {sections.includes('metrics') && <LiveBadge />}
+          </div>
+          <h1 style={{ fontFamily: T.fontDisplay, fontSize: 'clamp(32px,5vw,56px)', lineHeight: 1, margin: '0 0 10px', letterSpacing: '-0.03em', color: T.fg }}>
+            {device.name.split(' ').slice(0, -1).join(' ')}{' '}
+            <em style={{ fontStyle: 'italic', color: T.primary }}>{device.name.split(' ').slice(-1)[0]}</em>
           </h1>
-          {device.description && <p className="lede" style={{ marginTop: 8 }}>{device.description}</p>}
+          {device.description && <p style={{ fontSize: 15, color: T.fgMuted, maxWidth: 600, lineHeight: 1.6, margin: 0 }}>{device.description}</p>}
         </div>
 
-        {/* Metrics — clickable to select chart field */}
+        {/* Metrics grid */}
         {sections.includes('metrics') && numericFields.length > 0 && (
-          <div style={{ borderTop: '1px solid hsl(var(--fg))', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', marginBottom: 32 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(170px,1fr))', borderTop: `2px solid ${T.fg}`, marginBottom: 40 }}>
             {numericFields.map(([k, v], i) => {
               const fmeta = schemaFields.find((f: any) => f.key === k);
-              const color = fmeta?.chartColor ?? COLORS[i % COLORS.length];
+              const color = fieldColors[k];
+              const selected = k === chartField && sections.includes('chart');
               return (
                 <button
                   key={k}
-                  onClick={() => setChartField(k)}
+                  onClick={() => sections.includes('chart') && setChartField(k)}
                   style={{
-                    padding: '18px 20px', borderBottom: '1px solid hsl(var(--border))',
-                    borderRight: '1px solid hsl(var(--border))', textAlign: 'left',
-                    background: chartField === k && sections.includes('chart') ? 'hsl(var(--surface-raised))' : 'transparent',
+                    padding: '20px 22px', textAlign: 'left', background: selected ? T.primaryMuted : 'transparent',
+                    border: 'none', borderBottom: `1px solid ${T.border}`, borderRight: `1px solid ${T.border}`,
                     cursor: sections.includes('chart') ? 'pointer' : 'default',
-                    outline: chartField === k && sections.includes('chart') ? `1px solid ${color}` : 'none',
-                    outlineOffset: -1, transition: 'background 0.1s',
+                    outline: selected ? `1.5px solid ${color}` : 'none', outlineOffset: -1,
+                    transition: 'background 0.15s', color: T.fg,
                   }}
                 >
-                  <div className="eyebrow" style={{ fontSize: 9.5 }}>{k.replace(/_/g, ' ')}</div>
-                  <div style={{ fontFamily: 'var(--font-display)', fontSize: 32, lineHeight: 1, marginTop: 4, color }} className="num">{v.toFixed(2)}</div>
-                  {fmeta?.unit && <div className="mono faint" style={{ fontSize: 10, marginTop: 2 }}>{fmeta.unit}</div>}
+                  <div style={{ fontSize: 9.5, fontFamily: T.fontMono, letterSpacing: '0.1em', textTransform: 'uppercase', color: T.fgMuted, marginBottom: 6 }}>{k.replace(/_/g, ' ')}</div>
+                  <div style={{ fontFamily: T.fontDisplay, fontSize: 36, lineHeight: 1, color, letterSpacing: '-0.02em' }}>{v.toFixed(2)}</div>
+                  {fmeta?.unit && <div style={{ fontSize: 10, fontFamily: T.fontMono, color: T.fgFaint, marginTop: 4 }}>{fmeta.unit}</div>}
                 </button>
               );
             })}
@@ -118,59 +305,52 @@ function DeviceShareView({ token, data }: { token: string; data: any }) {
 
         {/* Chart section */}
         {sections.includes('chart') && numericFields.length > 0 && (
-          <div style={{ marginBottom: 32 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12, gap: 12, flexWrap: 'wrap' }}>
+          <div style={{ marginBottom: 40 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16, gap: 12, flexWrap: 'wrap' }}>
               <div>
-                <div className="eyebrow">Live telemetry</div>
-                <div style={{ fontFamily: 'var(--font-display)', fontSize: 24, lineHeight: 1, marginTop: 4, textTransform: 'capitalize' }}>
-                  {telemView === 'chart'
-                    ? <>{chartField.replace(/_/g, ' ')} <span style={{ fontStyle: 'italic', color: 'hsl(var(--primary))' }}>· {chartRange}</span></>
-                    : <>All fields <span style={{ fontStyle: 'italic', color: 'hsl(var(--primary))' }}>· {chartRange}</span></>}
+                <div style={{ fontSize: 9.5, fontFamily: T.fontMono, letterSpacing: '0.12em', textTransform: 'uppercase', color: T.fgMuted, marginBottom: 6 }}>Telemetry</div>
+                <div style={{ fontFamily: T.fontDisplay, fontSize: 28, lineHeight: 1, color: T.fg, letterSpacing: '-0.02em', textTransform: 'capitalize' }}>
+                  {telemView === 'chart' ? chartField.replace(/_/g, ' ') : 'All fields'}{' '}
+                  <span style={{ fontStyle: 'italic', color: T.primary }}>· {chartRange}</span>
                 </div>
               </div>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                 {telemView === 'chart' && numericFields.length > 1 && (
-                  <select className="input" value={chartField} onChange={e => setChartField(e.target.value)}
-                    style={{ fontSize: 11, padding: '4px 8px', height: 28 }}>
+                  <select value={chartField} onChange={e => setChartField(e.target.value)}
+                    style={{ padding: '5px 10px', background: T.surface, border: `1px solid ${T.border}`, color: T.fg, fontSize: 11, fontFamily: T.fontMono, outline: 'none', cursor: 'pointer' }}>
                     {numericFields.map(([k]) => <option key={k} value={k}>{k.replace(/_/g, ' ')}</option>)}
                   </select>
                 )}
-                <div className="seg">
-                  <button className={telemView === 'chart' ? 'on' : ''} onClick={() => setTelemView('chart')}>
-                    <BarChart2 size={12} style={{ marginRight: 4, verticalAlign: 'middle' }} />Chart
-                  </button>
-                  <button className={telemView === 'table' ? 'on' : ''} onClick={() => setTelemView('table')}>
-                    <TableProperties size={12} style={{ marginRight: 4, verticalAlign: 'middle' }} />Table
-                  </button>
+                <div style={seg}>
+                  <button style={segBtn(telemView === 'chart')} onClick={() => setTelemView('chart')}><BarChart2 size={11} style={{ verticalAlign: 'middle', marginRight: 4 }} />Chart</button>
+                  <button style={segBtn(telemView === 'table')} onClick={() => setTelemView('table')}><TableProperties size={11} style={{ verticalAlign: 'middle', marginRight: 4 }} />Table</button>
                 </div>
-                <div className="seg">
-                  {['1h', '6h', '24h', '7d'].map(r => (
-                    <button key={r} className={chartRange === r ? 'on' : ''} onClick={() => setChartRange(r)}>{r.toUpperCase()}</button>
-                  ))}
+                <div style={seg}>
+                  {['1h', '6h', '24h', '7d'].map(r => <button key={r} style={segBtn(chartRange === r)} onClick={() => setChartRange(r)}>{r.toUpperCase()}</button>)}
                 </div>
               </div>
             </div>
-            {telemView === 'chart'
-              ? <SharedChart token={token} field={chartField} color={chartColor} from={fromTs} />
-              : <SharedTable token={token} field={chartField} schemaFields={schemaFields} from={fromTs} />}
+            <div style={{ background: T.surface, border: `1px solid ${T.border}`, overflow: 'hidden' }}>
+              {telemView === 'chart'
+                ? <DeviceChart token={token} field={chartField} color={chartColor} from={fromTs} T={T} />
+                : <DeviceTable token={token} field={chartField} schemaFields={schemaFields} from={fromTs} T={T} />}
+            </div>
           </div>
         )}
 
         {/* Info */}
         {sections.includes('info') && (
-          <div style={{ marginBottom: 32 }}>
-            <div className="eyebrow" style={{ marginBottom: 12 }}>Device info</div>
-            <div className="panel" style={{ padding: 0, overflow: 'hidden' }}>
-              {[
-                ['Category', device.category],
-                ['Protocol', device.protocol?.toUpperCase()],
-                ['Format', device.payloadFormat?.toUpperCase() ?? '—'],
+          <div style={{ marginBottom: 40 }}>
+            <SectionHeading label="Device Info" T={T} />
+            <div style={{ background: T.surface, border: `1px solid ${T.border}` }}>
+              {[['Category', device.category], ['Protocol', device.protocol?.toUpperCase()],
+                ['Payload format', device.payloadFormat?.toUpperCase() ?? '—'],
                 ['Firmware', device.firmwareVersion ?? '—'],
-                ['Tags', device.tags?.join(', ') || '—'],
-              ].map(([label, value]) => (
-                <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '11px 16px', borderBottom: '1px solid hsl(var(--rule-ghost))' }}>
-                  <span className="mono faint" style={{ fontSize: 10.5, letterSpacing: '0.14em', textTransform: 'uppercase' }}>{label}</span>
-                  <span style={{ fontSize: 13 }}>{value}</span>
+                ['Tags', device.tags?.join(', ') || '—']
+              ].map(([label, val]) => (
+                <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 18px', borderBottom: `1px solid ${T.border}` }}>
+                  <span style={{ fontSize: 10.5, fontFamily: T.fontMono, letterSpacing: '0.1em', textTransform: 'uppercase', color: T.fgMuted }}>{label}</span>
+                  <span style={{ fontSize: 13, color: T.fg }}>{val}</span>
                 </div>
               ))}
             </div>
@@ -179,52 +359,51 @@ function DeviceShareView({ token, data }: { token: string; data: any }) {
 
         {/* Location */}
         {sections.includes('location') && device.location?.lat && (
-          <div className="section" style={{ marginBottom: 32 }}>
-            <div>
-              <div className="ssh">Location</div>
-              <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {[['Lat', device.location.lat?.toFixed(6)], ['Lng', (device.location.lng ?? device.location.lon)?.toFixed(6)]].map(([k, v]) => (
-                  <div key={k} style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span className="mono faint" style={{ fontSize: 10.5, textTransform: 'uppercase' }}>{k}</span>
-                    <span className="mono" style={{ fontSize: 13 }}>{v}</span>
+          <div style={{ marginBottom: 40 }}>
+            <SectionHeading label="Location" T={T} />
+            <div style={{ display: 'grid', gridTemplateColumns: '200px 1fr', gap: 16 }}>
+              <div style={{ background: T.surface, border: `1px solid ${T.border}`, padding: 18, display: 'flex', flexDirection: 'column', gap: 14 }}>
+                {[['LAT', device.location.lat?.toFixed(6)], ['LNG', (device.location.lng ?? device.location.lon)?.toFixed(6)]].map(([k, v]) => (
+                  <div key={k}>
+                    <div style={{ fontSize: 9, fontFamily: T.fontMono, letterSpacing: '0.12em', color: T.fgFaint, marginBottom: 4 }}>{k}</div>
+                    <div style={{ fontSize: 14, fontFamily: T.fontMono, color: T.fg }}>{v}</div>
                   </div>
                 ))}
               </div>
-            </div>
-            <div>
-              {API_KEY ? (
-                <APIProvider apiKey={API_KEY}>
-                  <Map mapId={MAP_ID}
-                    defaultCenter={{ lat: device.location.lat, lng: device.location.lng ?? device.location.lon ?? 0 }}
-                    defaultZoom={13} mapTypeId="satellite" style={{ width: '100%', height: 280 }}
-                    gestureHandling="cooperative" streetViewControl={false} mapTypeControl={false}>
-                    <AdvancedMarker position={{ lat: device.location.lat, lng: device.location.lng ?? device.location.lon ?? 0 }}>
-                      <div style={{ width: 14, height: 14, borderRadius: '50%', background: 'hsl(var(--primary))', border: '2px solid white', boxShadow: '0 0 0 3px rgba(255,91,31,0.35)' }} />
-                    </AdvancedMarker>
-                  </Map>
-                </APIProvider>
-              ) : (
-                <div className="panel" style={{ padding: 32, textAlign: 'center' }}><p className="dim" style={{ fontSize: 13 }}>Map unavailable</p></div>
-              )}
+              <div style={{ border: `1px solid ${T.border}`, overflow: 'hidden', minHeight: 260 }}>
+                <ShareMap devices={[device]} geofences={[]} mapTypeId="satellite" T={T} />
+              </div>
             </div>
           </div>
         )}
 
         {/* History */}
         {sections.includes('history') && (
-          <div style={{ marginBottom: 32 }}>
-            <div className="eyebrow" style={{ marginBottom: 12 }}>Command history</div>
-            <div className="table-responsive">
-              <table className="table">
-                <thead><tr><th>Command</th><th>Status</th><th>Sent</th></tr></thead>
+          <div style={{ marginBottom: 40 }}>
+            <SectionHeading label="Command History" T={T} />
+            <div style={{ background: T.surface, border: `1px solid ${T.border}`, overflow: 'hidden' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: T.fontMono, fontSize: 11 }}>
+                <thead>
+                  <tr style={{ background: T.surfaceActive }}>
+                    {['Command', 'Status', 'Sent'].map(h => (
+                      <th key={h} style={{ padding: '10px 16px', textAlign: 'left', fontSize: 9.5, letterSpacing: '0.1em', textTransform: 'uppercase', color: T.fgMuted, borderBottom: `1px solid ${T.border}`, fontWeight: 600 }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
                 <tbody>
                   {(data.commandHistory ?? []).length === 0
-                    ? <tr><td colSpan={3} style={{ textAlign: 'center', padding: '24px 0' }} className="dim">No commands</td></tr>
-                    : (data.commandHistory ?? []).map((cmd: any) => (
-                      <tr key={cmd._id}>
-                        <td className="mono acc" style={{ fontSize: 12 }}>{cmd.name}</td>
-                        <td><span className={`tag tag-${cmd.status === 'executed' ? 'online' : cmd.status === 'failed' ? 'error' : 'offline'}`}>{cmd.status}</span></td>
-                        <td className="mono faint" style={{ fontSize: 11 }}>{timeAgo(cmd.createdAt)}</td>
+                    ? <tr><td colSpan={3} style={{ padding: '28px 16px', textAlign: 'center', color: T.fgMuted }}>No commands recorded</td></tr>
+                    : (data.commandHistory ?? []).map((cmd: any, i: number) => (
+                      <tr key={cmd._id} style={{ background: i % 2 === 0 ? 'transparent' : T.surfaceHover }}>
+                        <td style={{ padding: '10px 16px', color: T.primary, borderBottom: `1px solid ${T.border}` }}>{cmd.name}</td>
+                        <td style={{ padding: '10px 16px', borderBottom: `1px solid ${T.border}` }}>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 9.5, padding: '2px 8px', letterSpacing: '0.08em',
+                            background: cmd.status === 'executed' ? T.good + '22' : cmd.status === 'failed' ? T.bad + '22' : T.border,
+                            color: cmd.status === 'executed' ? T.good : cmd.status === 'failed' ? T.bad : T.fgMuted }}>
+                            {cmd.status?.toUpperCase()}
+                          </span>
+                        </td>
+                        <td style={{ padding: '10px 16px', color: T.fgMuted, borderBottom: `1px solid ${T.border}` }}>{new Date(cmd.createdAt).toLocaleString()}</td>
                       </tr>
                     ))}
                 </tbody>
@@ -233,245 +412,195 @@ function DeviceShareView({ token, data }: { token: string; data: any }) {
           </div>
         )}
       </div>
+      <PageFooter />
     </div>
   );
 }
 
-/* ── Single-field chart ───────────────────────────────────────────────── */
-function SharedChart({ token, field, color, from }: { token: string; field: string; color: string; from: string }) {
-  const { data, isLoading } = useQuery({
-    queryKey: ['share-series', token, field, from],
-    queryFn: () => publicClient.get(`/public/device/${token}/series`, { params: { field, from } }).then(r => r.data),
-    enabled: !!field,
-  });
-  const points = (data?.data ?? []).map((p: any) => ({
-    ts: typeof p.ts === 'string' ? new Date(p.ts).getTime() : p.ts,
-    value: typeof p.value === 'number' ? p.value : 0,
-  }));
-  if (isLoading) return <div className="skeleton" style={{ height: 260 }} />;
-  return (
-    <div className="panel" style={{ padding: '16px 12px 8px', overflow: 'hidden' }}>
-      {points.length === 0
-        ? <div style={{ height: 240, display: 'flex', alignItems: 'center', justifyContent: 'center' }} className="dim">No data</div>
-        : <LineChart series={[{ name: field, data: points, color }]} height={240} showArea />}
-    </div>
-  );
-}
-
-/* ── Single-field table ───────────────────────────────────────────────── */
-function SharedTable({ token, field, schemaFields, from }: { token: string; field: string; schemaFields: any[]; from: string }) {
-  const fm = schemaFields.find((f: any) => f.key === field);
-  const color = fm?.chartColor ?? 'hsl(var(--primary))';
-  const { data, isLoading } = useQuery({
-    queryKey: ['share-table', token, field, from],
-    queryFn: () => publicClient.get(`/public/device/${token}/series`, { params: { field, from, limit: 200 } }).then(r => r.data),
-    enabled: !!field,
-  });
-  const rows: any[] = data?.data ?? [];
-  if (isLoading) return <div className="skeleton" style={{ height: 260 }} />;
-  if (rows.length === 0) return (
-    <div className="panel" style={{ padding: 0 }}>
-      <div style={{ height: 240, display: 'flex', alignItems: 'center', justifyContent: 'center' }} className="dim">No data in this range</div>
-    </div>
-  );
-  return (
-    <div className="panel" style={{ padding: 0, overflow: 'hidden' }}>
-      <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 320 }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--font-mono)', fontSize: 11 }}>
-          <thead style={{ position: 'sticky', top: 0, background: 'hsl(var(--surface-raised))', zIndex: 1 }}>
-            <tr>
-              <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', fontSize: 9.5, color: 'hsl(var(--muted-fg))', borderBottom: '1px solid hsl(var(--border))' }}>Timestamp</th>
-              <th style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', fontSize: 9.5, color, borderBottom: '1px solid hsl(var(--border))' }}>
-                {field.replace(/_/g, ' ')}{fm?.unit ? ` (${fm.unit})` : ''}
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row: any, i: number) => (
-              <tr key={i} style={{ background: i % 2 === 0 ? 'transparent' : 'hsl(var(--surface-raised) / 0.4)' }}>
-                <td style={{ padding: '7px 12px', color: 'hsl(var(--muted-fg))', whiteSpace: 'nowrap', borderBottom: '1px solid hsl(var(--rule-ghost))' }}>
-                  {new Date(row.ts ?? row.createdAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                </td>
-                <td style={{ padding: '7px 12px', textAlign: 'right', color, borderBottom: '1px solid hsl(var(--rule-ghost))' }}>
-                  {typeof row.value === 'number' ? row.value.toFixed(4) : String(row.value ?? '—')}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
-/* ══════════════════════════════════════════════════════════════════════
-   PAGE SHARE VIEW — premium grid matching builder layout
-   ══════════════════════════════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════════════════════════
+   PAGE SHARE VIEW — premium builder layout
+   ═══════════════════════════════════════════════════════════════════════ */
 function PageShareView({ pageData }: { pageData: any }) {
+  const { T } = useT();
   const { page, widgetData = {} } = pageData;
-
-  // Hide control_panel widgets on public pages (require auth to send commands)
+  const allowExports: boolean = page.allowExports ?? false;
   const visibleWidgets = (page.widgets ?? []).filter((w: any) => w.type !== 'control_panel');
 
   return (
-    <div style={{ minHeight: '100vh', background: 'hsl(var(--bg))', display: 'flex', flexDirection: 'column' }}>
-      <ShareTopBar subtitle={page.name} />
+    <div style={{ background: T.bg, color: T.fg, minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+      <TopNav subtitle={page.name} />
+      <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }`}</style>
 
-      <div style={{ flex: 1, maxWidth: 1440, margin: '0 auto', width: '100%', padding: '40px 32px 80px' }}>
-        {/* Page hero */}
-        <div style={{ marginBottom: 40, paddingBottom: 32, borderBottom: '1px solid hsl(var(--border))' }}>
-          <div className="eyebrow" style={{ marginBottom: 10, fontSize: 9 }}>Dashboard · Orion Platform</div>
-          <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 52, lineHeight: 0.95, margin: 0, letterSpacing: '-0.03em' }}>
-            {page.name.split(' ').length > 1 ? (
-              <>{page.name.split(' ').slice(0, -1).join(' ')}{' '}<em style={{ color: 'hsl(var(--primary))' }}>{page.name.split(' ').slice(-1)[0]}</em></>
-            ) : (
-              <em style={{ color: 'hsl(var(--primary))' }}>{page.name}</em>
-            )}
+      <div style={{ maxWidth: 1440, margin: '0 auto', width: '100%', padding: '48px 24px 0' }}>
+        {/* Hero */}
+        <div style={{ marginBottom: 48, paddingBottom: 36, borderBottom: `1px solid ${T.border}` }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+            <span style={{ fontSize: 9.5, fontFamily: T.fontMono, letterSpacing: '0.14em', color: T.fgMuted, textTransform: 'uppercase' }}>Dashboard · Orion Platform</span>
+            <LiveBadge />
+          </div>
+          <h1 style={{ fontFamily: T.fontDisplay, fontSize: 'clamp(36px,5vw,60px)', lineHeight: 1, margin: '0 0 12px', letterSpacing: '-0.03em', color: T.fg }}>
+            {page.name.split(' ').length > 1
+              ? <>{page.name.split(' ').slice(0, -1).join(' ')}{' '}<em style={{ fontStyle: 'italic', color: T.primary }}>{page.name.split(' ').slice(-1)[0]}</em></>
+              : <em style={{ fontStyle: 'italic', color: T.primary }}>{page.name}</em>}
           </h1>
-          {page.description && <p className="lede" style={{ marginTop: 12, maxWidth: 560 }}>{page.description}</p>}
+          {page.description && <p style={{ fontSize: 15, color: T.fgMuted, maxWidth: 560, lineHeight: 1.65, margin: 0 }}>{page.description}</p>}
         </div>
 
-        {/* Widget grid — exact 12-col, 70px-row layout matching the builder */}
+        {/* Widget grid — exact 12-col, 70px-row grid matching builder */}
         {visibleWidgets.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '80px 24px', opacity: 0.35 }}>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: 28, marginBottom: 8 }}>Nothing to show</div>
-            <p style={{ fontSize: 13 }}>This page has no widgets, or they are not public.</p>
+            <div style={{ fontFamily: T.fontDisplay, fontSize: 28, marginBottom: 8, color: T.fg }}>Nothing here yet</div>
+            <p style={{ fontSize: 13, color: T.fgMuted }}>This page has no visible widgets.</p>
           </div>
         ) : (
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(12, 1fr)',
-            gridAutoRows: '70px',
-            gap: '12px',
-          }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(12, 1fr)', gridAutoRows: '70px', gap: '12px' }}>
             {visibleWidgets.map((w: any) => {
               const pos = w.position ?? { x: 0, y: 0, w: 4, h: 3 };
               return (
-                <div
-                  key={w.id}
-                  style={{
-                    gridColumn: `${pos.x + 1} / span ${pos.w}`,
-                    gridRow: `${pos.y + 1} / span ${pos.h}`,
-                    minWidth: 0, minHeight: 0,
-                  }}
-                >
-                  <WidgetCard widget={w} data={widgetData[w.id]} />
+                <div key={w.id} style={{ gridColumn: `${pos.x + 1} / span ${pos.w}`, gridRow: `${pos.y + 1} / span ${pos.h}`, minWidth: 0, minHeight: 0 }}>
+                  <PageWidgetCard widget={w} data={widgetData[w.id]} T={T} allowExports={allowExports} />
                 </div>
               );
             })}
           </div>
         )}
       </div>
+      <PageFooter />
     </div>
   );
 }
 
-/* ── Premium widget card shell ───────────────────────────────────────── */
-function WidgetCard({ widget, data }: { widget: any; data: any }) {
+/* ── Widget card shell ───────────────────────────────────────────────── */
+const WIDGET_ACCENT: Record<string, string> = {
+  kpi_card: '#ff5b1f', line_chart: '#6366f1', bar_chart: '#22d3ee',
+  gauge: '#f59e0b', data_table: '#10b981', map: '#3b82f6', status_grid: '#a855f7',
+};
+
+const EXPORTABLE_TYPES = new Set(['line_chart', 'bar_chart', 'data_table']);
+
+function PageWidgetCard({ widget, data, T, allowExports }: { widget: any; data: any; T: Tokens; allowExports?: boolean }) {
+  const [hovered, setHovered] = useState(false);
+  const accent = WIDGET_ACCENT[widget.type] ?? T.primary;
+  const canExport = allowExports && EXPORTABLE_TYPES.has(widget.type);
+
+  const handleExport = () => {
+    if (widget.type === 'data_table') {
+      const entries = Object.entries(data?.fields ?? {}).filter(([, v]) => typeof v === 'number');
+      const rows = entries.map(([k, v]) => `"${k}","${v}"`);
+      downloadCsv(`${widget.title.replace(/\s+/g, '-')}-${new Date().toISOString().slice(0,10)}.csv`, ['field', 'value'], rows as any);
+    } else {
+      // line_chart / bar_chart — data is array of {ts, value}
+      const pts: any[] = Array.isArray(data) ? data : [];
+      const rows = pts.map(p => `"${new Date(p.ts).toISOString()}","${p.value}"`);
+      const field = widget.field ?? widget.type;
+      downloadCsv(`${field}-${new Date().toISOString().slice(0,10)}.csv`, ['timestamp', field], rows as any);
+    }
+  };
+
   return (
-    <div className="panel" style={{
-      overflow: 'hidden', height: '100%',
-      display: 'flex', flexDirection: 'column',
-      background: 'hsl(var(--surface))',
-    }}>
-      {/* Header */}
+    <div
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        height: '100%', display: 'flex', flexDirection: 'column',
+        background: T.surface, border: `1px solid ${T.border}`,
+        borderTop: `2px solid ${accent}`,
+        boxShadow: hovered ? T.shadowHover : T.shadowCard,
+        transition: 'box-shadow 0.2s, transform 0.2s',
+        transform: hovered ? 'translateY(-1px)' : 'none',
+        overflow: 'hidden',
+      }}
+    >
+      {/* Card header */}
       <div style={{
-        padding: '9px 14px',
-        borderBottom: '1px solid hsl(var(--rule-ghost))',
-        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        flexShrink: 0,
-        background: 'hsl(var(--surface-raised))',
+        padding: '9px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        borderBottom: `1px solid ${T.border}`, flexShrink: 0, background: T.surfaceActive,
       }}>
-        <div style={{ fontSize: 12.5, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', letterSpacing: '-0.01em' }}>
-          {widget.title}
-        </div>
-        <div className="mono" style={{ fontSize: 8.5, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'hsl(var(--muted-fg))', flexShrink: 0, marginLeft: 8 }}>
-          {WIDGET_LABELS[widget.type] ?? widget.type}
+        <span style={{ fontSize: 12, fontWeight: 600, color: T.fg, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', letterSpacing: '-0.01em' }}>{widget.title}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, marginLeft: 8 }}>
+          {canExport && <ExportBtn onClick={handleExport} T={T} />}
+          <span style={{ fontSize: 8.5, fontFamily: T.fontMono, letterSpacing: '0.12em', color: accent, textTransform: 'uppercase' }}>
+            {widget.type.replace('_', ' ')}
+          </span>
         </div>
       </div>
 
       {/* Content */}
-      <div style={{ flex: 1, overflow: 'hidden', position: 'relative', minHeight: 0 }}>
-        <WidgetContent widget={widget} data={data} />
+      <div style={{ flex: 1, overflow: 'hidden', minHeight: 0, position: 'relative' }}>
+        <PageWidgetContent widget={widget} data={data} T={T} />
       </div>
     </div>
   );
 }
 
-/* ── Widget content router ───────────────────────────────────────────── */
-function WidgetContent({ widget, data }: { widget: any; data: any }) {
+/* ── Widget content by type ──────────────────────────────────────────── */
+function PageWidgetContent({ widget, data, T }: { widget: any; data: any; T: Tokens }) {
   const empty = (msg = 'No data') => (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', fontSize: 12 }} className="dim">{msg}</div>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', fontSize: 12, fontFamily: T.fontMono, color: T.fgMuted }}>{msg}</div>
   );
 
-  /* KPI card */
   if (widget.type === 'kpi_card') {
     const val = data?.fields?.[widget.field];
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 4, padding: 16 }}>
-        <div className="eyebrow" style={{ fontSize: 9 }}>{(widget.field ?? 'value').replace(/_/g, ' ')}</div>
-        <div style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(24px,3.5vw,52px)', lineHeight: 1, color: 'hsl(var(--primary))' }}>
-          {val !== undefined ? Number(val).toFixed(2) : <span className="dim" style={{ fontSize: 20 }}>—</span>}
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 6, padding: 16 }}>
+        <div style={{ fontSize: 9.5, fontFamily: T.fontMono, letterSpacing: '0.12em', textTransform: 'uppercase', color: T.fgMuted }}>{(widget.field ?? 'value').replace(/_/g, ' ')}</div>
+        <div style={{ fontFamily: T.fontDisplay, fontSize: 'clamp(26px,4vw,52px)', lineHeight: 1, color: T.primary, letterSpacing: '-0.02em' }}>
+          {val !== undefined ? Number(val).toFixed(2) : <span style={{ fontSize: 22, color: T.fgFaint }}>—</span>}
         </div>
-        {data?.timestamp && <div className="mono faint" style={{ fontSize: 9 }}>updated {timeAgo(data.timestamp)}</div>}
+        {data?.timestamp && <div style={{ fontSize: 9, fontFamily: T.fontMono, color: T.fgFaint }}>updated {new Date(data.timestamp).toLocaleTimeString()}</div>}
       </div>
     );
   }
 
-  /* Gauge */
   if (widget.type === 'gauge') {
     const pts: any[] = Array.isArray(data) ? data : [];
     const lastVal = pts.length > 0 ? pts[pts.length - 1].value : undefined;
     const pct = lastVal !== undefined ? Math.min(100, Math.max(0, lastVal)) : 0;
-    const r = 58; const cx = 80; const cy = 78;
+    const r = 56; const cx = 80; const cy = 76;
     const start = Math.PI * 0.75; const end = Math.PI * 2.25;
     const arc = (a: number) => ({ x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) });
-    const s = arc(start); const e = arc(end);
-    const a = arc(start + (end - start) * (pct / 100));
+    const s = arc(start); const e = arc(end); const a = arc(start + (end - start) * (pct / 100));
     const large = pct > 50 ? 1 : 0;
     return (
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
-        <svg viewBox="0 0 160 120" style={{ width: '100%', maxWidth: 160, height: 'auto' }}>
-          <path d={`M ${s.x} ${s.y} A ${r} ${r} 0 1 1 ${e.x} ${e.y}`} fill="none" stroke="hsl(var(--border))" strokeWidth={10} strokeLinecap="round" />
-          {pct > 0 && <path d={`M ${s.x} ${s.y} A ${r} ${r} 0 ${large} 1 ${a.x} ${a.y}`} fill="none" stroke="hsl(var(--primary))" strokeWidth={10} strokeLinecap="round" />}
-          <text x={cx} y={cy - 2} textAnchor="middle" style={{ fontFamily: 'var(--font-display)', fontSize: 22, fill: 'hsl(var(--fg))' }}>{lastVal?.toFixed(1) ?? '—'}</text>
-          <text x={cx} y={cy + 14} textAnchor="middle" style={{ fontFamily: 'var(--font-mono)', fontSize: 8.5, fill: 'hsl(var(--muted-fg))', textTransform: 'uppercase' }}>{widget.field ?? ''}</text>
+        <svg viewBox="0 0 160 115" style={{ width: '100%', maxWidth: 160, height: 'auto' }}>
+          <path d={`M ${s.x} ${s.y} A ${r} ${r} 0 1 1 ${e.x} ${e.y}`} fill="none" stroke={T.border} strokeWidth={10} strokeLinecap="round" />
+          {pct > 0 && <path d={`M ${s.x} ${s.y} A ${r} ${r} 0 ${large} 1 ${a.x} ${a.y}`} fill="none" stroke={T.primary} strokeWidth={10} strokeLinecap="round" />}
+          <text x={cx} y={cy} textAnchor="middle" fill={T.fg} style={{ fontFamily: T.fontDisplay, fontSize: 22 }}>{lastVal?.toFixed(1) ?? '—'}</text>
+          <text x={cx} y={cy + 16} textAnchor="middle" fill={T.fgMuted} style={{ fontFamily: T.fontMono, fontSize: 8.5, textTransform: 'uppercase' }}>{widget.field ?? ''}</text>
         </svg>
       </div>
     );
   }
 
-  /* Line chart */
   if (widget.type === 'line_chart') {
     const pts = (Array.isArray(data) ? data : []).map((p: any) => ({ ts: new Date(p.ts).getTime(), value: p.value }));
     return pts.length > 0
-      ? <div style={{ padding: '8px 4px 4px', height: '100%' }}><LineChart series={[{ name: widget.field ?? '', data: pts, color: 'hsl(var(--primary))' }]} height={180} showArea /></div>
+      ? <div style={{ padding: '8px 4px 4px', height: '100%' }}><LineChart series={[{ name: widget.field ?? '', data: pts, color: T.primary }]} height={180} showArea /></div>
       : empty('No data yet');
   }
 
-  /* Bar chart */
   if (widget.type === 'bar_chart') {
     const pts = (Array.isArray(data) ? data : []).slice(-24).map((p: any) => ({
       label: new Date(p.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       value: p.value,
     }));
     return pts.length > 0
-      ? <div style={{ padding: '8px 4px 4px', height: '100%' }}><BarChart data={pts} color="hsl(var(--primary))" height={180} /></div>
+      ? <div style={{ padding: '8px 4px 4px', height: '100%' }}><BarChart data={pts} color={T.primary} height={180} /></div>
       : empty('No data yet');
   }
 
-  /* Data table */
   if (widget.type === 'data_table') {
     const entries = Object.entries(data?.fields ?? {}).filter(([, v]) => typeof v === 'number');
     if (entries.length === 0) return empty();
     return (
       <div style={{ overflowY: 'auto', height: '100%' }}>
-        <table style={{ width: '100%', fontSize: 11, fontFamily: 'var(--font-mono)', borderCollapse: 'collapse' }}>
+        <table style={{ width: '100%', fontSize: 11, fontFamily: T.fontMono, borderCollapse: 'collapse' }}>
           <tbody>
-            {entries.map(([k, v]) => (
-              <tr key={k} style={{ borderBottom: '1px solid hsl(var(--rule-ghost))' }}>
-                <td style={{ padding: '6px 14px', color: 'hsl(var(--muted-fg))' }}>{k.replace(/_/g, ' ')}</td>
-                <td style={{ padding: '6px 14px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{(v as number).toFixed(3)}</td>
+            {entries.map(([k, v], i) => (
+              <tr key={k} style={{ background: i % 2 === 0 ? 'transparent' : T.surfaceHover }}>
+                <td style={{ padding: '7px 14px', color: T.fgMuted, borderBottom: `1px solid ${T.border}` }}>{k.replace(/_/g, ' ')}</td>
+                <td style={{ padding: '7px 14px', textAlign: 'right', color: T.fg, borderBottom: `1px solid ${T.border}`, fontVariantNumeric: 'tabular-nums' }}>{(v as number).toFixed(3)}</td>
               </tr>
             ))}
           </tbody>
@@ -480,92 +609,344 @@ function WidgetContent({ widget, data }: { widget: any; data: any }) {
     );
   }
 
-  /* Status grid */
   if (widget.type === 'status_grid') {
     const devices: any[] = Array.isArray(data) ? data.filter(Boolean) : [];
     if (devices.length === 0) return empty('No devices');
     return (
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(84px, 1fr))', gap: 6, padding: 10, alignContent: 'start', overflowY: 'auto', height: '100%' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(88px,1fr))', gap: 6, padding: 10, alignContent: 'start', overflowY: 'auto', height: '100%' }}>
         {devices.map((d: any) => (
-          <div key={d._id} style={{ padding: '7px 9px', background: 'hsl(var(--surface-raised))' }}>
-            <div style={{ fontSize: 11, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.name}</div>
-            <span className={`tag tag-${d.status === 'online' ? 'online' : d.status === 'error' ? 'error' : 'offline'}`} style={{ marginTop: 3, display: 'inline-block' }}>{d.status}</span>
+          <div key={d._id} style={{ padding: '8px 10px', background: T.surfaceActive, border: `1px solid ${T.border}` }}>
+            <div style={{ fontSize: 11, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 4, color: T.fg }}>{d.name}</div>
+            <span style={{
+              fontSize: 9.5, fontFamily: T.fontMono, padding: '2px 6px', letterSpacing: '0.06em',
+              background: d.status === 'online' ? T.good + '22' : d.status === 'error' ? T.bad + '22' : T.border,
+              color: d.status === 'online' ? T.good : d.status === 'error' ? T.bad : T.fgMuted,
+            }}>{d.status}</span>
           </div>
         ))}
       </div>
     );
   }
 
-  /* Map */
   if (widget.type === 'map') {
-    const devices: any[] = Array.isArray(data) ? data.filter(Boolean) : [];
-    const withLoc = devices.filter(d => d?.location?.lat);
-    if (!API_KEY) return empty('Map unavailable (no API key)');
-    if (withLoc.length === 0) return empty('No location data');
-    const center = { lat: withLoc[0].location.lat, lng: withLoc[0].location.lng ?? withLoc[0].location.lon ?? 0 };
-    return (
-      <APIProvider apiKey={API_KEY}>
-        <Map mapId={MAP_ID} defaultCenter={center} defaultZoom={withLoc.length > 1 ? 8 : 12}
-          mapTypeId="satellite" style={{ width: '100%', height: '100%' }}
-          gestureHandling="cooperative" streetViewControl={false} mapTypeControl={false} zoomControl>
+    // data may be { devices, geofences } (new format) or an array (old format)
+    const mapData = Array.isArray(data) ? { devices: data, geofences: [] } : (data ?? { devices: [], geofences: [] });
+    const devices: any[] = (mapData.devices ?? []).filter(Boolean);
+    const geofences: any[] = mapData.geofences ?? [];
+    if (devices.length === 0) return empty('No location data');
+    return <ShareMap devices={devices} geofences={geofences} T={T} />;
+  }
+
+  return empty(widget.type.replace('_', ' '));
+}
+
+/* ── Google Map with geofences ───────────────────────────────────────── */
+type MapTypeId = 'satellite' | 'roadmap' | 'terrain' | 'hybrid';
+
+function ShareMap({ devices, geofences, mapTypeId: initialType, T }: {
+  devices: any[];
+  geofences: any[];
+  mapTypeId?: MapTypeId;
+  T: Tokens;
+}) {
+  const [mapType, setMapType] = useState<MapTypeId>(initialType ?? 'satellite');
+  const withLoc = devices.filter(d => d?.location?.lat);
+  if (!GMAPS_KEY) return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', fontSize: 12, fontFamily: T.fontMono, color: T.fgMuted }}>Map unavailable</div>;
+  if (withLoc.length === 0) return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', fontSize: 12, fontFamily: T.fontMono, color: T.fgMuted }}>No location data</div>;
+
+  const center = { lat: withLoc[0].location.lat, lng: withLoc[0].location.lng ?? withLoc[0].location.lon ?? 0 };
+
+  const MAP_TYPES: { key: MapTypeId; label: string }[] = [
+    { key: 'satellite', label: 'Satellite' }, { key: 'hybrid', label: 'Hybrid' },
+    { key: 'roadmap', label: 'Map' }, { key: 'terrain', label: 'Terrain' },
+  ];
+
+  return (
+    <div style={{ position: 'relative', width: '100%', height: '100%', minHeight: 200 }}>
+      {/* Map type selector */}
+      <div style={{ position: 'absolute', top: 10, right: 10, zIndex: 10, display: 'flex', gap: 4, background: T.bg + 'ee', border: `1px solid ${T.border}`, padding: 3 }}>
+        {MAP_TYPES.map(({ key, label }) => (
+          <button key={key} onClick={() => setMapType(key)} style={{
+            padding: '3px 8px', border: 'none', cursor: 'pointer', fontSize: 9.5, fontFamily: T.fontMono,
+            background: mapType === key ? T.primary : 'transparent',
+            color: mapType === key ? '#fff' : T.fgMuted,
+          }}>{label}</button>
+        ))}
+      </div>
+      <APIProvider apiKey={GMAPS_KEY}>
+        <Map mapId={GMAPS_ID} defaultCenter={center} defaultZoom={withLoc.length > 1 ? 8 : 13}
+          mapTypeId={mapType} style={{ width: '100%', height: '100%' }}
+          gestureHandling="cooperative" streetViewControl={false} mapTypeControl={false} fullscreenControl={false}>
+          <GeofenceLayer geofences={geofences} />
           {withLoc.map((d: any) => (
-            <AdvancedMarker key={d._id} position={{ lat: d.location.lat, lng: d.location.lng ?? d.location.lon ?? 0 }}>
-              <div style={{ width: 14, height: 14, borderRadius: '50%', background: 'hsl(var(--primary))', border: '2.5px solid white', boxShadow: '0 0 0 3px rgba(255,91,31,0.35)' }} />
-            </AdvancedMarker>
+            <DeviceMarker key={d._id} device={d} T={T} />
           ))}
         </Map>
       </APIProvider>
-    );
-  }
-
-  return empty(widget.type);
+    </div>
+  );
 }
 
-/* ══════════════════════════════════════════════════════════════════════
-   ROOT — resolves token → device share or page share
-   ══════════════════════════════════════════════════════════════════════ */
+/* ── Geofence overlay drawn imperatively ─────────────────────────────── */
+function GeofenceLayer({ geofences }: { geofences: any[] }) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!map || !geofences.length) return;
+    const win = window as any;
+    if (!win.google?.maps) return;
+
+    const shapes: any[] = [];
+    for (const gf of geofences) {
+      if (gf.type === 'polygon' && (gf.coordinates?.length ?? 0) >= 3) {
+        const poly = new win.google.maps.Polygon({
+          paths: gf.coordinates, strokeColor: gf.color, strokeOpacity: 0.9, strokeWeight: 2,
+          fillColor: gf.color, fillOpacity: 0.18, map,
+        });
+        shapes.push(poly);
+      } else if (gf.type === 'circle' && gf.center) {
+        const circle = new win.google.maps.Circle({
+          center: gf.center, radius: gf.radius ?? 100,
+          strokeColor: gf.color, strokeOpacity: 0.9, strokeWeight: 2,
+          fillColor: gf.color, fillOpacity: 0.18, map,
+        });
+        shapes.push(circle);
+      }
+    }
+    return () => shapes.forEach(s => s.setMap(null));
+  }, [map, geofences]);
+
+  return null;
+}
+
+/* ── Device marker with hover tooltip ───────────────────────────────── */
+function DeviceMarker({ device, T }: { device: any; T: Tokens }) {
+  const [hovered, setHovered] = useState(false);
+  const loc = device.location;
+  if (!loc?.lat) return null;
+  const CAT_COLORS: Record<string, string> = {
+    tracker: '#FF5B1F', environmental: '#10B981', energy: '#FACC15', water: '#3B82F6',
+    industrial: '#F97316', gateway: '#06B6D4', research: '#EC4899', telemetry: '#8B5CF6',
+    pump: '#14B8A6', mobile: '#F59E0B', fixed: '#6366F1', custom: '#8B5CF6',
+  };
+  const color = CAT_COLORS[device.category] ?? T.primary;
+
+  return (
+    <AdvancedMarker position={{ lat: loc.lat, lng: loc.lng ?? loc.lon ?? 0 }}>
+      <div
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        style={{ position: 'relative', cursor: 'pointer' }}
+      >
+        {/* Tooltip */}
+        {hovered && (
+          <div style={{
+            position: 'absolute', bottom: '100%', left: '50%', transform: 'translateX(-50%)',
+            marginBottom: 8, background: T.surface, border: `1px solid ${T.border}`,
+            padding: '8px 12px', whiteSpace: 'nowrap', boxShadow: T.shadowHover, minWidth: 140,
+          }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: T.fg, marginBottom: 2 }}>{device.name}</div>
+            <div style={{ fontSize: 10, fontFamily: T.fontMono, color: T.fgMuted }}>{device.category}</div>
+            <div style={{
+              display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 9.5, fontFamily: T.fontMono,
+              marginTop: 5, padding: '2px 7px',
+              background: device.status === 'online' ? T.good + '22' : T.border,
+              color: device.status === 'online' ? T.good : T.fgMuted,
+            }}>
+              {device.status === 'online' && <span style={{ width: 5, height: 5, borderRadius: '50%', background: T.good, animation: 'pulse 2s infinite' }} />}
+              {device.status?.toUpperCase()}
+            </div>
+          </div>
+        )}
+        {/* Dot */}
+        <div style={{
+          width: 16, height: 16, borderRadius: '50%', background: color,
+          border: '2.5px solid white', boxShadow: `0 0 0 3px ${color}44`,
+          transition: 'transform 0.15s',
+          transform: hovered ? 'scale(1.3)' : 'scale(1)',
+        }} />
+      </div>
+    </AdvancedMarker>
+  );
+}
+
+/* ── CSV download helper ─────────────────────────────────────────────── */
+function downloadCsv(filename: string, headers: string[], rows: (string | number)[]) {
+  const lines = [[...headers].map(h => `"${h}"`).join(','), ...rows].join('\n');
+  const blob = new Blob([lines], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
+
+function ExportBtn({ onClick, T }: { onClick: () => void; T: Tokens }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 5,
+        padding: '4px 10px', border: `1px solid ${T.border}`, background: 'transparent',
+        color: T.fgMuted, fontSize: 10, fontFamily: T.fontMono, letterSpacing: '0.06em',
+        cursor: 'pointer', transition: 'color 0.15s, border-color 0.15s',
+      }}
+      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = T.fg; (e.currentTarget as HTMLElement).style.borderColor = T.borderStrong; }}
+      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = T.fgMuted; (e.currentTarget as HTMLElement).style.borderColor = T.border; }}
+    >
+      <Download size={10} />CSV
+    </button>
+  );
+}
+
+/* ── Device share chart ──────────────────────────────────────────────── */
+function DeviceChart({ token, field, color, from, T }: { token: string; field: string; color: string; from: string; T: Tokens }) {
+  const { data, isLoading } = useQuery({
+    queryKey: ['share-series', token, field, from],
+    queryFn: () => publicClient.get(`/public/device/${token}/series`, { params: { field, from } }).then(r => r.data),
+    enabled: !!field,
+  });
+  const raw: any[] = data?.data ?? [];
+  const pts = raw.map((p: any) => ({ ts: new Date(p.ts).getTime(), value: typeof p.value === 'number' ? p.value : 0 }));
+
+  const exportCsv = () => {
+    const rows = raw.map(p => `"${new Date(p.ts).toISOString()}","${p.value}"`);
+    downloadCsv(`${field}-${new Date().toISOString().slice(0,10)}.csv`, ['timestamp', field], rows as any);
+  };
+
+  if (isLoading) return <div style={{ height: 260, background: T.surfaceActive, animation: 'pulse 2s infinite' }} />;
+  if (pts.length === 0) return <div style={{ height: 260, display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.fgMuted, fontFamily: T.fontMono, fontSize: 12 }}>No data</div>;
+  return (
+    <div style={{ position: 'relative' }}>
+      <div style={{ position: 'absolute', top: 8, right: 8, zIndex: 5 }}>
+        <ExportBtn onClick={exportCsv} T={T} />
+      </div>
+      <LineChart series={[{ name: field, data: pts, color }]} height={260} showArea />
+    </div>
+  );
+}
+
+/* ── Device share table ──────────────────────────────────────────────── */
+function DeviceTable({ token, field, schemaFields, from, T }: { token: string; field: string; schemaFields: any[]; from: string; T: Tokens }) {
+  const fm = schemaFields.find((f: any) => f.key === field);
+  const color = fm?.chartColor ?? T.primary;
+  const { data, isLoading } = useQuery({
+    queryKey: ['share-table', token, field, from],
+    queryFn: () => publicClient.get(`/public/device/${token}/series`, { params: { field, from, limit: 200 } }).then(r => r.data),
+    enabled: !!field,
+  });
+  const rows: any[] = data?.data ?? [];
+
+  const exportCsv = () => {
+    const csvRows = rows.map(r => `"${new Date(r.ts).toISOString()}","${r.value}"`);
+    downloadCsv(`${field}-${new Date().toISOString().slice(0,10)}.csv`, ['timestamp', field], csvRows as any);
+  };
+
+  if (isLoading) return <div style={{ height: 260, background: T.surfaceActive, animation: 'pulse 2s infinite' }} />;
+  if (rows.length === 0) return <div style={{ height: 260, display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.fgMuted, fontFamily: T.fontMono, fontSize: 12 }}>No data in range</div>;
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '8px 14px 0' }}>
+        <ExportBtn onClick={exportCsv} T={T} />
+      </div>
+      <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 300 }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: T.fontMono, fontSize: 11 }}>
+          <thead style={{ position: 'sticky', top: 0, background: T.surfaceActive, zIndex: 1 }}>
+            <tr>
+              <th style={{ padding: '9px 14px', textAlign: 'left', fontSize: 9.5, letterSpacing: '0.1em', textTransform: 'uppercase', color: T.fgMuted, borderBottom: `1px solid ${T.border}`, fontWeight: 600 }}>Timestamp</th>
+              <th style={{ padding: '9px 14px', textAlign: 'right', fontSize: 9.5, letterSpacing: '0.1em', textTransform: 'uppercase', color, borderBottom: `1px solid ${T.border}`, fontWeight: 600 }}>
+                {field.replace(/_/g, ' ')}{fm?.unit ? ` (${fm.unit})` : ''}
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row: any, i: number) => (
+              <tr key={i} style={{ background: i % 2 === 0 ? 'transparent' : T.surfaceHover }}>
+                <td style={{ padding: '8px 14px', color: T.fgMuted, whiteSpace: 'nowrap', borderBottom: `1px solid ${T.border}` }}>{new Date(row.ts).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' })}</td>
+                <td style={{ padding: '8px 14px', textAlign: 'right', color, borderBottom: `1px solid ${T.border}`, fontVariantNumeric: 'tabular-nums' }}>{typeof row.value === 'number' ? row.value.toFixed(4) : String(row.value ?? '—')}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+/* ── Section heading ─────────────────────────────────────────────────── */
+function SectionHeading({ label, T }: { label: string; T: Tokens }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+      <span style={{ fontSize: 9.5, fontFamily: T.fontMono, letterSpacing: '0.14em', textTransform: 'uppercase', color: T.fgMuted }}>{label}</span>
+      <div style={{ flex: 1, height: 1, background: T.border }} />
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   ROOT — resolves token, wraps in theme provider
+   ═══════════════════════════════════════════════════════════════════════ */
 export function ShareViewPage() {
   const { token } = useParams<{ token: string }>();
 
   const { data: deviceData, isLoading: loadingDevice, isError: deviceErr } = useQuery({
     queryKey: ['share-device', token],
     queryFn: () => publicClient.get(`/public/device/${token}`).then(r => r.data),
-    enabled: !!token,
-    retry: false,
+    enabled: !!token, retry: false,
   });
 
   const { data: pageData, isLoading: loadingPage } = useQuery({
     queryKey: ['share-page', token],
     queryFn: () => publicClient.get(`/public/page/${token}`).then(r => r.data),
-    enabled: !!token && deviceErr,
-    retry: false,
+    enabled: !!token && deviceErr, retry: false,
   });
 
   const isLoading = loadingDevice || (deviceErr && loadingPage);
 
   if (isLoading) {
     return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh' }}>
-        <div className="skeleton" style={{ width: 320, height: 80 }} />
-      </div>
+      <ThemeProvider>
+        <LoadingScreen />
+      </ThemeProvider>
     );
   }
 
-  if (deviceData?.device) {
-    return <DeviceShareView token={token!} data={deviceData} />;
-  }
-
-  if (pageData?.page) {
-    return <PageShareView pageData={pageData} />;
-  }
-
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-      <ShareTopBar />
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
-        <div style={{ fontFamily: 'var(--font-display)', fontSize: 32, letterSpacing: '-0.02em' }}>Link expired</div>
-        <p className="dim" style={{ fontSize: 14 }}>This share link has expired or doesn't exist.</p>
+    <ThemeProvider>
+      {deviceData?.device
+        ? <DeviceShareView token={token!} data={deviceData} />
+        : pageData?.page
+          ? <PageShareView pageData={pageData} />
+          : <NotFoundScreen />}
+    </ThemeProvider>
+  );
+}
+
+function LoadingScreen() {
+  const { T } = useT();
+  return (
+    <div style={{ minHeight: '100vh', background: T.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16 }}>
+      <div style={{ width: 36, height: 36, background: T.primary, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, fontFamily: T.fontDisplay, color: '#fff', fontWeight: 700 }}>O</div>
+      <div style={{ fontSize: 11, fontFamily: T.fontMono, letterSpacing: '0.14em', color: T.fgMuted, animation: 'pulse 2s infinite' }}>LOADING…</div>
+      <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }`}</style>
+    </div>
+  );
+}
+
+function NotFoundScreen() {
+  const { T } = useT();
+  return (
+    <div style={{ minHeight: '100vh', background: T.bg, color: T.fg, display: 'flex', flexDirection: 'column' }}>
+      <TopNav />
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, padding: 32 }}>
+        <div style={{ width: 1, height: 60, background: T.border, marginBottom: 8 }} />
+        <div style={{ fontFamily: T.fontDisplay, fontSize: 'clamp(28px,4vw,48px)', letterSpacing: '-0.03em', color: T.fg }}>Link expired</div>
+        <p style={{ fontSize: 14, color: T.fgMuted, maxWidth: 380, textAlign: 'center', lineHeight: 1.6 }}>
+          This share link has expired or doesn't exist. Ask the sender for a fresh link.
+        </p>
+        <a href="https://orion.vortan.io" style={{ fontSize: 12, fontFamily: T.fontMono, color: T.primary, textDecoration: 'none', letterSpacing: '0.08em', marginTop: 8 }}>
+          EXPLORE ORION →
+        </a>
       </div>
+      <PageFooter />
     </div>
   );
 }

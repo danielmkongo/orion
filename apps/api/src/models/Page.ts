@@ -27,6 +27,7 @@ export interface IPage extends Document {
   description?: string;
   widgets: IWidget[];
   shareToken?: string;
+  allowExports: boolean;
   createdBy: Schema.Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
@@ -40,7 +41,7 @@ const PositionSchema = new Schema(
 const WidgetSchema = new Schema<IWidget>(
   {
     id:        { type: String, required: true },
-    type:      { type: String, enum: ['kpi_card','line_chart','bar_chart','gauge','map','data_table','status_grid'], required: true },
+    type:      { type: String, enum: ['kpi_card','line_chart','bar_chart','gauge','map','data_table','status_grid','control_panel'], required: true },
     title:     { type: String, required: true },
     deviceId:  String,
     deviceIds: [String],
@@ -58,8 +59,9 @@ const PageSchema = new Schema<IPage>(
     name:        { type: String, required: true },
     description: String,
     widgets:     { type: [WidgetSchema], default: [] },
-    shareToken:  { type: String, index: true, sparse: true },
-    createdBy:   { type: Schema.Types.ObjectId, required: true, ref: 'User' },
+    shareToken:    { type: String, index: true, sparse: true },
+    allowExports:  { type: Boolean, default: false },
+    createdBy:     { type: Schema.Types.ObjectId, required: true, ref: 'User' },
   },
   { timestamps: true }
 );

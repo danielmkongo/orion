@@ -7,7 +7,7 @@ import { APIProvider, Map, AdvancedMarker } from '@vis.gl/react-google-maps';
 import apiClient from '@/api/client';
 import toast from 'react-hot-toast';
 import { copyText } from '@/lib/utils';
-import { ArrowLeft, Plus, Globe, Lock, Pencil, Trash2, GripVertical, X, Check, Copy, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Plus, Globe, Lock, Pencil, Trash2, GripVertical, X, Check, Copy, ExternalLink, Download } from 'lucide-react';
 import { LineChart, BarChart } from '@/components/charts/Charts';
 import { CommandWidget } from '@/components/devices/CommandWidget';
 import type { DeviceCommand } from '@/components/devices/CommandWidget';
@@ -391,6 +391,15 @@ export function PageBuilderPage() {
   const pageData = page as any;
   const widgets: Widget[] = pageData?.widgets ?? [];
   const publishedToken: string | null = pageData?.shareToken ?? null;
+  const allowExports: boolean = pageData?.allowExports ?? false;
+
+  const toggleExports = async () => {
+    try {
+      const res = await apiClient.patch(`/pages/${id}`, { allowExports: !allowExports });
+      queryClient.setQueryData(['page', id], (old: any) => ({ ...old, allowExports: res.data.allowExports }));
+      toast.success(!allowExports ? 'Exports enabled for viewers' : 'Exports disabled');
+    } catch { toast.error('Failed to update'); }
+  };
 
   const debouncedPatch = useCallback((newWidgets: Widget[]) => {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
@@ -486,7 +495,15 @@ export function PageBuilderPage() {
         <h1 style={{ flex: 1, fontFamily: 'var(--font-display)', fontSize: 26, margin: 0, lineHeight: 1 }}>
           {pageData.name} {publishedToken && <span className="eyebrow" style={{ fontSize: 10, color: 'hsl(var(--good))', marginLeft: 8 }}>● LIVE</span>}
         </h1>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          <button
+            onClick={toggleExports}
+            className="btn btn-sm btn-ghost"
+            title={allowExports ? 'Viewers can download data — click to disable' : 'Viewers cannot download — click to enable'}
+            style={{ gap: 6, color: allowExports ? 'hsl(var(--good))' : 'hsl(var(--muted-fg))' }}
+          >
+            <Download size={13} /> {allowExports ? 'Exports on' : 'Exports off'}
+          </button>
           <button className="btn btn-primary btn-sm" style={{ gap: 6 }} onClick={() => setConfigModal({ open: true })}>
             <Plus size={13} /> Add widget
           </button>
