@@ -9,6 +9,8 @@ export interface IFirmware extends Document {
   status: 'active' | 'deprecated' | 'archived' | 'ready';
   changelog?: string;
   devices: number;
+  fileUrl?: string;
+  checksum?: string;
   uploadedAt: Date;
   createdAt: Date;
   updatedAt: Date;
@@ -23,6 +25,8 @@ const FirmwareSchema = new Schema<IFirmware>({
   status:     { type: String, enum: ['active', 'deprecated', 'archived', 'ready'], default: 'ready' },
   changelog:  { type: String },
   devices:    { type: Number, default: 0 },
+  fileUrl:    { type: String },
+  checksum:   { type: String },
   uploadedAt: { type: Date, default: Date.now },
 }, { timestamps: true });
 

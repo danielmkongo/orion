@@ -59,7 +59,9 @@ function UploadModal({ onClose }: { onClose: () => void }) {
   const [notes, setNotes]     = useState('');
 
   const uploadMut = useMutation({
-    mutationFn: (body: object) => apiClient.post('/firmware', body).then(r => r.data),
+    mutationFn: (payload: FormData | object) => apiClient.post('/firmware', payload, {
+      headers: payload instanceof FormData ? { 'Content-Type': undefined } : {},
+    }).then(r => r.data),
     onSuccess: () => {
       toast.success('Firmware uploaded');
       queryClient.invalidateQueries({ queryKey: ['firmware'] });
@@ -70,10 +72,19 @@ function UploadModal({ onClose }: { onClose: () => void }) {
 
   const submit = () => {
     if (!name || !version) { toast.error('Fill all required fields'); return; }
-    const size = file
-      ? file.size > 1_000_000 ? `${(file.size / 1_048_576).toFixed(1)} MB` : `${Math.round(file.size / 1024)} KB`
-      : '0 KB';
-    uploadMut.mutate({ name, version, category, size, status: 'ready', changelog: notes, devices: 0, uploadedAt: new Date().toISOString() });
+    if (file) {
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('name', name);
+      fd.append('version', version);
+      fd.append('category', category);
+      fd.append('changelog', notes);
+      fd.append('status', 'ready');
+      uploadMut.mutate(fd);
+    } else {
+      const size = '0 KB';
+      uploadMut.mutate({ name, version, category, size, status: 'ready', changelog: notes, devices: 0, uploadedAt: new Date().toISOString() });
+    }
   };
 
   return (

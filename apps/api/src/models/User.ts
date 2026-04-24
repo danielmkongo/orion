@@ -1,6 +1,14 @@
 import { Schema, model, Document } from 'mongoose';
 import type { UserRole } from '@orion/shared';
 
+export interface INotifPrefs {
+  critical: boolean;
+  offline: boolean;
+  rules: boolean;
+  ota: boolean;
+  commands: boolean;
+}
+
 export interface IUser extends Document {
   email: string;
   passwordHash: string;
@@ -11,6 +19,7 @@ export interface IUser extends Document {
   lastLoginAt?: Date;
   isActive: boolean;
   refreshTokenHash?: string;
+  notifPrefs: INotifPrefs;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -30,6 +39,13 @@ const UserSchema = new Schema<IUser>(
     lastLoginAt: Date,
     isActive: { type: Boolean, default: true },
     refreshTokenHash: String,
+    notifPrefs: {
+      critical: { type: Boolean, default: true },
+      offline:  { type: Boolean, default: true },
+      rules:    { type: Boolean, default: true },
+      ota:      { type: Boolean, default: false },
+      commands: { type: Boolean, default: false },
+    },
   },
   { timestamps: true }
 );

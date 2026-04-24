@@ -145,6 +145,12 @@ class MqttService {
     await Command.findByIdAndUpdate(command._id, { $set: { status: 'sent', sentAt: new Date() } });
   }
 
+  publish(topic: string, payload: string) {
+    if (this.client?.connected) {
+      this.client.publish(topic, payload, { qos: 0 });
+    }
+  }
+
   isConnected() {
     return this.client?.connected ?? false;
   }

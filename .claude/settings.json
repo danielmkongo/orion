@@ -29,7 +29,10 @@
       "Bash(where graphify *)",
       "Bash(pnpm exec *)",
       "Bash(pnpm --filter web add @dnd-kit/core @dnd-kit/sortable @dnd-kit/utilities)",
-      "Bash(pnpm --filter web tsc --noEmit)"
+      "Bash(pnpm --filter web tsc --noEmit)",
+      "Bash(python -m graphify update .)",
+      "Bash(pnpm --filter @orion/api tsc --noEmit)",
+      "Bash(pnpm --filter @orion/web tsc --noEmit)"
     ],
     "additionalDirectories": [
       "C:\\Users\\danie\\Downloads\\orion marketing"

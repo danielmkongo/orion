@@ -24,6 +24,10 @@ import { orgRoutes } from './routes/org.routes.js';
 import { geofenceRoutes } from './routes/geofence.routes.js';
 import { shareRoutes } from './routes/share.routes.js';
 import { pageRoutes } from './routes/page.routes.js';
+import { exportRoutes } from './routes/export.routes.js';
+import multipart from '@fastify/multipart';
+import staticPlugin from '@fastify/static';
+import path from 'path';
 
 const app = Fastify({
   logger: {
@@ -34,6 +38,15 @@ const app = Fastify({
 });
 
 async function bootstrap() {
+  // Multipart (OTA uploads)
+  await app.register(multipart, { limits: { fileSize: 50 * 1024 * 1024 } });
+
+  // Serve uploaded firmware files
+  await app.register(staticPlugin, {
+    root: path.join(process.cwd(), 'uploads'),
+    prefix: '/uploads/',
+  });
+
   // CORS
   await app.register(cors, {
     origin: [config.cors.origin, config.frontendUrl],
@@ -63,6 +76,7 @@ async function bootstrap() {
     await api.register(geofenceRoutes);
     await api.register(shareRoutes);
     await api.register(pageRoutes);
+    await api.register(exportRoutes);
   }, { prefix });
 
   // Health check

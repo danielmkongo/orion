@@ -2,8 +2,12 @@ import { useState, useEffect } from 'react';
 import { useAuthStore } from '@/store/auth.store';
 import { useUIStore } from '@/store/ui.store';
 import { authApi, orgApi } from '@/api/auth';
+import apiClient from '@/api/client';
 import type { Organization } from '@orion/shared';
-import { Check, Eye, EyeOff } from 'lucide-react';
+import { Check, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+
+const API_BASE = import.meta.env.VITE_API_URL ?? '';
 
 function Toggle({ enabled, onChange }: { enabled: boolean; onChange: (v: boolean) => void }) {
   return (
@@ -38,6 +42,7 @@ const SECTIONS = [
 
 export function SettingsPage() {
   const { user, setUser } = useAuthStore();
+  const navigate = useNavigate();
   const {
     theme, setTheme,
     sidebarCollapsed, setSidebarCollapsed,
@@ -47,6 +52,8 @@ export function SettingsPage() {
   } = useUIStore();
 
   const [activeSection, setActiveSection] = useState('appearance');
+  const [deleteConfirmName, setDeleteConfirmName] = useState('');
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   // ── Profile ──
   const [profileName, setProfileName] = useState(user?.name ?? '');
@@ -275,7 +282,10 @@ export function SettingsPage() {
                     <p style={{ fontSize: 13 }}>{label}</p>
                     <p className="dim" style={{ fontSize: 12, marginTop: 2 }}>{desc}</p>
                   </div>
-                  <Toggle enabled={notifPrefs[key]} onChange={v => setNotifPref(key, v)} />
+                  <Toggle enabled={notifPrefs[key]} onChange={v => {
+                    setNotifPref(key, v);
+                    apiClient.patch('/users/me/notifications', { [key]: v }).catch(() => {});
+                  }} />
                 </div>
               ))}
             </div>
@@ -451,17 +461,54 @@ export function SettingsPage() {
                 <div className="eyebrow" style={{ marginBottom: 12 }}>Export & Delete</div>
                 <div className="panel" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', marginBottom: 8 }}>
                   <div>
-                    <p style={{ fontSize: 13, fontWeight: 500 }}>Export all data</p>
-                    <p className="dim" style={{ fontSize: 12, marginTop: 2 }}>Download all telemetry and device data as CSV</p>
+                    <p style={{ fontSize: 13, fontWeight: 500 }}>Export devices</p>
+                    <p className="dim" style={{ fontSize: 12, marginTop: 2 }}>Download all devices as CSV</p>
                   </div>
-                  <span className="tag" style={{ fontSize: 10 }}>Soon</span>
+                  <button className="btn" style={{ fontSize: 12 }} onClick={() => window.open(`${API_BASE}/api/v1/export/devices-csv`)}>
+                    Download CSV
+                  </button>
                 </div>
-                <div className="panel" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px' }}>
+                <div className="panel" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', marginBottom: 8 }}>
                   <div>
-                    <p style={{ fontSize: 13, fontWeight: 500, color: 'hsl(var(--destructive))' }}>Delete organization</p>
-                    <p className="dim" style={{ fontSize: 12, marginTop: 2 }}>Permanently remove all data — this cannot be undone</p>
+                    <p style={{ fontSize: 13, fontWeight: 500 }}>Export telemetry</p>
+                    <p className="dim" style={{ fontSize: 12, marginTop: 2 }}>Download all telemetry data as CSV</p>
                   </div>
-                  <span className="tag" style={{ fontSize: 10 }}>Soon</span>
+                  <button className="btn" style={{ fontSize: 12 }} onClick={() => window.open(`${API_BASE}/api/v1/export/telemetry-csv`)}>
+                    Download CSV
+                  </button>
+                </div>
+                <div className="panel" style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: '14px 16px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div>
+                      <p style={{ fontSize: 13, fontWeight: 500, color: 'hsl(var(--destructive))' }}>Delete organization</p>
+                      <p className="dim" style={{ fontSize: 12, marginTop: 2 }}>Permanently removes all devices, telemetry, and users — cannot be undone</p>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <input
+                      className="input"
+                      style={{ flex: 1 }}
+                      placeholder={`Type "${org?.name ?? 'org name'}" to confirm`}
+                      value={deleteConfirmName}
+                      onChange={e => setDeleteConfirmName(e.target.value)}
+                    />
+                    <button
+                      className="btn"
+                      style={{ background: 'hsl(var(--destructive))', color: '#fff', fontSize: 12, whiteSpace: 'nowrap' }}
+                      disabled={deleteConfirmName !== org?.name || deleteLoading}
+                      onClick={async () => {
+                        setDeleteLoading(true);
+                        try {
+                          await apiClient.delete('/org');
+                          navigate('/login');
+                        } catch {
+                          setDeleteLoading(false);
+                        }
+                      }}
+                    >
+                      {deleteLoading ? <Loader2 size={14} className="animate-spin" /> : 'Delete forever'}
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>

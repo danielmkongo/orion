@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { Dashboard } from '../models/Dashboard.js';
+import { Telemetry } from '../models/Telemetry.js';
 import { requirePermission } from '../middleware/auth.js';
 import { nanoid } from 'nanoid';
 
@@ -48,5 +49,38 @@ export async function dashboardRoutes(app: FastifyInstance) {
     const { id } = req.params as any;
     await Dashboard.deleteOne({ _id: id, orgId: req.user.orgId });
     return reply.send({ ok: true });
+  });
+
+  app.get('/dashboard/telemetry-summary', { preHandler: requirePermission('dashboards:read') }, async (req, reply) => {
+    const { from, to } = req.query as any;
+    const match: Record<string, unknown> = { orgId: req.user.orgId };
+    if (from || to) {
+      match.timestamp = {};
+      if (from) (match.timestamp as any).$gte = new Date(from);
+      if (to)   (match.timestamp as any).$lte = new Date(to);
+    }
+
+    const results = await Telemetry.aggregate([
+      { $match: match },
+      { $sort: { timestamp: -1 } },
+      {
+        $group: {
+          _id: '$deviceId',
+          pointCount: { $sum: 1 },
+          lastSeen: { $max: '$timestamp' },
+          latestFields: { $first: '$fields' },
+        },
+      },
+      { $limit: 100 },
+    ]);
+
+    return reply.send({
+      data: results.map(r => ({
+        deviceId: r._id,
+        pointCount: r.pointCount,
+        lastSeen: r.lastSeen,
+        fields: r.latestFields ?? {},
+      })),
+    });
   });
 }

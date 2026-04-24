@@ -9,7 +9,7 @@ import {
   Zap, Plus, Trash2, Bell, Terminal, Globe,
   Mail, MessageSquare, X, Check, ChevronLeft, ChevronRight,
   Loader2, AlertCircle, Clock, Cpu, Activity,
-  MapPin, Circle, Pentagon, RotateCcw, Search,
+  MapPin, Circle, Pentagon, RotateCcw, Search, Radio,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -39,8 +39,9 @@ const ACTION_TYPES = [
   { value: 'email',        Icon: Mail,          label: 'Email',        desc: 'Send an email notification'   },
   { value: 'notification', Icon: Bell,          label: 'Notification', desc: 'Push notification'            },
   { value: 'sms',          Icon: MessageSquare, label: 'SMS',          desc: 'Send a text message'          },
-  { value: 'command',      Icon: Terminal,      label: 'Command',      desc: 'Execute a device command'     },
-  { value: 'webhook',      Icon: Globe,         label: 'Webhook',      desc: 'POST to an external URL'      },
+  { value: 'command',       Icon: Terminal,      label: 'Command',      desc: 'Execute a device command'     },
+  { value: 'webhook',       Icon: Globe,         label: 'Webhook',      desc: 'POST to an external URL'      },
+  { value: 'mqtt_publish',  Icon: Radio,         label: 'MQTT Publish', desc: 'Publish to an MQTT topic'     },
 ];
 
 const PRIORITY_OPTIONS = ['low', 'medium', 'high', 'critical'] as const;
@@ -551,6 +552,7 @@ function CreateRuleModal({ onClose }: { onClose: () => void }) {
     severity: 'warning', title: '', message: '',
     email: '', subject: '', body: '',
     phone: '', smsMessage: '',
+    mqttTopic: '', mqttPayload: '',
     commandDeviceId: '', commandName: '', commandPayload: '{}',
     webhookUrl: '', webhookMethod: 'POST', webhookBody: '',
   });
@@ -606,8 +608,9 @@ function CreateRuleModal({ onClose }: { onClose: () => void }) {
       case 'email':  return { type: 'email',  config: { to: actionConfig.email, subject: actionConfig.subject, body: actionConfig.body } };
       case 'sms':    return { type: 'sms',    config: { to: actionConfig.phone, message: actionConfig.smsMessage } };
       case 'command':return { type: 'command',config: { deviceId: actionConfig.commandDeviceId, name: actionConfig.commandName, payload: actionConfig.commandPayload } };
-      case 'webhook':return { type: 'webhook',config: { url: actionConfig.webhookUrl, method: actionConfig.webhookMethod, body: actionConfig.webhookBody } };
-      default:       return { type: actionType, config: { severity: actionConfig.severity, title: actionConfig.title } };
+      case 'webhook':      return { type: 'webhook',      config: { url: actionConfig.webhookUrl, method: actionConfig.webhookMethod, body: actionConfig.webhookBody } };
+      case 'mqtt_publish': return { type: 'mqtt_publish', config: { topic: actionConfig.mqttTopic, payload: actionConfig.mqttPayload } };
+      default:             return { type: actionType, config: { severity: actionConfig.severity, title: actionConfig.title } };
     }
   };
 
@@ -937,6 +940,22 @@ function CreateRuleModal({ onClose }: { onClose: () => void }) {
                       <label className="block text-[12px] font-medium text-foreground mb-1.5">Body Template (JSON)</label>
                       <textarea value={actionConfig.webhookBody} onChange={e => updAction('webhookBody', e.target.value)} className="textarea font-mono text-[12px]" rows={4}
                         placeholder={'{"text": "Alert: {{rule.name}} fired for {{device.name}}", "value": "{{value}}"}'} />
+                    </div>
+                  </>
+                )}
+
+                {actionType === 'mqtt_publish' && (
+                  <>
+                    <div>
+                      <label className="block text-[12px] font-medium text-foreground mb-1.5">
+                        <Radio size={12} className="inline mr-1" />MQTT Topic
+                      </label>
+                      <input value={actionConfig.mqttTopic} onChange={e => updAction('mqttTopic', e.target.value)} className="input font-mono" placeholder="devices/{{device.id}}/alerts" />
+                    </div>
+                    <div>
+                      <label className="block text-[12px] font-medium text-foreground mb-1.5">Payload Template</label>
+                      <textarea value={actionConfig.mqttPayload} onChange={e => updAction('mqttPayload', e.target.value)} className="textarea font-mono text-[12px]" rows={3}
+                        placeholder={'{"event":"alert","device":"{{device.name}}","value":"{{value}}"}'} />
                     </div>
                   </>
                 )}

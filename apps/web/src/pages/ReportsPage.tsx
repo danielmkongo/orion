@@ -3,8 +3,14 @@ import { useQuery } from '@tanstack/react-query';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Download, Plus, X, Printer, Trash2 } from 'lucide-react';
 import { devicesApi } from '@/api/devices';
+import apiClient from '@/api/client';
 import { downloadXLSX } from '@/lib/utils';
 import toast from 'react-hot-toast';
+
+function rangeFrom(range: string): string {
+  const ms: Record<string, number> = { '24h': 86_400_000, '7d': 7 * 86_400_000, '30d': 30 * 86_400_000, '90d': 90 * 86_400_000 };
+  return new Date(Date.now() - (ms[range] ?? 7 * 86_400_000)).toISOString();
+}
 
 interface Device {
   _id: string;
@@ -48,6 +54,19 @@ export function ReportsPage() {
   });
 
   const devices = (data?.devices ?? []) as unknown as Device[];
+
+  const rangeFromDate = rangeFrom(range);
+  const rangeTo = new Date().toISOString();
+
+  const { data: telSummary } = useQuery({
+    queryKey: ['telemetry', 'summary', range],
+    queryFn: () => apiClient.get('/dashboard/telemetry-summary', { params: { from: rangeFromDate, to: rangeTo } }).then(r => r.data),
+    staleTime: 60_000,
+    enabled: devices.length > 0,
+  });
+  const summaryRows = ((telSummary?.data ?? []) as Array<{ deviceId: string; pointCount: number; lastSeen: string }>);
+  const totalPoints = summaryRows.reduce((s, r) => s + r.pointCount, 0);
+  const activeDevices = summaryRows.filter(r => r.pointCount > 0).length;
 
   const total    = devices.length;
   const online   = devices.filter(d => d.status === 'online').length;
@@ -296,7 +315,7 @@ export function ReportsPage() {
             <span className="eyebrow">Intelligence · Operational reports</span>
           </div>
           <h1><em>Reports</em>.</h1>
-          <p className="lede">Scheduled and ad-hoc reports across your entire Orion platform. Export to PDF or CSV, or schedule an email digest.</p>
+          <p className="lede">Scheduled and ad-hoc reports across your entire Orion platform. Export to PDF or CSV.</p>
         </div>
         <div style={{ gridColumn: 3, display: 'flex', alignItems: 'flex-end', gap: '8px', paddingBottom: '20px' }}>
           <div className="seg">
@@ -351,21 +370,42 @@ export function ReportsPage() {
           ) : (
             <>
               <p className="dim" style={{ fontSize: '13px', maxWidth: '48ch', marginBottom: '16px' }}>
-                Online devices vs total over time. Based on current snapshot — historical series requires telemetry ingestion.
+                Device activity over the selected range ({range.toUpperCase()}).
               </p>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 24 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 12, marginBottom: 24 }}>
                 {[
-                  { label: 'Online',  value: online,              color: '#0F7A3D' },
-                  { label: 'Idle',    value: devices.filter(d => d.status === 'idle').length,    color: '#B45309' },
-                  { label: 'Offline', value: devices.filter(d => d.status === 'offline').length, color: '#5E5C56' },
+                  { label: 'Online now',        value: online,         color: '#0F7A3D' },
+                  { label: 'Active in range',   value: activeDevices,  color: '#FF5B1F' },
+                  { label: 'Telemetry points',  value: totalPoints,    color: '#3B82F6' },
+                  { label: 'Idle / Offline',    value: devices.filter(d => d.status === 'idle' || d.status === 'offline').length, color: '#5E5C56' },
                 ].map(({ label, value, color }) => (
                   <div key={label} className="panel" style={{ padding: '16px 20px' }}>
                     <div className="eyebrow" style={{ marginBottom: 8 }}>{label}</div>
-                    <div style={{ fontFamily: 'var(--font-display)', fontSize: 36, lineHeight: 1, color }}>{value}</div>
-                    <div className="dim" style={{ fontSize: 11, marginTop: 4 }}>{total > 0 ? Math.round((value / total) * 100) : 0}% of fleet</div>
+                    <div style={{ fontFamily: 'var(--font-display)', fontSize: 36, lineHeight: 1, color }}>{value.toLocaleString()}</div>
+                    {label === 'Online now' && <div className="dim" style={{ fontSize: 11, marginTop: 4 }}>{total > 0 ? Math.round((value / total) * 100) : 0}% of fleet</div>}
                   </div>
                 ))}
               </div>
+              {summaryRows.length > 0 && (
+                <div style={{ marginTop: 16 }}>
+                  <div className="eyebrow" style={{ marginBottom: 10 }}>Top devices by telemetry volume</div>
+                  {summaryRows.slice().sort((a, b) => b.pointCount - a.pointCount).slice(0, 6).map(row => {
+                    const dev = devices.find(d => String((d as any)._id) === String(row.deviceId));
+                    const pct = totalPoints > 0 ? Math.round((row.pointCount / totalPoints) * 100) : 0;
+                    return (
+                      <div key={String(row.deviceId)} style={{ padding: '8px 0', borderBottom: '1px solid hsl(var(--border))' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                          <span style={{ fontSize: 13 }}>{dev?.name ?? String(row.deviceId).slice(-6)}</span>
+                          <span className="mono faint" style={{ fontSize: 11 }}>{row.pointCount.toLocaleString()} pts · {pct}%</span>
+                        </div>
+                        <div style={{ height: 4, background: 'hsl(var(--surface-raised))', position: 'relative' }}>
+                          <div style={{ position: 'absolute', inset: 0, width: `${pct}%`, background: '#FF5B1F', transition: 'width 0.6s ease' }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </>
           )}
         </div>

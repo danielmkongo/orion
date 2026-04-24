@@ -1,6 +1,7 @@
 import { Telemetry } from '../models/Telemetry.js';
 import { Device } from '../models/Device.js';
 import type { TelemetryPoint, TelemetryQuery } from '@orion/shared';
+import { ruleEngineService } from './rule-engine.service.js';
 
 const LAT_KEYS = new Set(['lat', 'latitude', 'Lat', 'Latitude']);
 const LNG_KEYS = new Set(['lng', 'lon', 'long', 'longitude', 'Lng', 'Lon', 'Long', 'Longitude']);
@@ -58,7 +59,15 @@ export class TelemetryService {
       updatePayload.location = { ...location, timestamp: new Date(point.timestamp) };
     }
 
-    await Device.updateOne({ _id: deviceId }, { $set: updatePayload });
+    const device = await Device.findOneAndUpdate(
+      { _id: deviceId },
+      { $set: updatePayload },
+      { new: true }
+    ).lean() as any;
+
+    if (device) {
+      ruleEngineService.evaluate(orgId, deviceId, point.fields, device).catch(() => {});
+    }
   }
 
   async query(orgId: string, q: TelemetryQuery) {

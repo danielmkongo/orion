@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueries } from '@tanstack/react-query';
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowRight, CheckCircle2 } from 'lucide-react';
@@ -90,11 +90,40 @@ export function DashboardPage() {
     value: typeof p.value === 'number' ? p.value : 0,
   }));
 
-  function sparkData(d: any): number[] {
-    return Array.from({ length: 12 }, (_, i) =>
-      30 + Math.sin(i + (d.name?.charCodeAt(0) ?? 0)) * 8 + Math.cos(i / 2) * 4
-    );
-  }
+  const { data: telSummary } = useQuery({
+    queryKey: ['telemetry', 'summary', from],
+    queryFn: () => apiClient.get('/dashboard/telemetry-summary', { params: { from, to } }).then(r => r.data),
+    enabled: devices.length > 0,
+    staleTime: 60_000,
+  });
+  const summaryMap = new Map<string, Record<string, unknown>>(
+    ((telSummary?.data ?? []) as Array<{ deviceId: string; fields: Record<string, unknown> }>)
+      .map(s => [String(s.deviceId), s.fields])
+  );
+
+  const sparkDevices = (devices as any[]).slice(0, 8);
+  const sparkQueries = useQueries({
+    queries: sparkDevices.map(d => {
+      const id = String(d._id ?? d.id);
+      const fields = summaryMap.get(id) ?? {};
+      const firstField = Object.keys(fields).find(k => typeof fields[k] === 'number');
+      return {
+        queryKey: ['spark', id, firstField ?? ''],
+        queryFn: () => telemetryApi.series(id, firstField!, from, to, 20),
+        enabled: !!id && !!firstField,
+        staleTime: 60_000,
+      };
+    }),
+  });
+
+  const sparkMap = new Map<string, number[]>();
+  sparkDevices.forEach((d, i) => {
+    const id = String(d._id ?? d.id);
+    const pts = (sparkQueries[i]?.data?.data ?? []) as Array<{ value: unknown }>;
+    if (pts.length > 0) {
+      sparkMap.set(id, pts.map(p => typeof p.value === 'number' ? p.value : 0));
+    }
+  });
 
   useEffect(() => {
     const unsub = on<any>('telemetry.update', (e) => {
@@ -317,7 +346,7 @@ export function DashboardPage() {
               {(devices as any[]).slice(0, 8).map((d, i) => {
                 const id = d._id ?? d.id;
                 const isLive = liveIds.has(id);
-                const sp = sparkData(d);
+                const sp = sparkMap.get(id) ?? [];
                 const { Icon: DIcon, color: dc } = getCategoryIconInfo(d.category);
                 return (
                   <tr key={id} style={{ cursor: 'pointer' }} onClick={() => navigate(`/devices/${id}`)}>
