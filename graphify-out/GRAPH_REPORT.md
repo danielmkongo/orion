@@ -1,12 +1,12 @@
 # Graph Report - C:\Users\danie\Vortan's IoT platform  (2026-04-24)
 
 ## Corpus Check
-- 110 files · ~110,969 words
+- 111 files · ~115,647 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 362 nodes · 502 edges · 60 communities detected
-- Extraction: 87% EXTRACTED · 13% INFERRED · 0% AMBIGUOUS · INFERRED: 65 edges (avg confidence: 0.8)
+- 367 nodes · 524 edges · 58 communities detected
+- Extraction: 87% EXTRACTED · 13% INFERRED · 0% AMBIGUOUS · INFERRED: 66 edges (avg confidence: 0.8)
 - Token cost: 0 input · 0 output
 
 ## Community Hubs (Navigation)
@@ -68,8 +68,6 @@
 - [[_COMMUNITY_Community 55|Community 55]]
 - [[_COMMUNITY_Community 56|Community 56]]
 - [[_COMMUNITY_Community 57|Community 57]]
-- [[_COMMUNITY_Community 58|Community 58]]
-- [[_COMMUNITY_Community 59|Community 59]]
 
 ## God Nodes (most connected - your core abstractions)
 1. `DeviceService` - 11 edges
@@ -84,34 +82,34 @@
 10. `ErrorBoundary` - 5 edges
 
 ## Surprising Connections (you probably didn't know these)
+- `requirePermission()` --calls--> `exportRoutes()`  [INFERRED]
+  C:\Users\danie\Vortan's IoT platform\apps\api\src\middleware\auth.ts → C:\Users\danie\Vortan's IoT platform\apps\api\src\routes\export.routes.ts
 - `bootstrap()` --calls--> `registerDeviceWs()`  [INFERRED]
   C:\Users\danie\Vortan's IoT platform\apps\api\src\index.ts → C:\Users\danie\Vortan's IoT platform\apps\api\src\services\device-ws.service.ts
 - `bootstrap()` --calls--> `connectMongoDB()`  [INFERRED]
   C:\Users\danie\Vortan's IoT platform\apps\api\src\index.ts → C:\Users\danie\Vortan's IoT platform\apps\api\src\db\mongoose.ts
 - `bootstrap()` --calls--> `startTcpServer()`  [INFERRED]
   C:\Users\danie\Vortan's IoT platform\apps\api\src\index.ts → C:\Users\danie\Vortan's IoT platform\apps\api\src\services\tcp.service.ts
-- `bootstrap()` --calls--> `startCoapServer()`  [INFERRED]
-  C:\Users\danie\Vortan's IoT platform\apps\api\src\index.ts → C:\Users\danie\Vortan's IoT platform\apps\api\src\services\coap.service.ts
-- `requirePermission()` --calls--> `alertRoutes()`  [INFERRED]
-  C:\Users\danie\Vortan's IoT platform\apps\api\src\middleware\auth.ts → C:\Users\danie\Vortan's IoT platform\apps\api\src\routes\alert.routes.ts
+- `bootstrap()` --calls--> `startUdpServer()`  [INFERRED]
+  C:\Users\danie\Vortan's IoT platform\apps\api\src\index.ts → C:\Users\danie\Vortan's IoT platform\apps\api\src\services\udp.service.ts
 
 ## Communities
 
 ### Community 0 - "Community 0"
-Cohesion: 0.1
-Nodes (18): coerce(), parsePayload(), startCoapServer(), deviceRoutes(), registerDeviceWs(), bootstrap(), connectMongoDB(), pageRoutes() (+10 more)
+Cohesion: 0.11
+Nodes (14): coerce(), parsePayload(), startCoapServer(), registerDeviceWs(), exportRoutes(), bootstrap(), connectMongoDB(), connectRedis() (+6 more)
 
 ### Community 1 - "Community 1"
 Cohesion: 0.1
-Nodes (12): alertRoutes(), requirePermission(), commandRoutes(), dashboardRoutes(), exportRoutes(), generateTelemetry(), randBetween(), seed() (+4 more)
+Nodes (17): alertRoutes(), requirePermission(), commandRoutes(), dashboardRoutes(), genTelemetry(), rand(), seed(), wave() (+9 more)
 
 ### Community 2 - "Community 2"
-Cohesion: 0.1
-Nodes (10): authenticate(), interpolate(), RuleEngineService, interpolate(), SmsService, extractLocation(), TelemetryService, interpolate() (+2 more)
+Cohesion: 0.08
+Nodes (9): DeviceService, generateShareLink(), revokeShareLink(), orgRoutes(), copyShareLink(), deletePage(), revokeShare(), shareRoutes() (+1 more)
 
 ### Community 3 - "Community 3"
-Cohesion: 0.09
-Nodes (8): DeviceService, generateShareLink(), revokeShareLink(), orgRoutes(), copyShareLink(), deletePage(), revokeShare(), copyText()
+Cohesion: 0.12
+Nodes (6): CommandService, coerce(), formatPayload(), MqttService, parsePayload(), RealtimeService
 
 ### Community 4 - "Community 4"
 Cohesion: 0.08
@@ -119,15 +117,15 @@ Nodes (6): close(), confirmXLSXDownload(), printReport(), categoryIcon(), downlo
 
 ### Community 5 - "Community 5"
 Cohesion: 0.13
-Nodes (7): AuthService, handleSubmit(), handleSubmit(), update(), async(), saveOrg(), saveRetention()
+Nodes (12): authenticate(), EmailService, interpolate(), sendViaResend(), sendViaSMTP(), interpolate(), RuleEngineService, interpolate() (+4 more)
 
 ### Community 6 - "Community 6"
-Cohesion: 0.2
-Nodes (2): CommandService, RealtimeService
+Cohesion: 0.11
+Nodes (6): geofenceRoutes(), GeofenceService, haversineDistance(), pointInPolygon(), extractLocation(), TelemetryService
 
 ### Community 7 - "Community 7"
-Cohesion: 0.18
-Nodes (4): geofenceRoutes(), GeofenceService, haversineDistance(), pointInPolygon()
+Cohesion: 0.13
+Nodes (7): AuthService, handleSubmit(), handleSubmit(), update(), async(), saveOrg(), saveRetention()
 
 ### Community 8 - "Community 8"
 Cohesion: 0.16
@@ -146,40 +144,40 @@ Cohesion: 0.18
 Nodes (4): exportCsv(), handleExport(), exportCSV(), downloadCSV()
 
 ### Community 12 - "Community 12"
-Cohesion: 0.31
-Nodes (4): coerce(), formatPayload(), MqttService, parsePayload()
-
-### Community 13 - "Community 13"
 Cohesion: 0.18
 Nodes (0): 
 
-### Community 14 - "Community 14"
+### Community 13 - "Community 13"
 Cohesion: 0.22
 Nodes (2): applyPaste(), EMPTY_FIELD()
 
+### Community 14 - "Community 14"
+Cohesion: 0.22
+Nodes (5): ActivityFeed(), AppLayout(), startUdpServer(), createSocket(), useSocket()
+
 ### Community 15 - "Community 15"
-Cohesion: 0.29
-Nodes (3): ActivityFeed(), AppLayout(), useSocket()
-
-### Community 16 - "Community 16"
-Cohesion: 0.53
-Nodes (4): EmailService, interpolate(), sendViaResend(), sendViaSMTP()
-
-### Community 17 - "Community 17"
 Cohesion: 0.5
 Nodes (0): 
 
-### Community 18 - "Community 18"
+### Community 16 - "Community 16"
 Cohesion: 0.67
 Nodes (0): 
+
+### Community 17 - "Community 17"
+Cohesion: 0.67
+Nodes (0): 
+
+### Community 18 - "Community 18"
+Cohesion: 1.0
+Nodes (2): handleSend(), sendCmd()
 
 ### Community 19 - "Community 19"
 Cohesion: 0.67
 Nodes (0): 
 
 ### Community 20 - "Community 20"
-Cohesion: 1.0
-Nodes (2): handleSend(), sendCmd()
+Cohesion: 0.67
+Nodes (0): 
 
 ### Community 21 - "Community 21"
 Cohesion: 0.67
@@ -190,11 +188,11 @@ Cohesion: 0.67
 Nodes (0): 
 
 ### Community 23 - "Community 23"
-Cohesion: 0.67
+Cohesion: 1.0
 Nodes (0): 
 
 ### Community 24 - "Community 24"
-Cohesion: 0.67
+Cohesion: 1.0
 Nodes (0): 
 
 ### Community 25 - "Community 25"
@@ -329,100 +327,92 @@ Nodes (0):
 Cohesion: 1.0
 Nodes (0): 
 
-### Community 58 - "Community 58"
-Cohesion: 1.0
-Nodes (0): 
-
-### Community 59 - "Community 59"
-Cohesion: 1.0
-Nodes (0): 
-
 ## Knowledge Gaps
-- **Thin community `Community 25`** (2 nodes): `CommandWidget.tsx`, `formatPayload()`
+- **Thin community `Community 23`** (2 nodes): `CommandWidget.tsx`, `formatPayload()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 26`** (2 nodes): `Header.tsx`, `useClock()`
+- **Thin community `Community 24`** (2 nodes): `Header.tsx`, `useClock()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 27`** (2 nodes): `OrionModal.tsx`, `ModalFooter()`
+- **Thin community `Community 25`** (2 nodes): `OrionModal.tsx`, `ModalFooter()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 28`** (2 nodes): `DashboardPage.tsx`, `greeting()`
+- **Thin community `Community 26`** (2 nodes): `DashboardPage.tsx`, `greeting()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 29`** (2 nodes): `PagePreviewPage.tsx`, `Sparkline()`
+- **Thin community `Community 27`** (2 nodes): `PagePreviewPage.tsx`, `Sparkline()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 30`** (1 nodes): `AuditLog.ts`
+- **Thin community `Community 28`** (1 nodes): `AuditLog.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 31`** (1 nodes): `DeviceTemplate.ts`
+- **Thin community `Community 29`** (1 nodes): `DeviceTemplate.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 32`** (1 nodes): `postcss.config.js`
+- **Thin community `Community 30`** (1 nodes): `postcss.config.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 33`** (1 nodes): `tailwind.config.ts`
+- **Thin community `Community 31`** (1 nodes): `tailwind.config.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 34`** (1 nodes): `vite.config.ts`
+- **Thin community `Community 32`** (1 nodes): `vite.config.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 35`** (1 nodes): `main.tsx`
+- **Thin community `Community 33`** (1 nodes): `main.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 36`** (1 nodes): `auth.ts`
+- **Thin community `Community 34`** (1 nodes): `auth.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 37`** (1 nodes): `client.ts`
+- **Thin community `Community 35`** (1 nodes): `client.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 38`** (1 nodes): `devices.ts`
+- **Thin community `Community 36`** (1 nodes): `devices.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 39`** (1 nodes): `geofence.ts`
+- **Thin community `Community 37`** (1 nodes): `geofence.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 40`** (1 nodes): `publicClient.ts`
+- **Thin community `Community 38`** (1 nodes): `publicClient.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 41`** (1 nodes): `telemetry.ts`
+- **Thin community `Community 39`** (1 nodes): `telemetry.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 42`** (1 nodes): `DeviceStatusPie.tsx`
+- **Thin community `Community 40`** (1 nodes): `DeviceStatusPie.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 43`** (1 nodes): `TelemetryLineChart.tsx`
+- **Thin community `Community 41`** (1 nodes): `TelemetryLineChart.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 44`** (1 nodes): `Sidebar.tsx`
+- **Thin community `Community 42`** (1 nodes): `Sidebar.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 45`** (1 nodes): `ConfirmModal.tsx`
+- **Thin community `Community 43`** (1 nodes): `ConfirmModal.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 46`** (1 nodes): `OrionButton.tsx`
+- **Thin community `Community 44`** (1 nodes): `OrionButton.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 47`** (1 nodes): `PageHeader.tsx`
+- **Thin community `Community 45`** (1 nodes): `PageHeader.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 48`** (1 nodes): `auth.store.ts`
+- **Thin community `Community 46`** (1 nodes): `auth.store.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 49`** (1 nodes): `ui.store.ts`
+- **Thin community `Community 47`** (1 nodes): `ui.store.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 50`** (1 nodes): `index.ts`
+- **Thin community `Community 48`** (1 nodes): `index.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 51`** (1 nodes): `alert.ts`
+- **Thin community `Community 49`** (1 nodes): `alert.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 52`** (1 nodes): `auth.ts`
+- **Thin community `Community 50`** (1 nodes): `auth.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 53`** (1 nodes): `command.ts`
+- **Thin community `Community 51`** (1 nodes): `command.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 54`** (1 nodes): `dashboard.ts`
+- **Thin community `Community 52`** (1 nodes): `dashboard.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 55`** (1 nodes): `device.ts`
+- **Thin community `Community 53`** (1 nodes): `device.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 56`** (1 nodes): `events.ts`
+- **Thin community `Community 54`** (1 nodes): `events.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 57`** (1 nodes): `ota.ts`
+- **Thin community `Community 55`** (1 nodes): `ota.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 58`** (1 nodes): `rule.ts`
+- **Thin community `Community 56`** (1 nodes): `rule.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 59`** (1 nodes): `telemetry.ts`
+- **Thin community `Community 57`** (1 nodes): `telemetry.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `copyText()` connect `Community 3` to `Community 4`?**
-  _High betweenness centrality (0.088) - this node is a cross-community bridge._
-- **Why does `DeviceService` connect `Community 3` to `Community 0`?**
+- **Why does `copyText()` connect `Community 2` to `Community 4`?**
+  _High betweenness centrality (0.087) - this node is a cross-community bridge._
+- **Why does `DeviceService` connect `Community 2` to `Community 0`?**
   _High betweenness centrality (0.056) - this node is a cross-community bridge._
 - **Are the 9 inferred relationships involving `bootstrap()` (e.g. with `.register()` and `registerDeviceWs()`) actually correct?**
   _`bootstrap()` has 9 INFERRED edges - model-reasoned connections that need verification._
 - **Are the 9 inferred relationships involving `requirePermission()` (e.g. with `alertRoutes()` and `commandRoutes()`) actually correct?**
   _`requirePermission()` has 9 INFERRED edges - model-reasoned connections that need verification._
 - **Should `Community 0` be split into smaller, more focused modules?**
-  _Cohesion score 0.1 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.11 - nodes in this community are weakly interconnected._
 - **Should `Community 1` be split into smaller, more focused modules?**
   _Cohesion score 0.1 - nodes in this community are weakly interconnected._
 - **Should `Community 2` be split into smaller, more focused modules?**
-  _Cohesion score 0.1 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.08 - nodes in this community are weakly interconnected._

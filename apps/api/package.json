@@ -10,13 +10,14 @@
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
     "db:seed": "tsx src/seed/index.ts",
+    "db:demo": "tsx src/seed/demo.ts",
     "clean": "rm -rf dist"
   },
   "dependencies": {
     "@fastify/cors": "^9.0.0",
     "@fastify/multipart": "^8.3.0",
     "@fastify/rate-limit": "^9.1.0",
-    "@fastify/static": "^9.1.3",
+    "@fastify/static": "^6.12.0",
     "@fastify/websocket": "^10.0.0",
     "@orion/shared": "workspace:*",
     "@types/nodemailer": "^8.0.0",

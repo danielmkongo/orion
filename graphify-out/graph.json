@@ -99,7 +99,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\middleware\\auth.ts",
       "source_location": "L12",
       "id": "auth_authenticate",
-      "community": 2,
+      "community": 5,
       "norm_label": "authenticate()"
     },
     {
@@ -117,7 +117,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\models\\Alert.ts",
       "source_location": "L1",
       "id": "c_users_danie_vortan_s_iot_platform_apps_api_src_models_alert_ts",
-      "community": 7,
+      "community": 1,
       "norm_label": "alert.ts"
     },
     {
@@ -126,7 +126,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\models\\AuditLog.ts",
       "source_location": "L1",
       "id": "c_users_danie_vortan_s_iot_platform_apps_api_src_models_auditlog_ts",
-      "community": 30,
+      "community": 28,
       "norm_label": "auditlog.ts"
     },
     {
@@ -153,7 +153,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\models\\Device.ts",
       "source_location": "L1",
       "id": "c_users_danie_vortan_s_iot_platform_apps_api_src_models_device_ts",
-      "community": 1,
+      "community": 0,
       "norm_label": "device.ts"
     },
     {
@@ -162,7 +162,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\models\\DeviceTemplate.ts",
       "source_location": "L1",
       "id": "c_users_danie_vortan_s_iot_platform_apps_api_src_models_devicetemplate_ts",
-      "community": 31,
+      "community": 29,
       "norm_label": "devicetemplate.ts"
     },
     {
@@ -180,7 +180,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\models\\Geofence.ts",
       "source_location": "L1",
       "id": "c_users_danie_vortan_s_iot_platform_apps_api_src_models_geofence_ts",
-      "community": 7,
+      "community": 6,
       "norm_label": "geofence.ts"
     },
     {
@@ -207,7 +207,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\models\\Page.ts",
       "source_location": "L1",
       "id": "c_users_danie_vortan_s_iot_platform_apps_api_src_models_page_ts",
-      "community": 0,
+      "community": 1,
       "norm_label": "page.ts"
     },
     {
@@ -225,7 +225,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\models\\Share.ts",
       "source_location": "L1",
       "id": "c_users_danie_vortan_s_iot_platform_apps_api_src_models_share_ts",
-      "community": 0,
+      "community": 1,
       "norm_label": "share.ts"
     },
     {
@@ -234,7 +234,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\models\\Telemetry.ts",
       "source_location": "L1",
       "id": "c_users_danie_vortan_s_iot_platform_apps_api_src_models_telemetry_ts",
-      "community": 1,
+      "community": 0,
       "norm_label": "telemetry.ts"
     },
     {
@@ -252,7 +252,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\routes\\alert.routes.ts",
       "source_location": "L1",
       "id": "c_users_danie_vortan_s_iot_platform_apps_api_src_routes_alert_routes_ts",
-      "community": 0,
+      "community": 1,
       "norm_label": "alert.routes.ts"
     },
     {
@@ -288,7 +288,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\routes\\command.routes.ts",
       "source_location": "L1",
       "id": "c_users_danie_vortan_s_iot_platform_apps_api_src_routes_command_routes_ts",
-      "community": 1,
+      "community": 0,
       "norm_label": "command.routes.ts"
     },
     {
@@ -333,7 +333,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\routes\\device.routes.ts",
       "source_location": "L5",
       "id": "device_routes_deviceroutes",
-      "community": 0,
+      "community": 1,
       "norm_label": "deviceroutes()"
     },
     {
@@ -342,7 +342,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\routes\\export.routes.ts",
       "source_location": "L1",
       "id": "c_users_danie_vortan_s_iot_platform_apps_api_src_routes_export_routes_ts",
-      "community": 1,
+      "community": 0,
       "norm_label": "export.routes.ts"
     },
     {
@@ -351,7 +351,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\routes\\export.routes.ts",
       "source_location": "L6",
       "id": "export_routes_escapecsv",
-      "community": 1,
+      "community": 0,
       "norm_label": "escapecsv()"
     },
     {
@@ -360,7 +360,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\routes\\export.routes.ts",
       "source_location": "L14",
       "id": "export_routes_rowtocsv",
-      "community": 1,
+      "community": 0,
       "norm_label": "rowtocsv()"
     },
     {
@@ -369,7 +369,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\routes\\export.routes.ts",
       "source_location": "L18",
       "id": "export_routes_exportroutes",
-      "community": 1,
+      "community": 0,
       "norm_label": "exportroutes()"
     },
     {
@@ -378,7 +378,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\routes\\geofence.routes.ts",
       "source_location": "L1",
       "id": "c_users_danie_vortan_s_iot_platform_apps_api_src_routes_geofence_routes_ts",
-      "community": 7,
+      "community": 6,
       "norm_label": "geofence.routes.ts"
     },
     {
@@ -387,7 +387,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\routes\\geofence.routes.ts",
       "source_location": "L5",
       "id": "geofence_routes_geofenceroutes",
-      "community": 7,
+      "community": 6,
       "norm_label": "geofenceroutes()"
     },
     {
@@ -405,7 +405,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\routes\\org.routes.ts",
       "source_location": "L16",
       "id": "org_routes_orgroutes",
-      "community": 3,
+      "community": 2,
       "norm_label": "orgroutes()"
     },
     {
@@ -441,7 +441,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\routes\\page.routes.ts",
       "source_location": "L1",
       "id": "c_users_danie_vortan_s_iot_platform_apps_api_src_routes_page_routes_ts",
-      "community": 0,
+      "community": 1,
       "norm_label": "page.routes.ts"
     },
     {
@@ -450,7 +450,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\routes\\page.routes.ts",
       "source_location": "L11",
       "id": "page_routes_pageroutes",
-      "community": 0,
+      "community": 1,
       "norm_label": "pageroutes()"
     },
     {
@@ -486,7 +486,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\routes\\share.routes.ts",
       "source_location": "L12",
       "id": "share_routes_shareroutes",
-      "community": 0,
+      "community": 2,
       "norm_label": "shareroutes()"
     },
     {
@@ -524,6 +524,51 @@
       "id": "users_routes_usersroutes",
       "community": 1,
       "norm_label": "usersroutes()"
+    },
+    {
+      "label": "demo.ts",
+      "file_type": "code",
+      "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\seed\\demo.ts",
+      "source_location": "L1",
+      "id": "c_users_danie_vortan_s_iot_platform_apps_api_src_seed_demo_ts",
+      "community": 1,
+      "norm_label": "demo.ts"
+    },
+    {
+      "label": "rand()",
+      "file_type": "code",
+      "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\seed\\demo.ts",
+      "source_location": "L58",
+      "id": "demo_rand",
+      "community": 1,
+      "norm_label": "rand()"
+    },
+    {
+      "label": "wave()",
+      "file_type": "code",
+      "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\seed\\demo.ts",
+      "source_location": "L62",
+      "id": "demo_wave",
+      "community": 1,
+      "norm_label": "wave()"
+    },
+    {
+      "label": "genTelemetry()",
+      "file_type": "code",
+      "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\seed\\demo.ts",
+      "source_location": "L66",
+      "id": "demo_gentelemetry",
+      "community": 1,
+      "norm_label": "gentelemetry()"
+    },
+    {
+      "label": "seed()",
+      "file_type": "code",
+      "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\seed\\demo.ts",
+      "source_location": "L153",
+      "id": "demo_seed",
+      "community": 1,
+      "norm_label": "seed()"
     },
     {
       "label": "index.ts",
@@ -576,7 +621,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\auth.service.ts",
       "source_location": "L9",
       "id": "auth_service_authservice",
-      "community": 5,
+      "community": 7,
       "norm_label": "authservice"
     },
     {
@@ -585,7 +630,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\auth.service.ts",
       "source_location": "L10",
       "id": "auth_service_authservice_register",
-      "community": 5,
+      "community": 7,
       "norm_label": ".register()"
     },
     {
@@ -594,7 +639,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\auth.service.ts",
       "source_location": "L29",
       "id": "auth_service_authservice_login",
-      "community": 5,
+      "community": 7,
       "norm_label": ".login()"
     },
     {
@@ -603,7 +648,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\auth.service.ts",
       "source_location": "L55",
       "id": "auth_service_authservice_refreshtokens",
-      "community": 5,
+      "community": 7,
       "norm_label": ".refreshtokens()"
     },
     {
@@ -612,7 +657,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\auth.service.ts",
       "source_location": "L76",
       "id": "auth_service_authservice_logout",
-      "community": 5,
+      "community": 7,
       "norm_label": ".logout()"
     },
     {
@@ -621,7 +666,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\auth.service.ts",
       "source_location": "L80",
       "id": "auth_service_authservice_generatetokens",
-      "community": 5,
+      "community": 7,
       "norm_label": ".generatetokens()"
     },
     {
@@ -630,7 +675,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\auth.service.ts",
       "source_location": "L93",
       "id": "auth_service_authservice_verifytoken",
-      "community": 2,
+      "community": 5,
       "norm_label": ".verifytoken()"
     },
     {
@@ -693,7 +738,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\command.service.ts",
       "source_location": "L6",
       "id": "command_service_commandservice",
-      "community": 6,
+      "community": 3,
       "norm_label": "commandservice"
     },
     {
@@ -702,7 +747,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\command.service.ts",
       "source_location": "L7",
       "id": "command_service_commandservice_create",
-      "community": 6,
+      "community": 3,
       "norm_label": ".create()"
     },
     {
@@ -711,7 +756,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\command.service.ts",
       "source_location": "L32",
       "id": "command_service_commandservice_list",
-      "community": 6,
+      "community": 3,
       "norm_label": ".list()"
     },
     {
@@ -720,7 +765,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\command.service.ts",
       "source_location": "L38",
       "id": "command_service_commandservice_acknowledge",
-      "community": 6,
+      "community": 3,
       "norm_label": ".acknowledge()"
     },
     {
@@ -729,7 +774,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\command.service.ts",
       "source_location": "L66",
       "id": "command_service_commandservice_getpending",
-      "community": 6,
+      "community": 3,
       "norm_label": ".getpending()"
     },
     {
@@ -738,7 +783,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\command.service.ts",
       "source_location": "L70",
       "id": "command_service_commandservice_cancel",
-      "community": 6,
+      "community": 3,
       "norm_label": ".cancel()"
     },
     {
@@ -774,7 +819,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\device.service.ts",
       "source_location": "L7",
       "id": "device_service_deviceservice",
-      "community": 3,
+      "community": 2,
       "norm_label": "deviceservice"
     },
     {
@@ -783,7 +828,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\device.service.ts",
       "source_location": "L8",
       "id": "device_service_deviceservice_list",
-      "community": 3,
+      "community": 2,
       "norm_label": ".list()"
     },
     {
@@ -792,7 +837,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\device.service.ts",
       "source_location": "L34",
       "id": "device_service_deviceservice_getbyid",
-      "community": 3,
+      "community": 2,
       "norm_label": ".getbyid()"
     },
     {
@@ -801,7 +846,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\device.service.ts",
       "source_location": "L38",
       "id": "device_service_deviceservice_getbyapikey",
-      "community": 3,
+      "community": 2,
       "norm_label": ".getbyapikey()"
     },
     {
@@ -810,7 +855,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\device.service.ts",
       "source_location": "L42",
       "id": "device_service_deviceservice_create",
-      "community": 3,
+      "community": 2,
       "norm_label": ".create()"
     },
     {
@@ -819,7 +864,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\device.service.ts",
       "source_location": "L54",
       "id": "device_service_deviceservice_update",
-      "community": 3,
+      "community": 2,
       "norm_label": ".update()"
     },
     {
@@ -828,7 +873,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\device.service.ts",
       "source_location": "L58",
       "id": "device_service_deviceservice_delete",
-      "community": 3,
+      "community": 2,
       "norm_label": ".delete()"
     },
     {
@@ -837,7 +882,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\device.service.ts",
       "source_location": "L63",
       "id": "device_service_deviceservice_markseen",
-      "community": 3,
+      "community": 2,
       "norm_label": ".markseen()"
     },
     {
@@ -846,7 +891,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\device.service.ts",
       "source_location": "L74",
       "id": "device_service_deviceservice_updatelocation",
-      "community": 3,
+      "community": 2,
       "norm_label": ".updatelocation()"
     },
     {
@@ -855,7 +900,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\device.service.ts",
       "source_location": "L87",
       "id": "device_service_deviceservice_getstats",
-      "community": 3,
+      "community": 2,
       "norm_label": ".getstats()"
     },
     {
@@ -864,7 +909,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\device.service.ts",
       "source_location": "L101",
       "id": "device_service_deviceservice_regenerateapikey",
-      "community": 3,
+      "community": 2,
       "norm_label": ".regenerateapikey()"
     },
     {
@@ -873,7 +918,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\email.service.ts",
       "source_location": "L1",
       "id": "c_users_danie_vortan_s_iot_platform_apps_api_src_services_email_service_ts",
-      "community": 16,
+      "community": 5,
       "norm_label": "email.service.ts"
     },
     {
@@ -882,7 +927,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\email.service.ts",
       "source_location": "L8",
       "id": "email_service_interpolate",
-      "community": 16,
+      "community": 5,
       "norm_label": "interpolate()"
     },
     {
@@ -891,7 +936,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\email.service.ts",
       "source_location": "L18",
       "id": "email_service_sendviaresend",
-      "community": 16,
+      "community": 5,
       "norm_label": "sendviaresend()"
     },
     {
@@ -900,7 +945,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\email.service.ts",
       "source_location": "L35",
       "id": "email_service_sendviasmtp",
-      "community": 16,
+      "community": 5,
       "norm_label": "sendviasmtp()"
     },
     {
@@ -909,7 +954,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\email.service.ts",
       "source_location": "L46",
       "id": "email_service_emailservice",
-      "community": 16,
+      "community": 5,
       "norm_label": "emailservice"
     },
     {
@@ -918,7 +963,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\email.service.ts",
       "source_location": "L47",
       "id": "email_service_emailservice_send",
-      "community": 16,
+      "community": 5,
       "norm_label": ".send()"
     },
     {
@@ -927,7 +972,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\geofence.service.ts",
       "source_location": "L1",
       "id": "c_users_danie_vortan_s_iot_platform_apps_api_src_services_geofence_service_ts",
-      "community": 7,
+      "community": 6,
       "norm_label": "geofence.service.ts"
     },
     {
@@ -936,7 +981,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\geofence.service.ts",
       "source_location": "L7",
       "id": "geofence_service_haversinedistance",
-      "community": 7,
+      "community": 6,
       "norm_label": "haversinedistance()"
     },
     {
@@ -945,7 +990,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\geofence.service.ts",
       "source_location": "L19",
       "id": "geofence_service_pointinpolygon",
-      "community": 7,
+      "community": 6,
       "norm_label": "pointinpolygon()"
     },
     {
@@ -954,7 +999,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\geofence.service.ts",
       "source_location": "L36",
       "id": "geofence_service_geofenceservice",
-      "community": 7,
+      "community": 6,
       "norm_label": "geofenceservice"
     },
     {
@@ -963,7 +1008,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\geofence.service.ts",
       "source_location": "L37",
       "id": "geofence_service_geofenceservice_list",
-      "community": 7,
+      "community": 6,
       "norm_label": ".list()"
     },
     {
@@ -972,7 +1017,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\geofence.service.ts",
       "source_location": "L41",
       "id": "geofence_service_geofenceservice_create",
-      "community": 2,
+      "community": 6,
       "norm_label": ".create()"
     },
     {
@@ -981,7 +1026,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\geofence.service.ts",
       "source_location": "L45",
       "id": "geofence_service_geofenceservice_update",
-      "community": 7,
+      "community": 6,
       "norm_label": ".update()"
     },
     {
@@ -990,7 +1035,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\geofence.service.ts",
       "source_location": "L49",
       "id": "geofence_service_geofenceservice_remove",
-      "community": 7,
+      "community": 6,
       "norm_label": ".remove()"
     },
     {
@@ -999,7 +1044,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\geofence.service.ts",
       "source_location": "L53",
       "id": "geofence_service_geofenceservice_toggle",
-      "community": 7,
+      "community": 6,
       "norm_label": ".toggle()"
     },
     {
@@ -1008,7 +1053,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\geofence.service.ts",
       "source_location": "L60",
       "id": "geofence_service_geofenceservice_checktransitions",
-      "community": 7,
+      "community": 6,
       "norm_label": ".checktransitions()"
     },
     {
@@ -1017,7 +1062,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\geofence.service.ts",
       "source_location": "L91",
       "id": "geofence_service_geofenceservice_firealert",
-      "community": 7,
+      "community": 6,
       "norm_label": ".firealert()"
     },
     {
@@ -1026,7 +1071,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\mqtt.service.ts",
       "source_location": "L1",
       "id": "c_users_danie_vortan_s_iot_platform_apps_api_src_services_mqtt_service_ts",
-      "community": 12,
+      "community": 0,
       "norm_label": "mqtt.service.ts"
     },
     {
@@ -1035,7 +1080,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\mqtt.service.ts",
       "source_location": "L10",
       "id": "mqtt_service_coerce",
-      "community": 12,
+      "community": 3,
       "norm_label": "coerce()"
     },
     {
@@ -1044,7 +1089,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\mqtt.service.ts",
       "source_location": "L19",
       "id": "mqtt_service_parsepayload",
-      "community": 12,
+      "community": 3,
       "norm_label": "parsepayload()"
     },
     {
@@ -1053,7 +1098,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\mqtt.service.ts",
       "source_location": "L44",
       "id": "mqtt_service_formatpayload",
-      "community": 12,
+      "community": 3,
       "norm_label": "formatpayload()"
     },
     {
@@ -1062,7 +1107,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\mqtt.service.ts",
       "source_location": "L53",
       "id": "mqtt_service_mqttservice",
-      "community": 12,
+      "community": 3,
       "norm_label": "mqttservice"
     },
     {
@@ -1080,7 +1125,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\mqtt.service.ts",
       "source_location": "L83",
       "id": "mqtt_service_mqttservice_handlemessage",
-      "community": 12,
+      "community": 3,
       "norm_label": ".handlemessage()"
     },
     {
@@ -1089,7 +1134,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\mqtt.service.ts",
       "source_location": "L98",
       "id": "mqtt_service_mqttservice_handletelemetry",
-      "community": 12,
+      "community": 3,
       "norm_label": ".handletelemetry()"
     },
     {
@@ -1098,7 +1143,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\mqtt.service.ts",
       "source_location": "L121",
       "id": "mqtt_service_mqttservice_handleack",
-      "community": 12,
+      "community": 3,
       "norm_label": ".handleack()"
     },
     {
@@ -1107,7 +1152,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\mqtt.service.ts",
       "source_location": "L131",
       "id": "mqtt_service_mqttservice_delivercommand",
-      "community": 12,
+      "community": 3,
       "norm_label": ".delivercommand()"
     },
     {
@@ -1116,7 +1161,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\mqtt.service.ts",
       "source_location": "L148",
       "id": "mqtt_service_mqttservice_publish",
-      "community": 12,
+      "community": 3,
       "norm_label": ".publish()"
     },
     {
@@ -1125,7 +1170,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\mqtt.service.ts",
       "source_location": "L154",
       "id": "mqtt_service_mqttservice_isconnected",
-      "community": 12,
+      "community": 3,
       "norm_label": ".isconnected()"
     },
     {
@@ -1143,7 +1188,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\realtime.service.ts",
       "source_location": "L6",
       "id": "realtime_service_realtimeservice",
-      "community": 6,
+      "community": 3,
       "norm_label": "realtimeservice"
     },
     {
@@ -1152,7 +1197,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\realtime.service.ts",
       "source_location": "L9",
       "id": "realtime_service_realtimeservice_setio",
-      "community": 6,
+      "community": 3,
       "norm_label": ".setio()"
     },
     {
@@ -1161,7 +1206,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\realtime.service.ts",
       "source_location": "L15",
       "id": "realtime_service_realtimeservice_setupmiddleware",
-      "community": 6,
+      "community": 3,
       "norm_label": ".setupmiddleware()"
     },
     {
@@ -1170,7 +1215,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\realtime.service.ts",
       "source_location": "L31",
       "id": "realtime_service_realtimeservice_setupevents",
-      "community": 6,
+      "community": 3,
       "norm_label": ".setupevents()"
     },
     {
@@ -1179,7 +1224,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\realtime.service.ts",
       "source_location": "L54",
       "id": "realtime_service_realtimeservice_emit",
-      "community": 6,
+      "community": 3,
       "norm_label": ".emit()"
     },
     {
@@ -1188,7 +1233,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\realtime.service.ts",
       "source_location": "L65",
       "id": "realtime_service_realtimeservice_emittelemetry",
-      "community": 6,
+      "community": 3,
       "norm_label": ".emittelemetry()"
     },
     {
@@ -1197,7 +1242,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\realtime.service.ts",
       "source_location": "L75",
       "id": "realtime_service_realtimeservice_emitdevicestatus",
-      "community": 6,
+      "community": 3,
       "norm_label": ".emitdevicestatus()"
     },
     {
@@ -1206,7 +1251,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\realtime.service.ts",
       "source_location": "L85",
       "id": "realtime_service_realtimeservice_emitalert",
-      "community": 6,
+      "community": 3,
       "norm_label": ".emitalert()"
     },
     {
@@ -1215,7 +1260,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\realtime.service.ts",
       "source_location": "L94",
       "id": "realtime_service_realtimeservice_emitlocationupdate",
-      "community": 6,
+      "community": 3,
       "norm_label": ".emitlocationupdate()"
     },
     {
@@ -1224,7 +1269,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\rule-engine.service.ts",
       "source_location": "L1",
       "id": "c_users_danie_vortan_s_iot_platform_apps_api_src_services_rule_engine_service_ts",
-      "community": 2,
+      "community": 5,
       "norm_label": "rule-engine.service.ts"
     },
     {
@@ -1233,7 +1278,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\rule-engine.service.ts",
       "source_location": "L10",
       "id": "rule_engine_service_interpolate",
-      "community": 2,
+      "community": 5,
       "norm_label": "interpolate()"
     },
     {
@@ -1242,7 +1287,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\rule-engine.service.ts",
       "source_location": "L14",
       "id": "rule_engine_service_evalcondition",
-      "community": 2,
+      "community": 5,
       "norm_label": "evalcondition()"
     },
     {
@@ -1251,7 +1296,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\rule-engine.service.ts",
       "source_location": "L30",
       "id": "rule_engine_service_ruleengineservice",
-      "community": 2,
+      "community": 5,
       "norm_label": "ruleengineservice"
     },
     {
@@ -1260,7 +1305,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\rule-engine.service.ts",
       "source_location": "L31",
       "id": "rule_engine_service_ruleengineservice_evaluate",
-      "community": 2,
+      "community": 5,
       "norm_label": ".evaluate()"
     },
     {
@@ -1269,7 +1314,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\rule-engine.service.ts",
       "source_location": "L98",
       "id": "rule_engine_service_ruleengineservice_fireaction",
-      "community": 2,
+      "community": 5,
       "norm_label": ".fireaction()"
     },
     {
@@ -1278,7 +1323,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\sms.service.ts",
       "source_location": "L1",
       "id": "c_users_danie_vortan_s_iot_platform_apps_api_src_services_sms_service_ts",
-      "community": 2,
+      "community": 5,
       "norm_label": "sms.service.ts"
     },
     {
@@ -1287,7 +1332,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\sms.service.ts",
       "source_location": "L5",
       "id": "sms_service_interpolate",
-      "community": 2,
+      "community": 5,
       "norm_label": "interpolate()"
     },
     {
@@ -1296,7 +1341,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\sms.service.ts",
       "source_location": "L9",
       "id": "sms_service_smsservice",
-      "community": 2,
+      "community": 5,
       "norm_label": "smsservice"
     },
     {
@@ -1305,7 +1350,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\sms.service.ts",
       "source_location": "L10",
       "id": "sms_service_smsservice_send",
-      "community": 2,
+      "community": 5,
       "norm_label": ".send()"
     },
     {
@@ -1359,7 +1404,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\telemetry.service.ts",
       "source_location": "L12",
       "id": "telemetry_service_extractlocation",
-      "community": 2,
+      "community": 6,
       "norm_label": "extractlocation()"
     },
     {
@@ -1368,7 +1413,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\telemetry.service.ts",
       "source_location": "L39",
       "id": "telemetry_service_telemetryservice",
-      "community": 2,
+      "community": 6,
       "norm_label": "telemetryservice"
     },
     {
@@ -1377,7 +1422,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\telemetry.service.ts",
       "source_location": "L40",
       "id": "telemetry_service_telemetryservice_ingest",
-      "community": 2,
+      "community": 6,
       "norm_label": ".ingest()"
     },
     {
@@ -1386,7 +1431,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\telemetry.service.ts",
       "source_location": "L73",
       "id": "telemetry_service_telemetryservice_query",
-      "community": 2,
+      "community": 6,
       "norm_label": ".query()"
     },
     {
@@ -1395,7 +1440,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\telemetry.service.ts",
       "source_location": "L94",
       "id": "telemetry_service_telemetryservice_getlatest",
-      "community": 2,
+      "community": 6,
       "norm_label": ".getlatest()"
     },
     {
@@ -1404,7 +1449,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\telemetry.service.ts",
       "source_location": "L100",
       "id": "telemetry_service_telemetryservice_getlocationhistory",
-      "community": 2,
+      "community": 6,
       "norm_label": ".getlocationhistory()"
     },
     {
@@ -1413,7 +1458,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\telemetry.service.ts",
       "source_location": "L120",
       "id": "telemetry_service_telemetryservice_getseries",
-      "community": 2,
+      "community": 6,
       "norm_label": ".getseries()"
     },
     {
@@ -1422,7 +1467,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\telemetry.service.ts",
       "source_location": "L138",
       "id": "telemetry_service_telemetryservice_getmultideviceseries",
-      "community": 2,
+      "community": 6,
       "norm_label": ".getmultideviceseries()"
     },
     {
@@ -1458,7 +1503,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\udp.service.ts",
       "source_location": "L32",
       "id": "udp_service_startudpserver",
-      "community": 0,
+      "community": 14,
       "norm_label": "startudpserver()"
     },
     {
@@ -1467,7 +1512,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\webhook.service.ts",
       "source_location": "L1",
       "id": "c_users_danie_vortan_s_iot_platform_apps_api_src_services_webhook_service_ts",
-      "community": 2,
+      "community": 5,
       "norm_label": "webhook.service.ts"
     },
     {
@@ -1476,7 +1521,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\webhook.service.ts",
       "source_location": "L11",
       "id": "webhook_service_isprivate",
-      "community": 2,
+      "community": 5,
       "norm_label": "isprivate()"
     },
     {
@@ -1485,7 +1530,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\webhook.service.ts",
       "source_location": "L15",
       "id": "webhook_service_interpolate",
-      "community": 2,
+      "community": 5,
       "norm_label": "interpolate()"
     },
     {
@@ -1494,7 +1539,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\webhook.service.ts",
       "source_location": "L26",
       "id": "webhook_service_webhookservice",
-      "community": 2,
+      "community": 5,
       "norm_label": "webhookservice"
     },
     {
@@ -1503,7 +1548,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\webhook.service.ts",
       "source_location": "L27",
       "id": "webhook_service_webhookservice_dispatch",
-      "community": 2,
+      "community": 5,
       "norm_label": ".dispatch()"
     },
     {
@@ -1512,7 +1557,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\postcss.config.js",
       "source_location": "L1",
       "id": "c_users_danie_vortan_s_iot_platform_apps_web_postcss_config_js",
-      "community": 32,
+      "community": 30,
       "norm_label": "postcss.config.js"
     },
     {
@@ -1521,7 +1566,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\tailwind.config.ts",
       "source_location": "L1",
       "id": "c_users_danie_vortan_s_iot_platform_apps_web_tailwind_config_ts",
-      "community": 33,
+      "community": 31,
       "norm_label": "tailwind.config.ts"
     },
     {
@@ -1530,7 +1575,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\vite.config.ts",
       "source_location": "L1",
       "id": "c_users_danie_vortan_s_iot_platform_apps_web_vite_config_ts",
-      "community": 34,
+      "community": 32,
       "norm_label": "vite.config.ts"
     },
     {
@@ -1539,7 +1584,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\App.tsx",
       "source_location": "L1",
       "id": "c_users_danie_vortan_s_iot_platform_apps_web_src_app_tsx",
-      "community": 18,
+      "community": 16,
       "norm_label": "app.tsx"
     },
     {
@@ -1548,7 +1593,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\App.tsx",
       "source_location": "L24",
       "id": "app_protectedroute",
-      "community": 18,
+      "community": 16,
       "norm_label": "protectedroute()"
     },
     {
@@ -1557,7 +1602,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\App.tsx",
       "source_location": "L30",
       "id": "app_publicroute",
-      "community": 18,
+      "community": 16,
       "norm_label": "publicroute()"
     },
     {
@@ -1566,7 +1611,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\main.tsx",
       "source_location": "L1",
       "id": "c_users_danie_vortan_s_iot_platform_apps_web_src_main_tsx",
-      "community": 35,
+      "community": 33,
       "norm_label": "main.tsx"
     },
     {
@@ -1575,7 +1620,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\api\\auth.ts",
       "source_location": "L1",
       "id": "c_users_danie_vortan_s_iot_platform_apps_web_src_api_auth_ts",
-      "community": 36,
+      "community": 34,
       "norm_label": "auth.ts"
     },
     {
@@ -1584,7 +1629,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\api\\client.ts",
       "source_location": "L1",
       "id": "c_users_danie_vortan_s_iot_platform_apps_web_src_api_client_ts",
-      "community": 37,
+      "community": 35,
       "norm_label": "client.ts"
     },
     {
@@ -1593,7 +1638,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\api\\devices.ts",
       "source_location": "L1",
       "id": "c_users_danie_vortan_s_iot_platform_apps_web_src_api_devices_ts",
-      "community": 38,
+      "community": 36,
       "norm_label": "devices.ts"
     },
     {
@@ -1602,7 +1647,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\api\\geofence.ts",
       "source_location": "L1",
       "id": "c_users_danie_vortan_s_iot_platform_apps_web_src_api_geofence_ts",
-      "community": 39,
+      "community": 37,
       "norm_label": "geofence.ts"
     },
     {
@@ -1611,7 +1656,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\api\\publicClient.ts",
       "source_location": "L1",
       "id": "c_users_danie_vortan_s_iot_platform_apps_web_src_api_publicclient_ts",
-      "community": 40,
+      "community": 38,
       "norm_label": "publicclient.ts"
     },
     {
@@ -1620,7 +1665,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\api\\telemetry.ts",
       "source_location": "L1",
       "id": "c_users_danie_vortan_s_iot_platform_apps_web_src_api_telemetry_ts",
-      "community": 41,
+      "community": 39,
       "norm_label": "telemetry.ts"
     },
     {
@@ -1629,7 +1674,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\components\\charts\\ActivityFeed.tsx",
       "source_location": "L1",
       "id": "c_users_danie_vortan_s_iot_platform_apps_web_src_components_charts_activityfeed_tsx",
-      "community": 15,
+      "community": 14,
       "norm_label": "activityfeed.tsx"
     },
     {
@@ -1638,7 +1683,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\components\\charts\\ActivityFeed.tsx",
       "source_location": "L28",
       "id": "activityfeed_activityfeed",
-      "community": 15,
+      "community": 14,
       "norm_label": "activityfeed()"
     },
     {
@@ -1755,7 +1800,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\components\\charts\\DeviceStatusPie.tsx",
       "source_location": "L1",
       "id": "c_users_danie_vortan_s_iot_platform_apps_web_src_components_charts_devicestatuspie_tsx",
-      "community": 42,
+      "community": 40,
       "norm_label": "devicestatuspie.tsx"
     },
     {
@@ -1764,7 +1809,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\components\\charts\\TelemetryLineChart.tsx",
       "source_location": "L1",
       "id": "c_users_danie_vortan_s_iot_platform_apps_web_src_components_charts_telemetrylinechart_tsx",
-      "community": 43,
+      "community": 41,
       "norm_label": "telemetrylinechart.tsx"
     },
     {
@@ -1773,7 +1818,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\components\\devices\\CommandWidget.tsx",
       "source_location": "L1",
       "id": "c_users_danie_vortan_s_iot_platform_apps_web_src_components_devices_commandwidget_tsx",
-      "community": 25,
+      "community": 23,
       "norm_label": "commandwidget.tsx"
     },
     {
@@ -1782,7 +1827,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\components\\devices\\CommandWidget.tsx",
       "source_location": "L23",
       "id": "commandwidget_formatpayload",
-      "community": 25,
+      "community": 23,
       "norm_label": "formatpayload()"
     },
     {
@@ -1791,7 +1836,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\components\\devices\\DeviceForm.tsx",
       "source_location": "L1",
       "id": "c_users_danie_vortan_s_iot_platform_apps_web_src_components_devices_deviceform_tsx",
-      "community": 14,
+      "community": 13,
       "norm_label": "deviceform.tsx"
     },
     {
@@ -1800,7 +1845,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\components\\devices\\DeviceForm.tsx",
       "source_location": "L39",
       "id": "deviceform_empty_field",
-      "community": 14,
+      "community": 13,
       "norm_label": "empty_field()"
     },
     {
@@ -1809,7 +1854,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\components\\devices\\DeviceForm.tsx",
       "source_location": "L44",
       "id": "deviceform_empty_command",
-      "community": 14,
+      "community": 13,
       "norm_label": "empty_command()"
     },
     {
@@ -1818,7 +1863,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\components\\devices\\DeviceForm.tsx",
       "source_location": "L242",
       "id": "deviceform_buildsmooth",
-      "community": 14,
+      "community": 13,
       "norm_label": "buildsmooth()"
     },
     {
@@ -1827,7 +1872,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\components\\devices\\DeviceForm.tsx",
       "source_location": "L673",
       "id": "deviceform_addfield",
-      "community": 14,
+      "community": 13,
       "norm_label": "addfield()"
     },
     {
@@ -1836,7 +1881,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\components\\devices\\DeviceForm.tsx",
       "source_location": "L679",
       "id": "deviceform_removefield",
-      "community": 14,
+      "community": 13,
       "norm_label": "removefield()"
     },
     {
@@ -1845,7 +1890,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\components\\devices\\DeviceForm.tsx",
       "source_location": "L688",
       "id": "deviceform_addcommand",
-      "community": 14,
+      "community": 13,
       "norm_label": "addcommand()"
     },
     {
@@ -1854,7 +1899,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\components\\devices\\DeviceForm.tsx",
       "source_location": "L692",
       "id": "deviceform_removecommand",
-      "community": 14,
+      "community": 13,
       "norm_label": "removecommand()"
     },
     {
@@ -1863,7 +1908,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\components\\devices\\DeviceForm.tsx",
       "source_location": "L696",
       "id": "deviceform_applypaste",
-      "community": 14,
+      "community": 13,
       "norm_label": "applypaste()"
     },
     {
@@ -1872,7 +1917,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\components\\devices\\DeviceForm.tsx",
       "source_location": "L721",
       "id": "deviceform_handlesubmit",
-      "community": 14,
+      "community": 13,
       "norm_label": "handlesubmit()"
     },
     {
@@ -1881,7 +1926,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\components\\layout\\AppLayout.tsx",
       "source_location": "L1",
       "id": "c_users_danie_vortan_s_iot_platform_apps_web_src_components_layout_applayout_tsx",
-      "community": 15,
+      "community": 14,
       "norm_label": "applayout.tsx"
     },
     {
@@ -1890,7 +1935,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\components\\layout\\AppLayout.tsx",
       "source_location": "L9",
       "id": "applayout_applayout",
-      "community": 15,
+      "community": 14,
       "norm_label": "applayout()"
     },
     {
@@ -1899,7 +1944,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\components\\layout\\Header.tsx",
       "source_location": "L1",
       "id": "c_users_danie_vortan_s_iot_platform_apps_web_src_components_layout_header_tsx",
-      "community": 26,
+      "community": 24,
       "norm_label": "header.tsx"
     },
     {
@@ -1908,7 +1953,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\components\\layout\\Header.tsx",
       "source_location": "L26",
       "id": "header_useclock",
-      "community": 26,
+      "community": 24,
       "norm_label": "useclock()"
     },
     {
@@ -1917,7 +1962,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\components\\layout\\Sidebar.tsx",
       "source_location": "L1",
       "id": "c_users_danie_vortan_s_iot_platform_apps_web_src_components_layout_sidebar_tsx",
-      "community": 44,
+      "community": 42,
       "norm_label": "sidebar.tsx"
     },
     {
@@ -1926,7 +1971,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\components\\ui\\ConfirmModal.tsx",
       "source_location": "L1",
       "id": "c_users_danie_vortan_s_iot_platform_apps_web_src_components_ui_confirmmodal_tsx",
-      "community": 45,
+      "community": 43,
       "norm_label": "confirmmodal.tsx"
     },
     {
@@ -1989,7 +2034,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\components\\ui\\OrionButton.tsx",
       "source_location": "L1",
       "id": "c_users_danie_vortan_s_iot_platform_apps_web_src_components_ui_orionbutton_tsx",
-      "community": 46,
+      "community": 44,
       "norm_label": "orionbutton.tsx"
     },
     {
@@ -1998,7 +2043,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\components\\ui\\OrionLogo.tsx",
       "source_location": "L1",
       "id": "c_users_danie_vortan_s_iot_platform_apps_web_src_components_ui_orionlogo_tsx",
-      "community": 19,
+      "community": 17,
       "norm_label": "orionlogo.tsx"
     },
     {
@@ -2007,7 +2052,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\components\\ui\\OrionLogo.tsx",
       "source_location": "L8",
       "id": "orionlogo_orionmark",
-      "community": 19,
+      "community": 17,
       "norm_label": "orionmark()"
     },
     {
@@ -2016,7 +2061,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\components\\ui\\OrionLogo.tsx",
       "source_location": "L25",
       "id": "orionlogo_orionlogo",
-      "community": 19,
+      "community": 17,
       "norm_label": "orionlogo()"
     },
     {
@@ -2025,7 +2070,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\components\\ui\\OrionModal.tsx",
       "source_location": "L1",
       "id": "c_users_danie_vortan_s_iot_platform_apps_web_src_components_ui_orionmodal_tsx",
-      "community": 27,
+      "community": 25,
       "norm_label": "orionmodal.tsx"
     },
     {
@@ -2034,7 +2079,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\components\\ui\\OrionModal.tsx",
       "source_location": "L135",
       "id": "orionmodal_modalfooter",
-      "community": 27,
+      "community": 25,
       "norm_label": "modalfooter()"
     },
     {
@@ -2043,7 +2088,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\components\\ui\\PageHeader.tsx",
       "source_location": "L1",
       "id": "c_users_danie_vortan_s_iot_platform_apps_web_src_components_ui_pageheader_tsx",
-      "community": 47,
+      "community": 45,
       "norm_label": "pageheader.tsx"
     },
     {
@@ -2052,7 +2097,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\hooks\\useSocket.ts",
       "source_location": "L1",
       "id": "c_users_danie_vortan_s_iot_platform_apps_web_src_hooks_usesocket_ts",
-      "community": 15,
+      "community": 14,
       "norm_label": "usesocket.ts"
     },
     {
@@ -2061,7 +2106,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\hooks\\useSocket.ts",
       "source_location": "L11",
       "id": "usesocket_createsocket",
-      "community": 0,
+      "community": 14,
       "norm_label": "createsocket()"
     },
     {
@@ -2070,7 +2115,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\hooks\\useSocket.ts",
       "source_location": "L26",
       "id": "usesocket_getsocket",
-      "community": 15,
+      "community": 14,
       "norm_label": "getsocket()"
     },
     {
@@ -2079,7 +2124,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\hooks\\useSocket.ts",
       "source_location": "L30",
       "id": "usesocket_usesocket",
-      "community": 15,
+      "community": 14,
       "norm_label": "usesocket()"
     },
     {
@@ -2214,7 +2259,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\lib\\utils.ts",
       "source_location": "L151",
       "id": "utils_copytext",
-      "community": 3,
+      "community": 2,
       "norm_label": "copytext()"
     },
     {
@@ -2241,7 +2286,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\pages\\AlertsPage.tsx",
       "source_location": "L1",
       "id": "c_users_danie_vortan_s_iot_platform_apps_web_src_pages_alertspage_tsx",
-      "community": 17,
+      "community": 15,
       "norm_label": "alertspage.tsx"
     },
     {
@@ -2250,7 +2295,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\pages\\AlertsPage.tsx",
       "source_location": "L11",
       "id": "alertspage_severitydot",
-      "community": 17,
+      "community": 15,
       "norm_label": "severitydot()"
     },
     {
@@ -2259,7 +2304,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\pages\\AlertsPage.tsx",
       "source_location": "L17",
       "id": "alertspage_severitytag",
-      "community": 17,
+      "community": 15,
       "norm_label": "severitytag()"
     },
     {
@@ -2268,7 +2313,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\pages\\AlertsPage.tsx",
       "source_location": "L23",
       "id": "alertspage_statustag",
-      "community": 17,
+      "community": 15,
       "norm_label": "statustag()"
     },
     {
@@ -2277,7 +2322,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\pages\\CommandsPage.tsx",
       "source_location": "L1",
       "id": "c_users_danie_vortan_s_iot_platform_apps_web_src_pages_commandspage_tsx",
-      "community": 20,
+      "community": 18,
       "norm_label": "commandspage.tsx"
     },
     {
@@ -2286,7 +2331,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\pages\\CommandsPage.tsx",
       "source_location": "L41",
       "id": "commandspage_sendcmd",
-      "community": 20,
+      "community": 18,
       "norm_label": "sendcmd()"
     },
     {
@@ -2295,7 +2340,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\pages\\CommandsPage.tsx",
       "source_location": "L52",
       "id": "commandspage_handlesend",
-      "community": 20,
+      "community": 18,
       "norm_label": "handlesend()"
     },
     {
@@ -2304,7 +2349,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\pages\\ControlPage.tsx",
       "source_location": "L1",
       "id": "c_users_danie_vortan_s_iot_platform_apps_web_src_pages_controlpage_tsx",
-      "community": 21,
+      "community": 19,
       "norm_label": "controlpage.tsx"
     },
     {
@@ -2313,7 +2358,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\pages\\ControlPage.tsx",
       "source_location": "L59",
       "id": "controlpage_sendcontrol",
-      "community": 21,
+      "community": 19,
       "norm_label": "sendcontrol()"
     },
     {
@@ -2322,7 +2367,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\pages\\ControlPage.tsx",
       "source_location": "L70",
       "id": "controlpage_sendterminal",
-      "community": 21,
+      "community": 19,
       "norm_label": "sendterminal()"
     },
     {
@@ -2331,7 +2376,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\pages\\DashboardPage.tsx",
       "source_location": "L1",
       "id": "c_users_danie_vortan_s_iot_platform_apps_web_src_pages_dashboardpage_tsx",
-      "community": 28,
+      "community": 26,
       "norm_label": "dashboardpage.tsx"
     },
     {
@@ -2340,7 +2385,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\pages\\DashboardPage.tsx",
       "source_location": "L13",
       "id": "dashboardpage_greeting",
-      "community": 28,
+      "community": 26,
       "norm_label": "greeting()"
     },
     {
@@ -2349,7 +2394,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\pages\\DeviceDetailPage.tsx",
       "source_location": "L1",
       "id": "c_users_danie_vortan_s_iot_platform_apps_web_src_pages_devicedetailpage_tsx",
-      "community": 3,
+      "community": 2,
       "norm_label": "devicedetailpage.tsx"
     },
     {
@@ -2358,7 +2403,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\pages\\DeviceDetailPage.tsx",
       "source_location": "L30",
       "id": "devicedetailpage_satellitemap",
-      "community": 3,
+      "community": 2,
       "norm_label": "satellitemap()"
     },
     {
@@ -2376,7 +2421,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\pages\\DeviceDetailPage.tsx",
       "source_location": "L210",
       "id": "devicedetailpage_sendcontrol",
-      "community": 3,
+      "community": 2,
       "norm_label": "sendcontrol()"
     },
     {
@@ -2385,7 +2430,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\pages\\DeviceDetailPage.tsx",
       "source_location": "L221",
       "id": "devicedetailpage_togglesection",
-      "community": 3,
+      "community": 2,
       "norm_label": "togglesection()"
     },
     {
@@ -2394,7 +2439,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\pages\\DeviceDetailPage.tsx",
       "source_location": "L224",
       "id": "devicedetailpage_generatesharelink",
-      "community": 3,
+      "community": 2,
       "norm_label": "generatesharelink()"
     },
     {
@@ -2403,7 +2448,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\pages\\DeviceDetailPage.tsx",
       "source_location": "L242",
       "id": "devicedetailpage_revokesharelink",
-      "community": 3,
+      "community": 2,
       "norm_label": "revokesharelink()"
     },
     {
@@ -2412,7 +2457,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\pages\\DeviceDetailPage.tsx",
       "source_location": "L328",
       "id": "devicedetailpage_if",
-      "community": 3,
+      "community": 2,
       "norm_label": "if()"
     },
     {
@@ -2421,7 +2466,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\pages\\DeviceDetailPage.tsx",
       "source_location": "L624",
       "id": "devicedetailpage_arc",
-      "community": 3,
+      "community": 2,
       "norm_label": "arc()"
     },
     {
@@ -2430,7 +2475,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\pages\\DevicesPage.tsx",
       "source_location": "L1",
       "id": "c_users_danie_vortan_s_iot_platform_apps_web_src_pages_devicespage_tsx",
-      "community": 22,
+      "community": 20,
       "norm_label": "devicespage.tsx"
     },
     {
@@ -2439,7 +2484,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\pages\\DevicesPage.tsx",
       "source_location": "L17",
       "id": "devicespage_sparkdata",
-      "community": 22,
+      "community": 20,
       "norm_label": "sparkdata()"
     },
     {
@@ -2448,7 +2493,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\pages\\DevicesPage.tsx",
       "source_location": "L63",
       "id": "devicespage_confirmdelete",
-      "community": 22,
+      "community": 20,
       "norm_label": "confirmdelete()"
     },
     {
@@ -2457,7 +2502,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\pages\\LoginPage.tsx",
       "source_location": "L1",
       "id": "c_users_danie_vortan_s_iot_platform_apps_web_src_pages_loginpage_tsx",
-      "community": 5,
+      "community": 7,
       "norm_label": "loginpage.tsx"
     },
     {
@@ -2466,7 +2511,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\pages\\LoginPage.tsx",
       "source_location": "L25",
       "id": "loginpage_handlesubmit",
-      "community": 5,
+      "community": 7,
       "norm_label": "handlesubmit()"
     },
     {
@@ -2475,7 +2520,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\pages\\MapPage.tsx",
       "source_location": "L1",
       "id": "c_users_danie_vortan_s_iot_platform_apps_web_src_pages_mappage_tsx",
-      "community": 13,
+      "community": 12,
       "norm_label": "mappage.tsx"
     },
     {
@@ -2484,7 +2529,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\pages\\MapPage.tsx",
       "source_location": "L102",
       "id": "mappage_hextorgb",
-      "community": 13,
+      "community": 12,
       "norm_label": "hextorgb()"
     },
     {
@@ -2493,7 +2538,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\pages\\MapPage.tsx",
       "source_location": "L109",
       "id": "mappage_reltime",
-      "community": 13,
+      "community": 12,
       "norm_label": "reltime()"
     },
     {
@@ -2502,7 +2547,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\pages\\MapPage.tsx",
       "source_location": "L120",
       "id": "mappage_formatval",
-      "community": 13,
+      "community": 12,
       "norm_label": "formatval()"
     },
     {
@@ -2511,7 +2556,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\pages\\MapPage.tsx",
       "source_location": "L385",
       "id": "mappage_docomplete",
-      "community": 13,
+      "community": 12,
       "norm_label": "docomplete()"
     },
     {
@@ -2520,7 +2565,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\pages\\MapPage.tsx",
       "source_location": "L754",
       "id": "mappage_ispolygon",
-      "community": 13,
+      "community": 12,
       "norm_label": "ispolygon()"
     },
     {
@@ -2529,7 +2574,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\pages\\MapPage.tsx",
       "source_location": "L790",
       "id": "mappage_handlesubmit",
-      "community": 13,
+      "community": 12,
       "norm_label": "handlesubmit()"
     },
     {
@@ -2538,7 +2583,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\pages\\MapPage.tsx",
       "source_location": "L1131",
       "id": "mappage_handlestartdraw",
-      "community": 13,
+      "community": 12,
       "norm_label": "handlestartdraw()"
     },
     {
@@ -2547,7 +2592,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\pages\\MapPage.tsx",
       "source_location": "L1138",
       "id": "mappage_handledrawcomplete",
-      "community": 13,
+      "community": 12,
       "norm_label": "handledrawcomplete()"
     },
     {
@@ -2556,7 +2601,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\pages\\MapPage.tsx",
       "source_location": "L1143",
       "id": "mappage_handlecanceldraw",
-      "community": 13,
+      "community": 12,
       "norm_label": "handlecanceldraw()"
     },
     {
@@ -2565,7 +2610,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\pages\\MapPage.tsx",
       "source_location": "L1149",
       "id": "mappage_handlesavedraft",
-      "community": 13,
+      "community": 12,
       "norm_label": "handlesavedraft()"
     },
     {
@@ -2574,7 +2619,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\pages\\OtaPage.tsx",
       "source_location": "L1",
       "id": "c_users_danie_vortan_s_iot_platform_apps_web_src_pages_otapage_tsx",
-      "community": 23,
+      "community": 21,
       "norm_label": "otapage.tsx"
     },
     {
@@ -2583,7 +2628,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\pages\\OtaPage.tsx",
       "source_location": "L73",
       "id": "otapage_submit",
-      "community": 23,
+      "community": 21,
       "norm_label": "submit()"
     },
     {
@@ -2592,7 +2637,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\pages\\OtaPage.tsx",
       "source_location": "L417",
       "id": "otapage_jobsloading",
-      "community": 23,
+      "community": 21,
       "norm_label": "jobsloading()"
     },
     {
@@ -2664,7 +2709,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\pages\\PagePreviewPage.tsx",
       "source_location": "L1",
       "id": "c_users_danie_vortan_s_iot_platform_apps_web_src_pages_pagepreviewpage_tsx",
-      "community": 29,
+      "community": 27,
       "norm_label": "pagepreviewpage.tsx"
     },
     {
@@ -2673,7 +2718,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\pages\\PagePreviewPage.tsx",
       "source_location": "L19",
       "id": "pagepreviewpage_sparkline",
-      "community": 29,
+      "community": 27,
       "norm_label": "sparkline()"
     },
     {
@@ -2682,7 +2727,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\pages\\PagesPage.tsx",
       "source_location": "L1",
       "id": "c_users_danie_vortan_s_iot_platform_apps_web_src_pages_pagespage_tsx",
-      "community": 3,
+      "community": 2,
       "norm_label": "pagespage.tsx"
     },
     {
@@ -2691,7 +2736,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\pages\\PagesPage.tsx",
       "source_location": "L29",
       "id": "pagespage_createpage",
-      "community": 3,
+      "community": 2,
       "norm_label": "createpage()"
     },
     {
@@ -2700,7 +2745,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\pages\\PagesPage.tsx",
       "source_location": "L40",
       "id": "pagespage_deletepage",
-      "community": 3,
+      "community": 2,
       "norm_label": "deletepage()"
     },
     {
@@ -2709,7 +2754,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\pages\\PagesPage.tsx",
       "source_location": "L49",
       "id": "pagespage_revokeshare",
-      "community": 3,
+      "community": 2,
       "norm_label": "revokeshare()"
     },
     {
@@ -2718,7 +2763,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\pages\\PagesPage.tsx",
       "source_location": "L58",
       "id": "pagespage_copysharelink",
-      "community": 3,
+      "community": 2,
       "norm_label": "copysharelink()"
     },
     {
@@ -2727,7 +2772,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\pages\\RegisterPage.tsx",
       "source_location": "L1",
       "id": "c_users_danie_vortan_s_iot_platform_apps_web_src_pages_registerpage_tsx",
-      "community": 5,
+      "community": 7,
       "norm_label": "registerpage.tsx"
     },
     {
@@ -2736,7 +2781,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\pages\\RegisterPage.tsx",
       "source_location": "L37",
       "id": "registerpage_update",
-      "community": 5,
+      "community": 7,
       "norm_label": "update()"
     },
     {
@@ -2745,7 +2790,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\pages\\RegisterPage.tsx",
       "source_location": "L40",
       "id": "registerpage_handlenext",
-      "community": 5,
+      "community": 7,
       "norm_label": "handlenext()"
     },
     {
@@ -2754,7 +2799,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\pages\\RegisterPage.tsx",
       "source_location": "L45",
       "id": "registerpage_handlesubmit",
-      "community": 5,
+      "community": 7,
       "norm_label": "handlesubmit()"
     },
     {
@@ -2970,7 +3015,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\pages\\SettingsPage.tsx",
       "source_location": "L1",
       "id": "c_users_danie_vortan_s_iot_platform_apps_web_src_pages_settingspage_tsx",
-      "community": 5,
+      "community": 7,
       "norm_label": "settingspage.tsx"
     },
     {
@@ -2979,7 +3024,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\pages\\SettingsPage.tsx",
       "source_location": "L12",
       "id": "settingspage_toggle",
-      "community": 5,
+      "community": 7,
       "norm_label": "toggle()"
     },
     {
@@ -2988,7 +3033,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\pages\\SettingsPage.tsx",
       "source_location": "L97",
       "id": "settingspage_saveprofile",
-      "community": 5,
+      "community": 7,
       "norm_label": "saveprofile()"
     },
     {
@@ -2997,7 +3042,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\pages\\SettingsPage.tsx",
       "source_location": "L113",
       "id": "settingspage_savepassword",
-      "community": 5,
+      "community": 7,
       "norm_label": "savepassword()"
     },
     {
@@ -3006,7 +3051,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\pages\\SettingsPage.tsx",
       "source_location": "L131",
       "id": "settingspage_saveorg",
-      "community": 5,
+      "community": 7,
       "norm_label": "saveorg()"
     },
     {
@@ -3015,7 +3060,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\pages\\SettingsPage.tsx",
       "source_location": "L147",
       "id": "settingspage_saveretention",
-      "community": 5,
+      "community": 7,
       "norm_label": "saveretention()"
     },
     {
@@ -3024,7 +3069,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\pages\\SettingsPage.tsx",
       "source_location": "L499",
       "id": "settingspage_async",
-      "community": 5,
+      "community": 7,
       "norm_label": "async()"
     },
     {
@@ -3132,7 +3177,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\pages\\UsersPage.tsx",
       "source_location": "L1",
       "id": "c_users_danie_vortan_s_iot_platform_apps_web_src_pages_userspage_tsx",
-      "community": 24,
+      "community": 22,
       "norm_label": "userspage.tsx"
     },
     {
@@ -3141,7 +3186,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\pages\\UsersPage.tsx",
       "source_location": "L28",
       "id": "userspage_roletag",
-      "community": 24,
+      "community": 22,
       "norm_label": "roletag()"
     },
     {
@@ -3150,7 +3195,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\pages\\UsersPage.tsx",
       "source_location": "L89",
       "id": "userspage_openedit",
-      "community": 24,
+      "community": 22,
       "norm_label": "openedit()"
     },
     {
@@ -3159,7 +3204,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\store\\auth.store.ts",
       "source_location": "L1",
       "id": "c_users_danie_vortan_s_iot_platform_apps_web_src_store_auth_store_ts",
-      "community": 48,
+      "community": 46,
       "norm_label": "auth.store.ts"
     },
     {
@@ -3168,7 +3213,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\store\\ui.store.ts",
       "source_location": "L1",
       "id": "c_users_danie_vortan_s_iot_platform_apps_web_src_store_ui_store_ts",
-      "community": 49,
+      "community": 47,
       "norm_label": "ui.store.ts"
     },
     {
@@ -3177,7 +3222,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\packages\\shared\\src\\index.ts",
       "source_location": "L1",
       "id": "c_users_danie_vortan_s_iot_platform_packages_shared_src_index_ts",
-      "community": 50,
+      "community": 48,
       "norm_label": "index.ts"
     },
     {
@@ -3186,7 +3231,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\packages\\shared\\src\\types\\alert.ts",
       "source_location": "L1",
       "id": "c_users_danie_vortan_s_iot_platform_packages_shared_src_types_alert_ts",
-      "community": 51,
+      "community": 49,
       "norm_label": "alert.ts"
     },
     {
@@ -3195,7 +3240,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\packages\\shared\\src\\types\\auth.ts",
       "source_location": "L1",
       "id": "c_users_danie_vortan_s_iot_platform_packages_shared_src_types_auth_ts",
-      "community": 52,
+      "community": 50,
       "norm_label": "auth.ts"
     },
     {
@@ -3204,7 +3249,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\packages\\shared\\src\\types\\command.ts",
       "source_location": "L1",
       "id": "c_users_danie_vortan_s_iot_platform_packages_shared_src_types_command_ts",
-      "community": 53,
+      "community": 51,
       "norm_label": "command.ts"
     },
     {
@@ -3213,7 +3258,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\packages\\shared\\src\\types\\dashboard.ts",
       "source_location": "L1",
       "id": "c_users_danie_vortan_s_iot_platform_packages_shared_src_types_dashboard_ts",
-      "community": 54,
+      "community": 52,
       "norm_label": "dashboard.ts"
     },
     {
@@ -3222,7 +3267,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\packages\\shared\\src\\types\\device.ts",
       "source_location": "L1",
       "id": "c_users_danie_vortan_s_iot_platform_packages_shared_src_types_device_ts",
-      "community": 55,
+      "community": 53,
       "norm_label": "device.ts"
     },
     {
@@ -3231,7 +3276,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\packages\\shared\\src\\types\\events.ts",
       "source_location": "L1",
       "id": "c_users_danie_vortan_s_iot_platform_packages_shared_src_types_events_ts",
-      "community": 56,
+      "community": 54,
       "norm_label": "events.ts"
     },
     {
@@ -3240,7 +3285,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\packages\\shared\\src\\types\\ota.ts",
       "source_location": "L1",
       "id": "c_users_danie_vortan_s_iot_platform_packages_shared_src_types_ota_ts",
-      "community": 57,
+      "community": 55,
       "norm_label": "ota.ts"
     },
     {
@@ -3249,7 +3294,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\packages\\shared\\src\\types\\rule.ts",
       "source_location": "L1",
       "id": "c_users_danie_vortan_s_iot_platform_packages_shared_src_types_rule_ts",
-      "community": 58,
+      "community": 56,
       "norm_label": "rule.ts"
     },
     {
@@ -3258,7 +3303,7 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\packages\\shared\\src\\types\\telemetry.ts",
       "source_location": "L1",
       "id": "c_users_danie_vortan_s_iot_platform_packages_shared_src_types_telemetry_ts",
-      "community": 59,
+      "community": 57,
       "norm_label": "telemetry.ts"
     }
   ],
@@ -3674,6 +3719,18 @@
     {
       "relation": "imports_from",
       "confidence": "EXTRACTED",
+      "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\seed\\demo.ts",
+      "source_location": "L14",
+      "weight": 1.0,
+      "_src": "c_users_danie_vortan_s_iot_platform_apps_api_src_seed_demo_ts",
+      "_tgt": "c_users_danie_vortan_s_iot_platform_apps_api_src_config_index_ts",
+      "source": "c_users_danie_vortan_s_iot_platform_apps_api_src_config_index_ts",
+      "target": "c_users_danie_vortan_s_iot_platform_apps_api_src_seed_demo_ts",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\seed\\index.ts",
       "source_location": "L5",
       "weight": 1.0,
@@ -4050,8 +4107,8 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\routes\\export.routes.ts",
       "source_location": "L19",
       "weight": 1.0,
-      "_src": "export_routes_exportroutes",
-      "_tgt": "auth_requirepermission",
+      "_src": "auth_requirepermission",
+      "_tgt": "export_routes_exportroutes",
       "source": "auth_requirepermission",
       "target": "export_routes_exportroutes"
     },
@@ -4130,6 +4187,18 @@
     {
       "relation": "imports_from",
       "confidence": "EXTRACTED",
+      "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\seed\\demo.ts",
+      "source_location": "L20",
+      "weight": 1.0,
+      "_src": "c_users_danie_vortan_s_iot_platform_apps_api_src_seed_demo_ts",
+      "_tgt": "c_users_danie_vortan_s_iot_platform_apps_api_src_models_alert_ts",
+      "source": "c_users_danie_vortan_s_iot_platform_apps_api_src_models_alert_ts",
+      "target": "c_users_danie_vortan_s_iot_platform_apps_api_src_seed_demo_ts",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\seed\\index.ts",
       "source_location": "L11",
       "weight": 1.0,
@@ -4173,6 +4242,18 @@
       "_tgt": "c_users_danie_vortan_s_iot_platform_apps_api_src_models_command_ts",
       "source": "c_users_danie_vortan_s_iot_platform_apps_api_src_models_command_ts",
       "target": "c_users_danie_vortan_s_iot_platform_apps_api_src_routes_org_routes_ts",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\seed\\demo.ts",
+      "source_location": "L25",
+      "weight": 1.0,
+      "_src": "c_users_danie_vortan_s_iot_platform_apps_api_src_seed_demo_ts",
+      "_tgt": "c_users_danie_vortan_s_iot_platform_apps_api_src_models_command_ts",
+      "source": "c_users_danie_vortan_s_iot_platform_apps_api_src_models_command_ts",
+      "target": "c_users_danie_vortan_s_iot_platform_apps_api_src_seed_demo_ts",
       "confidence_score": 1.0
     },
     {
@@ -4238,6 +4319,18 @@
     {
       "relation": "imports_from",
       "confidence": "EXTRACTED",
+      "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\seed\\demo.ts",
+      "source_location": "L19",
+      "weight": 1.0,
+      "_src": "c_users_danie_vortan_s_iot_platform_apps_api_src_seed_demo_ts",
+      "_tgt": "c_users_danie_vortan_s_iot_platform_apps_api_src_models_dashboard_ts",
+      "source": "c_users_danie_vortan_s_iot_platform_apps_api_src_models_dashboard_ts",
+      "target": "c_users_danie_vortan_s_iot_platform_apps_api_src_seed_demo_ts",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\seed\\index.ts",
       "source_location": "L10",
       "weight": 1.0,
@@ -4281,6 +4374,18 @@
       "_tgt": "c_users_danie_vortan_s_iot_platform_apps_api_src_models_device_ts",
       "source": "c_users_danie_vortan_s_iot_platform_apps_api_src_models_device_ts",
       "target": "c_users_danie_vortan_s_iot_platform_apps_api_src_routes_ota_routes_ts",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\seed\\demo.ts",
+      "source_location": "L17",
+      "weight": 1.0,
+      "_src": "c_users_danie_vortan_s_iot_platform_apps_api_src_seed_demo_ts",
+      "_tgt": "c_users_danie_vortan_s_iot_platform_apps_api_src_models_device_ts",
+      "source": "c_users_danie_vortan_s_iot_platform_apps_api_src_models_device_ts",
+      "target": "c_users_danie_vortan_s_iot_platform_apps_api_src_seed_demo_ts",
       "confidence_score": 1.0
     },
     {
@@ -4358,6 +4463,18 @@
     {
       "relation": "imports_from",
       "confidence": "EXTRACTED",
+      "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\seed\\demo.ts",
+      "source_location": "L22",
+      "weight": 1.0,
+      "_src": "c_users_danie_vortan_s_iot_platform_apps_api_src_seed_demo_ts",
+      "_tgt": "c_users_danie_vortan_s_iot_platform_apps_api_src_models_firmware_ts",
+      "source": "c_users_danie_vortan_s_iot_platform_apps_api_src_models_firmware_ts",
+      "target": "c_users_danie_vortan_s_iot_platform_apps_api_src_seed_demo_ts",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\seed\\index.ts",
       "source_location": "L13",
       "weight": 1.0,
@@ -4401,6 +4518,18 @@
       "_tgt": "c_users_danie_vortan_s_iot_platform_apps_api_src_models_geofence_ts",
       "source": "c_users_danie_vortan_s_iot_platform_apps_api_src_models_geofence_ts",
       "target": "c_users_danie_vortan_s_iot_platform_apps_api_src_routes_share_routes_ts",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\seed\\demo.ts",
+      "source_location": "L24",
+      "weight": 1.0,
+      "_src": "c_users_danie_vortan_s_iot_platform_apps_api_src_seed_demo_ts",
+      "_tgt": "c_users_danie_vortan_s_iot_platform_apps_api_src_models_geofence_ts",
+      "source": "c_users_danie_vortan_s_iot_platform_apps_api_src_models_geofence_ts",
+      "target": "c_users_danie_vortan_s_iot_platform_apps_api_src_seed_demo_ts",
       "confidence_score": 1.0
     },
     {
@@ -4466,6 +4595,18 @@
     {
       "relation": "imports_from",
       "confidence": "EXTRACTED",
+      "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\seed\\demo.ts",
+      "source_location": "L15",
+      "weight": 1.0,
+      "_src": "c_users_danie_vortan_s_iot_platform_apps_api_src_seed_demo_ts",
+      "_tgt": "c_users_danie_vortan_s_iot_platform_apps_api_src_models_organization_ts",
+      "source": "c_users_danie_vortan_s_iot_platform_apps_api_src_models_organization_ts",
+      "target": "c_users_danie_vortan_s_iot_platform_apps_api_src_seed_demo_ts",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\seed\\index.ts",
       "source_location": "L6",
       "weight": 1.0,
@@ -4526,6 +4667,18 @@
     {
       "relation": "imports_from",
       "confidence": "EXTRACTED",
+      "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\seed\\demo.ts",
+      "source_location": "L23",
+      "weight": 1.0,
+      "_src": "c_users_danie_vortan_s_iot_platform_apps_api_src_seed_demo_ts",
+      "_tgt": "c_users_danie_vortan_s_iot_platform_apps_api_src_models_otajob_ts",
+      "source": "c_users_danie_vortan_s_iot_platform_apps_api_src_models_otajob_ts",
+      "target": "c_users_danie_vortan_s_iot_platform_apps_api_src_seed_demo_ts",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\seed\\index.ts",
       "source_location": "L14",
       "weight": 1.0,
@@ -4574,6 +4727,18 @@
     {
       "relation": "imports_from",
       "confidence": "EXTRACTED",
+      "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\seed\\demo.ts",
+      "source_location": "L27",
+      "weight": 1.0,
+      "_src": "c_users_danie_vortan_s_iot_platform_apps_api_src_seed_demo_ts",
+      "_tgt": "c_users_danie_vortan_s_iot_platform_apps_api_src_models_page_ts",
+      "source": "c_users_danie_vortan_s_iot_platform_apps_api_src_models_page_ts",
+      "target": "c_users_danie_vortan_s_iot_platform_apps_api_src_seed_demo_ts",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\routes\\org.routes.ts",
       "source_location": "L7",
       "weight": 1.0,
@@ -4593,6 +4758,18 @@
       "_tgt": "c_users_danie_vortan_s_iot_platform_apps_api_src_models_rule_ts",
       "source": "c_users_danie_vortan_s_iot_platform_apps_api_src_models_rule_ts",
       "target": "c_users_danie_vortan_s_iot_platform_apps_api_src_routes_rules_routes_ts",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\seed\\demo.ts",
+      "source_location": "L21",
+      "weight": 1.0,
+      "_src": "c_users_danie_vortan_s_iot_platform_apps_api_src_seed_demo_ts",
+      "_tgt": "c_users_danie_vortan_s_iot_platform_apps_api_src_models_rule_ts",
+      "source": "c_users_danie_vortan_s_iot_platform_apps_api_src_models_rule_ts",
+      "target": "c_users_danie_vortan_s_iot_platform_apps_api_src_seed_demo_ts",
       "confidence_score": 1.0
     },
     {
@@ -4658,6 +4835,18 @@
     {
       "relation": "imports_from",
       "confidence": "EXTRACTED",
+      "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\seed\\demo.ts",
+      "source_location": "L26",
+      "weight": 1.0,
+      "_src": "c_users_danie_vortan_s_iot_platform_apps_api_src_seed_demo_ts",
+      "_tgt": "c_users_danie_vortan_s_iot_platform_apps_api_src_models_share_ts",
+      "source": "c_users_danie_vortan_s_iot_platform_apps_api_src_models_share_ts",
+      "target": "c_users_danie_vortan_s_iot_platform_apps_api_src_seed_demo_ts",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\routes\\dashboard.routes.ts",
       "source_location": "L3",
       "weight": 1.0,
@@ -4689,6 +4878,18 @@
       "_tgt": "c_users_danie_vortan_s_iot_platform_apps_api_src_models_telemetry_ts",
       "source": "c_users_danie_vortan_s_iot_platform_apps_api_src_models_telemetry_ts",
       "target": "c_users_danie_vortan_s_iot_platform_apps_api_src_routes_org_routes_ts",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\seed\\demo.ts",
+      "source_location": "L18",
+      "weight": 1.0,
+      "_src": "c_users_danie_vortan_s_iot_platform_apps_api_src_seed_demo_ts",
+      "_tgt": "c_users_danie_vortan_s_iot_platform_apps_api_src_models_telemetry_ts",
+      "source": "c_users_danie_vortan_s_iot_platform_apps_api_src_models_telemetry_ts",
+      "target": "c_users_danie_vortan_s_iot_platform_apps_api_src_seed_demo_ts",
       "confidence_score": 1.0
     },
     {
@@ -4761,6 +4962,18 @@
       "_tgt": "c_users_danie_vortan_s_iot_platform_apps_api_src_models_user_ts",
       "source": "c_users_danie_vortan_s_iot_platform_apps_api_src_models_user_ts",
       "target": "c_users_danie_vortan_s_iot_platform_apps_api_src_routes_users_routes_ts",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\seed\\demo.ts",
+      "source_location": "L16",
+      "weight": 1.0,
+      "_src": "c_users_danie_vortan_s_iot_platform_apps_api_src_seed_demo_ts",
+      "_tgt": "c_users_danie_vortan_s_iot_platform_apps_api_src_models_user_ts",
+      "source": "c_users_danie_vortan_s_iot_platform_apps_api_src_models_user_ts",
+      "target": "c_users_danie_vortan_s_iot_platform_apps_api_src_seed_demo_ts",
       "confidence_score": 1.0
     },
     {
@@ -5266,6 +5479,102 @@
       "_tgt": "device_service_deviceservice_delete",
       "source": "users_routes_usersroutes",
       "target": "device_service_deviceservice_delete"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\seed\\demo.ts",
+      "source_location": "L58",
+      "weight": 1.0,
+      "_src": "c_users_danie_vortan_s_iot_platform_apps_api_src_seed_demo_ts",
+      "_tgt": "demo_rand",
+      "source": "c_users_danie_vortan_s_iot_platform_apps_api_src_seed_demo_ts",
+      "target": "demo_rand",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\seed\\demo.ts",
+      "source_location": "L62",
+      "weight": 1.0,
+      "_src": "c_users_danie_vortan_s_iot_platform_apps_api_src_seed_demo_ts",
+      "_tgt": "demo_wave",
+      "source": "c_users_danie_vortan_s_iot_platform_apps_api_src_seed_demo_ts",
+      "target": "demo_wave",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\seed\\demo.ts",
+      "source_location": "L66",
+      "weight": 1.0,
+      "_src": "c_users_danie_vortan_s_iot_platform_apps_api_src_seed_demo_ts",
+      "_tgt": "demo_gentelemetry",
+      "source": "c_users_danie_vortan_s_iot_platform_apps_api_src_seed_demo_ts",
+      "target": "demo_gentelemetry",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\seed\\demo.ts",
+      "source_location": "L153",
+      "weight": 1.0,
+      "_src": "c_users_danie_vortan_s_iot_platform_apps_api_src_seed_demo_ts",
+      "_tgt": "demo_seed",
+      "source": "c_users_danie_vortan_s_iot_platform_apps_api_src_seed_demo_ts",
+      "target": "demo_seed",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\seed\\demo.ts",
+      "source_location": "L76",
+      "weight": 1.0,
+      "_src": "demo_gentelemetry",
+      "_tgt": "demo_rand",
+      "source": "demo_rand",
+      "target": "demo_gentelemetry",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\seed\\demo.ts",
+      "source_location": "L78",
+      "weight": 1.0,
+      "_src": "demo_gentelemetry",
+      "_tgt": "demo_wave",
+      "source": "demo_wave",
+      "target": "demo_gentelemetry",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\seed\\demo.ts",
+      "source_location": "L223",
+      "weight": 1.0,
+      "_src": "demo_seed",
+      "_tgt": "demo_gentelemetry",
+      "source": "demo_gentelemetry",
+      "target": "demo_seed",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\seed\\demo.ts",
+      "source_location": "L169",
+      "weight": 1.0,
+      "_src": "demo_seed",
+      "_tgt": "geofence_service_geofenceservice_create",
+      "source": "demo_seed",
+      "target": "geofence_service_geofenceservice_create"
     },
     {
       "relation": "contains",
@@ -6054,8 +6363,8 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\web\\src\\pages\\SettingsPage.tsx",
       "source_location": "L502",
       "weight": 1.0,
-      "_src": "settingspage_async",
-      "_tgt": "device_service_deviceservice_delete",
+      "_src": "device_service_deviceservice_delete",
+      "_tgt": "settingspage_async",
       "source": "device_service_deviceservice_delete",
       "target": "settingspage_async"
     },
@@ -6342,8 +6651,8 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\rule-engine.service.ts",
       "source_location": "L147",
       "weight": 1.0,
-      "_src": "rule_engine_service_ruleengineservice_fireaction",
-      "_tgt": "geofence_service_geofenceservice_create",
+      "_src": "geofence_service_geofenceservice_create",
+      "_tgt": "rule_engine_service_ruleengineservice_fireaction",
       "source": "geofence_service_geofenceservice_create",
       "target": "rule_engine_service_ruleengineservice_fireaction"
     },
@@ -6666,8 +6975,8 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\rule-engine.service.ts",
       "source_location": "L140",
       "weight": 1.0,
-      "_src": "rule_engine_service_ruleengineservice_fireaction",
-      "_tgt": "mqtt_service_mqttservice_publish",
+      "_src": "mqtt_service_mqttservice_publish",
+      "_tgt": "rule_engine_service_ruleengineservice_fireaction",
       "source": "mqtt_service_mqttservice_publish",
       "target": "rule_engine_service_ruleengineservice_fireaction"
     },
@@ -7002,8 +7311,8 @@
       "source_file": "C:\\Users\\danie\\Vortan's IoT platform\\apps\\api\\src\\services\\telemetry.service.ts",
       "source_location": "L69",
       "weight": 1.0,
-      "_src": "telemetry_service_telemetryservice_ingest",
-      "_tgt": "rule_engine_service_ruleengineservice_evaluate",
+      "_src": "rule_engine_service_ruleengineservice_evaluate",
+      "_tgt": "telemetry_service_telemetryservice_ingest",
       "source": "rule_engine_service_ruleengineservice_evaluate",
       "target": "telemetry_service_telemetryservice_ingest"
     },
