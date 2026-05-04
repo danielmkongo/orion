@@ -1,0 +1,47 @@
+{
+  "name": "Orion — Device Intelligence Platform",
+  "short_name": "Orion",
+  "description": "Monitor, control, and automate your IoT devices with Orion by Vortan.",
+  "start_url": "/dashboard",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#050505",
+  "theme_color": "#FF5B1F",
+  "lang": "en",
+  "categories": ["productivity", "utilities", "business"],
+  "icons": [
+    {
+      "src": "/orion-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/orion-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Dashboard",
+      "short_name": "Dashboard",
+      "url": "/dashboard",
+      "description": "Open the main dashboard"
+    },
+    {
+      "name": "Devices",
+      "short_name": "Devices",
+      "url": "/devices",
+      "description": "View all devices"
+    },
+    {
+      "name": "Alerts",
+      "short_name": "Alerts",
+      "url": "/alerts",
+      "description": "Check active alerts"
+    }
+  ]
+}

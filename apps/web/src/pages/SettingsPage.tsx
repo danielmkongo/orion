@@ -171,13 +171,14 @@ export function SettingsPage() {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '200px 1fr', gap: 32 }}>
+      <div className="settings-layout">
         {/* Nav */}
-        <div>
+        <div className="settings-nav">
           {SECTIONS.map(({ id, label }, i) => (
             <button
               key={id}
               onClick={() => setActiveSection(id)}
+              className={activeSection === id ? 'active-setting' : ''}
               style={{
                 display: 'flex', alignItems: 'center', gap: 10,
                 width: '100%', padding: '9px 10px',
@@ -188,7 +189,7 @@ export function SettingsPage() {
                 marginLeft: -2, cursor: 'pointer', transition: 'all 0.12s', textAlign: 'left',
               }}
             >
-              <span className="mono faint" style={{ fontSize: 10, width: 16 }}>{String(i + 1).padStart(2, '0')}</span>
+              <span className="mono faint hide-sm" style={{ fontSize: 10, width: 16 }}>{String(i + 1).padStart(2, '0')}</span>
               {label}
             </button>
           ))}

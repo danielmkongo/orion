@@ -214,7 +214,7 @@ export function DashboardPage() {
       </div>
 
       {/* ── Featured chart + category donut ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 0, marginTop: '32px', borderTop: '1px solid hsl(var(--fg))' }}>
+      <div className="dash-chart-grid">
         {/* Chart — 2/3 */}
         <div style={{ padding: '24px 24px 24px 0', borderRight: '1px solid hsl(var(--border))' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px', gap: '12px', flexWrap: 'wrap' }}>

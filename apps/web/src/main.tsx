@@ -7,6 +7,13 @@ import App from './App';
 import { ErrorBoundary } from './components/ui/ErrorBoundary';
 import './styles/globals.css';
 
+// Register service worker for PWA
+if ('serviceWorker' in navigator && import.meta.env.PROD) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  });
+}
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {

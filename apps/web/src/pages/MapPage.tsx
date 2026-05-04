@@ -197,6 +197,41 @@ function MapController({ device }: { device: RichDevice | null }) {
 }
 
 /* ═══════════════════════════════════════════════════════════
+   MapGeofenceController — pans/zooms to a selected geofence
+═══════════════════════════════════════════════════════════ */
+function MapGeofenceController({ geofence }: { geofence: Geofence | null }) {
+  const map   = useMap();
+  const prevId = useRef('');
+
+  useEffect(() => {
+    if (!map || !geofence) return;
+    if (geofence._id === prevId.current) return;
+    prevId.current = geofence._id;
+
+    if (geofence.type === 'circle' && geofence.center) {
+      map.panTo(geofence.center);
+      const r = geofence.radius ?? 500;
+      const zoom =
+        r <= 100   ? 18 :
+        r <= 250   ? 17 :
+        r <= 500   ? 16 :
+        r <= 1000  ? 15 :
+        r <= 2500  ? 14 :
+        r <= 5000  ? 13 :
+        r <= 10000 ? 12 :
+        r <= 25000 ? 11 : 9;
+      setTimeout(() => map.setZoom(zoom), 80);
+    } else if (geofence.type === 'polygon' && geofence.coordinates?.length) {
+      const bounds = new google.maps.LatLngBounds();
+      geofence.coordinates.forEach(pt => bounds.extend(pt));
+      map.fitBounds(bounds, { top: 80, right: 60, bottom: 80, left: 60 });
+    }
+  }, [map, geofence?._id]);
+
+  return null;
+}
+
+/* ═══════════════════════════════════════════════════════════
    TrajectoryLayer — fading polylines inside <Map>
 ═══════════════════════════════════════════════════════════ */
 interface TrajectoryLayerProps {
@@ -886,6 +921,7 @@ interface GeofencesPanelProps {
   geofences: Geofence[];
   onToggle: (id: string) => void;
   onDelete: (id: string) => void;
+  onSelect: (gf: Geofence) => void;
   onStartDraw: (type: DrawType) => void;
   drawMode: boolean;
   drawDraft: DrawResult | null;
@@ -895,7 +931,7 @@ interface GeofencesPanelProps {
 }
 
 function GeofencesPanel({
-  geofences, onToggle, onDelete, onStartDraw,
+  geofences, onToggle, onDelete, onSelect, onStartDraw,
   drawMode, drawDraft, onSaveDraft, onCancelDraft, saving,
 }: GeofencesPanelProps) {
   return (
@@ -951,11 +987,17 @@ function GeofencesPanel({
             <span style={{ opacity: 0.6 }}>Draw circle or polygon zones to monitor device movements</span>
           </div>
         ) : geofences.map(gf => (
-          <div key={gf._id} style={{
-            padding: '11px 14px', borderBottom: '1px solid hsl(var(--border))',
-            borderLeft: `3px solid ${gf.active ? gf.color : 'transparent'}`,
-            opacity: gf.active ? 1 : 0.5,
-          }}>
+          <div key={gf._id}
+            onClick={() => onSelect(gf)}
+            style={{
+              padding: '11px 14px', borderBottom: '1px solid hsl(var(--border))',
+              borderLeft: `3px solid ${gf.active ? gf.color : 'transparent'}`,
+              opacity: gf.active ? 1 : 0.5,
+              cursor: 'pointer', transition: 'background 0.1s',
+            }}
+            onMouseEnter={e => (e.currentTarget.style.background = 'hsl(var(--surface))')}
+            onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+          >
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
                 <span style={{ width: 8, height: 8, borderRadius: gf.type === 'circle' ? '50%' : '1px',
@@ -963,13 +1005,13 @@ function GeofencesPanel({
                 <span style={{ fontSize: 12.5, fontWeight: 500, color: 'hsl(var(--fg))' }}>{gf.name}</span>
               </div>
               <div style={{ display: 'flex', gap: 4 }}>
-                <button onClick={() => onToggle(gf._id)} style={{
+                <button onClick={e => { e.stopPropagation(); onToggle(gf._id); }} style={{
                   background: 'none', border: 'none', cursor: 'pointer', padding: 2,
                   color: gf.active ? gf.color : 'hsl(var(--muted-fg))', display: 'flex',
                 }}>
                   {gf.active ? <ToggleRight size={16} /> : <ToggleLeft size={16} />}
                 </button>
-                <button onClick={() => onDelete(gf._id)} style={{
+                <button onClick={e => { e.stopPropagation(); onDelete(gf._id); }} style={{
                   background: 'none', border: 'none', cursor: 'pointer', padding: 2,
                   color: 'hsl(var(--muted-fg))', display: 'flex',
                 }}>
@@ -1085,6 +1127,9 @@ export function MapPage() {
 
   // Map style
   const [mapStyle, setMapStyle]           = useState<'satellite' | 'dark'>('satellite');
+
+  // Geofence focus
+  const [selectedGf, setSelectedGf]       = useState<Geofence | null>(null);
 
   // Draw mode
   const [drawType, setDrawType]           = useState<DrawType | null>(null);
@@ -1219,6 +1264,7 @@ export function MapPage() {
             style={{ width: '100%', height: '100%' }}
           >
             <MapController device={selectedDevice} />
+            <MapGeofenceController geofence={selectedGf} />
 
             <TrajectoryLayer
               deviceId={selectedId}
@@ -1476,6 +1522,7 @@ export function MapPage() {
             geofences={geofences}
             onToggle={id => toggleGf.mutate(id)}
             onDelete={id => deleteGf.mutate(id)}
+            onSelect={gf => { setSelectedGf(gf); setMobilePanel(false); }}
             onStartDraw={handleStartDraw}
             drawMode={!!drawType}
             drawDraft={drawDraft}

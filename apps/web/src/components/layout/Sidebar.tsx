@@ -66,6 +66,7 @@ export function Sidebar() {
                 )}
                 <NavLink
                   to={href}
+                  onClick={() => { if (window.innerWidth < 768) useUIStore.getState().setSidebarCollapsed(true); }}
                   className={[
                     'flex items-center gap-3 px-3 py-2 w-full transition-colors duration-100',
                     'border-l-2',
