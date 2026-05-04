@@ -12,6 +12,7 @@ export default defineConfig({
   server: {
     port: 6002,
     host: '0.0.0.0',
+    allowedHosts: ['orion.vortan.io'],
     proxy: {
       '/api': {
         target: 'http://127.0.0.1:7001',
