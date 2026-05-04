@@ -7,7 +7,7 @@ import { LineChart } from '@/components/charts/Charts';
 import { Download, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 
 const COLORS = ['hsl(var(--primary))', 'hsl(var(--fg))', 'hsl(var(--info))', 'hsl(var(--good))', 'hsl(var(--warn))', '#A06CD5'];
-const RANGES = [{ label: '1h', h: 1 }, { label: '6h', h: 6 }, { label: '24h', h: 24 }, { label: '7d', h: 168 }];
+const RANGES = [{ label: '24h', h: 24 }, { label: '7d', h: 168 }, { label: '30d', h: 720 }];
 
 export function TelemetryPage() {
   const [selectedDeviceId, setSelectedDeviceId] = useState('');
@@ -16,6 +16,9 @@ export function TelemetryPage() {
   const [range, setRange] = useState(RANGES[2]);
   const [normalize, setNormalize] = useState(false);
   const [showArea, setShowArea] = useState(true);
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo]   = useState('');
+  const isCustom = range.label === 'custom';
 
   const { data: devicesData } = useQuery({
     queryKey: ['devices', 'telemetry-page'],
@@ -46,8 +49,12 @@ export function TelemetryPage() {
       setFeaturedField(numericFields[0].key);
   }, [numericFields.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const from = new Date(Date.now() - range.h * 3600_000).toISOString();
-  const to   = new Date().toISOString();
+  const from = isCustom && customFrom
+    ? new Date(customFrom).toISOString()
+    : new Date(Date.now() - range.h * 3600_000).toISOString();
+  const to = isCustom && customTo
+    ? new Date(customTo + 'T23:59:59').toISOString()
+    : new Date().toISOString();
 
   const { data: seriesData, isLoading } = useQuery({
     queryKey: ['series-multi', deviceId, selectedFields.join(','), range.label],
@@ -224,7 +231,7 @@ export function TelemetryPage() {
                   key={key}
                   onClick={() => toggleField(key)}
                   style={{
-                    padding: `14px 18px 14px ${i === 0 ? 0 : 18}px`,
+                    padding: '14px 18px',
                     borderRight: i < Math.min(6, numericFields.length) - 1 ? '1px solid hsl(var(--border))' : 'none',
                     textAlign: 'left',
                     background: 'transparent',
@@ -282,7 +289,17 @@ export function TelemetryPage() {
             {RANGES.map(r => (
               <button key={r.label} className={range.label === r.label ? 'on' : ''} onClick={() => setRange(r)}>{r.label.toUpperCase()}</button>
             ))}
+            <button className={isCustom ? 'on' : ''} onClick={() => { setRange({ label: 'custom', h: 0 }); if (!customFrom) { const d = new Date(); const week = new Date(d); week.setDate(d.getDate() - 7); setCustomFrom(week.toISOString().slice(0,10)); setCustomTo(d.toISOString().slice(0,10)); } }}>CUSTOM</button>
           </div>
+          {isCustom && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <input type="date" value={customFrom} onChange={e => setCustomFrom(e.target.value)}
+                className="input" style={{ padding: '4px 8px', fontSize: 11, fontFamily: 'var(--font-mono)', width: 130 }} />
+              <span className="mono faint" style={{ fontSize: 11 }}>→</span>
+              <input type="date" value={customTo} onChange={e => setCustomTo(e.target.value)}
+                className="input" style={{ padding: '4px 8px', fontSize: 11, fontFamily: 'var(--font-mono)', width: 130 }} />
+            </div>
+          )}
           <div className="seg">
             <button className={showArea ? 'on' : ''} onClick={() => setShowArea(true)}>Area</button>
             <button className={!showArea ? 'on' : ''} onClick={() => setShowArea(false)}>Line</button>
@@ -312,7 +329,7 @@ export function TelemetryPage() {
         ) : isLoading ? (
           <div className="skeleton" style={{ height: 360 }} />
         ) : chartSeries.every(s => s.data.length === 0) ? (
-          <div style={{ height: 360, display: 'flex', alignItems: 'center', justifyContent: 'center' }} className="dim">No data for selected fields in {range.label}</div>
+          <div style={{ height: 360, display: 'flex', alignItems: 'center', justifyContent: 'center' }} className="dim">No data for selected fields in {isCustom ? `${customFrom} → ${customTo}` : range.label}</div>
         ) : (
           <LineChart series={chartSeries} height={360} showArea={showArea} normalize={normalize} />
         )}

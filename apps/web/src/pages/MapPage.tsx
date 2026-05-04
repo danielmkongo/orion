@@ -581,7 +581,7 @@ function MapControls({
 /* ═══════════════════════════════════════════════════════════
    DeviceCard — overlay bottom-left of map
 ═══════════════════════════════════════════════════════════ */
-function DeviceCard({ device, onClose }: { device: RichDevice; onClose: () => void }) {
+function DeviceCard({ device, onClose, isMobile = false }: { device: RichDevice; onClose: () => void; isMobile?: boolean }) {
   const id       = device._id ?? device.id;
   const catColor = CAT_COLOR[device.category] ?? '#FF5B1F';
 
@@ -607,13 +607,25 @@ function DeviceCard({ device, onClose }: { device: RichDevice; onClose: () => vo
 
   return (
     <div style={{
-      position: 'absolute', bottom: 28, left: 14, width: 272,
+      ...(isMobile ? {
+        position: 'fixed', bottom: 0, left: 0, right: 0,
+        borderRadius: '14px 14px 0 0',
+        maxHeight: '65vh', overflowY: 'auto',
+        zIndex: 35,
+      } : {
+        position: 'absolute', bottom: 28, left: 14, width: 272,
+        overflow: 'hidden', zIndex: 20,
+      }),
       background: 'hsl(var(--surface))',
       border: '1px solid hsl(var(--border))',
       borderTop: `3px solid ${catColor}`,
-      boxShadow: '0 12px 40px rgba(0,0,0,0.45), 0 2px 8px rgba(0,0,0,0.2)',
-      zIndex: 20, overflow: 'hidden',
+      boxShadow: '0 -8px 40px rgba(0,0,0,0.45), 0 2px 8px rgba(0,0,0,0.2)',
     }}>
+      {isMobile && (
+        <div style={{ display: 'flex', justifyContent: 'center', padding: '10px 0 4px', flexShrink: 0 }}>
+          <div style={{ width: 36, height: 4, borderRadius: 2, background: 'hsl(var(--border))' }} />
+        </div>
+      )}
 
       {/* Header */}
       <div style={{ padding: '13px 14px 11px', background: `${catColor}0A` }}>
@@ -748,7 +760,7 @@ function DrawBanner({ drawType, pts, onDone, onCancel }: {
       border: '1px solid hsl(var(--border))',
       boxShadow: '0 6px 24px rgba(0,0,0,0.4)',
       padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 12,
-      whiteSpace: 'nowrap',
+      maxWidth: 'calc(100vw - 28px)', flexWrap: 'wrap',
     }}>
       <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'hsl(var(--fg))' }}>
         {isPolygon
@@ -1042,6 +1054,21 @@ function NoApiKey() {
 export function MapPage() {
   const qc = useQueryClient();
 
+  // Mobile layout
+  const [isMobile, setIsMobile]       = useState(() => window.innerWidth < 768);
+  const [mobilePanel, setMobilePanel] = useState(false);
+
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  const handleSelect = useCallback((id: string | null) => {
+    setSelectedId(id);
+    if (id) setMobilePanel(false);
+  }, []);
+
   // Device selection + filters
   const [selectedId, setSelectedId]       = useState<string | null>(null);
   const [search, setSearch]               = useState('');
@@ -1156,10 +1183,14 @@ export function MapPage() {
   if (!API_KEY) return <NoApiKey />;
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', height: 'calc(100vh - 58px)' }}>
+    <div style={{
+      display: isMobile ? 'block' : 'grid',
+      gridTemplateColumns: isMobile ? undefined : '1fr 340px',
+      height: 'calc(100vh - 58px)',
+    }}>
 
       {/* ── Map column ── */}
-      <div id="orion-map-col" style={{ position: 'relative' }}>
+      <div id="orion-map-col" style={{ position: 'relative', height: isMobile ? '100%' : undefined }}>
         {mapStyle === 'dark' && (
           <style>{`
             #orion-map-col .gm-style canvas,
@@ -1215,7 +1246,7 @@ export function MapPage() {
                 <AdvancedMarker
                   key={id}
                   position={{ lat: device.location!.lat, lng: device.location!.lng }}
-                  onClick={() => setSelectedId(isSelected ? null : id)}
+                  onClick={() => handleSelect(isSelected ? null : id)}
                   zIndex={isSelected ? 20 : 1}
                 >
                   <DevicePin device={device} isSelected={isSelected} darkMode={mapStyle === 'dark'} />
@@ -1246,14 +1277,66 @@ export function MapPage() {
           />
         )}
 
+        {/* Mobile FAB — opens panel when no device selected */}
+        {isMobile && !selectedDevice && (
+          <button
+            onClick={() => setMobilePanel(v => !v)}
+            style={{
+              position: 'fixed', bottom: 20, right: 20, zIndex: 22,
+              width: 52, height: 52, borderRadius: '50%',
+              background: 'hsl(var(--primary))', color: '#fff',
+              border: 'none', cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              boxShadow: '0 4px 20px rgba(0,0,0,0.45)',
+              transition: 'transform 0.15s',
+            }}
+          >
+            {mobilePanel ? <X size={22} /> : <Layers size={22} />}
+          </button>
+        )}
+
         {/* Device detail card */}
         {selectedDevice && !drawType && (
-          <DeviceCard device={selectedDevice} onClose={() => setSelectedId(null)} />
+          <DeviceCard device={selectedDevice} onClose={() => handleSelect(null)} isMobile={isMobile} />
         )}
       </div>
 
+      {/* Mobile backdrop */}
+      {isMobile && mobilePanel && (
+        <div
+          onClick={() => setMobilePanel(false)}
+          style={{ position: 'fixed', inset: 0, zIndex: 28, background: 'rgba(0,0,0,0.45)' }}
+        />
+      )}
+
       {/* ── Right panel ── */}
-      <div style={{ display: 'flex', flexDirection: 'column', background: 'hsl(var(--bg))', borderLeft: '1px solid hsl(var(--border))', overflow: 'hidden' }}>
+      <div style={isMobile ? {
+        position: 'fixed', bottom: 0, left: 0, right: 0,
+        height: '68vh',
+        transform: mobilePanel ? 'translateY(0)' : 'translateY(100%)',
+        transition: 'transform 0.3s cubic-bezier(0.4,0,0.2,1)',
+        zIndex: 30,
+        display: 'flex', flexDirection: 'column',
+        background: 'hsl(var(--bg))',
+        borderTop: '1px solid hsl(var(--border))',
+        borderRadius: '16px 16px 0 0',
+        boxShadow: '0 -8px 40px rgba(0,0,0,0.45)',
+        overflow: 'hidden',
+      } : {
+        display: 'flex', flexDirection: 'column',
+        background: 'hsl(var(--bg))',
+        borderLeft: '1px solid hsl(var(--border))',
+        overflow: 'hidden',
+      }}>
+        {/* Mobile drag handle */}
+        {isMobile && (
+          <div
+            onClick={() => setMobilePanel(false)}
+            style={{ display: 'flex', justifyContent: 'center', padding: '10px 0 6px', flexShrink: 0, cursor: 'pointer' }}
+          >
+            <div style={{ width: 36, height: 4, borderRadius: 2, background: 'hsl(var(--border))' }} />
+          </div>
+        )}
 
         {/* Header */}
         <div style={{ padding: '18px 20px 14px', borderBottom: '1px solid hsl(var(--border))' }}>
@@ -1349,7 +1432,7 @@ export function MapPage() {
                   const catColor    = CAT_COLOR[device.category] ?? '#FF5B1F';
                   return (
                     <div key={id}
-                      onClick={() => { if (hasLocation) setSelectedId(isSelected ? null : id); }}
+                      onClick={() => { if (hasLocation) handleSelect(isSelected ? null : id); }}
                       style={{
                         padding: '11px 20px', borderBottom: '1px solid hsl(var(--border))',
                         borderLeft: isSelected ? `3px solid ${catColor}` : '3px solid transparent',
