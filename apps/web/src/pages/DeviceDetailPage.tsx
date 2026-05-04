@@ -90,6 +90,8 @@ export function DeviceDetailPage() {
   const [liveFields, setLiveFields] = useState<Record<string, any>>({});
   const [chartField, setChartField] = useState('');
   const [chartRange, setChartRange] = useState('24h');
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo]     = useState('');
   const [apiKeyVisible, setApiKeyVisible] = useState(false);
   const [currentKey, setCurrentKey] = useState('');
   const [cmdName, setCmdName] = useState('');
@@ -136,9 +138,13 @@ export function DeviceDetailPage() {
     refetchInterval: 60_000,
   });
 
-  const hoursMap: Record<string, number> = { '1h': 1, '6h': 6, '24h': 24, '7d': 168 };
-  const from = new Date(Date.now() - (hoursMap[chartRange] ?? 24) * 3600_000).toISOString();
-  const to   = new Date().toISOString();
+  const hoursMap: Record<string, number> = { '1h': 1, '6h': 6, '24h': 24, '7d': 168, '30d': 720 };
+  const from = chartRange === 'custom' && customFrom
+    ? new Date(customFrom).toISOString()
+    : new Date(Date.now() - (hoursMap[chartRange] ?? 24) * 3600_000).toISOString();
+  const to   = chartRange === 'custom' && customTo
+    ? new Date(customTo).toISOString()
+    : new Date().toISOString();
 
   const { data: seriesData } = useQuery({
     queryKey: ['series', id, chartField, chartRange],
@@ -530,7 +536,7 @@ export function DeviceDetailPage() {
                 )}
               </div>
             </div>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
               <div className="seg">
                 <button className={telemView === 'chart' ? 'on' : ''} onClick={() => setTelemView('chart')} title="Chart view">
                   <BarChart2 size={12} style={{ marginRight: 4, verticalAlign: 'middle' }} />Chart
@@ -540,11 +546,21 @@ export function DeviceDetailPage() {
                 </button>
               </div>
               <div className="seg">
-                {['1h', '6h', '24h', '7d'].map(r => (
+                {['1h', '6h', '24h', '7d', '30d'].map(r => (
                   <button key={r} className={chartRange === r ? 'on' : ''} onClick={() => setChartRange(r)}>{r.toUpperCase()}</button>
                 ))}
+                <button className={chartRange === 'custom' ? 'on' : ''} onClick={() => setChartRange('custom')}>Custom</button>
               </div>
             </div>
+            {chartRange === 'custom' && (
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 8 }}>
+                <input type="date" className="input" style={{ fontSize: 12, padding: '4px 8px', flex: '1 1 130px' }}
+                  value={customFrom} onChange={e => setCustomFrom(e.target.value)} />
+                <span className="mono faint" style={{ fontSize: 11 }}>→</span>
+                <input type="date" className="input" style={{ fontSize: 12, padding: '4px 8px', flex: '1 1 130px' }}
+                  value={customTo} onChange={e => setCustomTo(e.target.value)} />
+              </div>
+            )}
           </div>
           <div className="panel" style={{ padding: telemView === 'table' ? 0 : '16px 12px 8px', overflow: 'hidden' }}>
             {telemView === 'table' ? (() => {

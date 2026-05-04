@@ -641,6 +641,8 @@
 }
 
 @media (max-width: 768px) {
+  /* Hide eyebrow labels in page headers — title is self-explanatory on mobile */
+  .ph .eyebrow                    { display: none; }
   /* Detail page chart+info 2-col → 1-col */
   .detail-grid                    { grid-template-columns: 1fr !important; }
   /* Section grid → 1-col */

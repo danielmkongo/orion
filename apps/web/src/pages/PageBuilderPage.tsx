@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import GridLayout, { WidthProvider } from 'react-grid-layout';
@@ -8,7 +9,7 @@ import apiClient from '@/api/client';
 import toast from 'react-hot-toast';
 import { copyText } from '@/lib/utils';
 import { ArrowLeft, Plus, Globe, Lock, Pencil, Trash2, GripVertical, X, Check, Copy,
-         ExternalLink, Download, Settings, ChevronLeft, Eye, ArrowUp, ArrowDown,
+         ExternalLink, Download, Settings, ChevronLeft, ChevronDown, Eye, ArrowUp, ArrowDown,
          ArrowRight as ArrowRightIcon, ChevronRight } from 'lucide-react';
 import { LineChart, BarChart } from '@/components/charts/Charts';
 import { CommandWidget } from '@/components/devices/CommandWidget';
@@ -497,6 +498,76 @@ function WidgetContent({ widget }: { widget: Widget }) {
   return <div className="dim" style={dim}>{widget.type}</div>;
 }
 
+/* ── Orion-themed custom select (portal-based, never clipped) ───────── */
+function OrionSelect({ value, onChange, options, placeholder }: {
+  value: string;
+  onChange: (v: string) => void;
+  options: { value: string; label: string }[];
+  placeholder?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const [rect, setRect] = useState({ top: 0, left: 0, width: 0 });
+
+  useEffect(() => {
+    if (!open) return;
+    const close = () => setOpen(false);
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [open]);
+
+  const toggle = () => {
+    if (triggerRef.current) {
+      const r = triggerRef.current.getBoundingClientRect();
+      setRect({ top: r.bottom + 2, left: r.left, width: r.width });
+    }
+    setOpen(v => !v);
+  };
+
+  const selected = options.find(o => o.value === value);
+
+  return (
+    <>
+      <button ref={triggerRef} type="button" onClick={toggle} style={{
+        width: '100%', padding: '8px 10px', textAlign: 'left',
+        background: 'hsl(var(--bg))', border: '1px solid hsl(var(--border))',
+        color: selected ? 'hsl(var(--fg))' : 'hsl(var(--muted-fg))',
+        fontSize: 12, fontFamily: 'var(--font-mono)',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        cursor: 'pointer',
+      }}>
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {selected?.label ?? placeholder ?? '— select —'}
+        </span>
+        <ChevronDown size={12} style={{ flexShrink: 0, marginLeft: 6, color: 'hsl(var(--muted-fg))',
+          transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />
+      </button>
+      {open && createPortal(
+        <div onMouseDown={e => e.stopPropagation()} style={{
+          position: 'fixed', top: rect.top, left: rect.left, width: rect.width, zIndex: 9999,
+          background: 'hsl(var(--surface))', border: '1px solid hsl(var(--border))',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.4)', maxHeight: 220, overflowY: 'auto',
+        }}>
+          {options.map(opt => (
+            <button key={opt.value} type="button"
+              onMouseDown={() => { onChange(opt.value); setOpen(false); }}
+              style={{
+                width: '100%', padding: '9px 12px', textAlign: 'left', display: 'block',
+                background: value === opt.value ? 'hsl(var(--primary) / 0.1)' : 'transparent',
+                border: 'none', borderBottom: '1px solid hsl(var(--border))',
+                borderLeft: `2px solid ${value === opt.value ? 'hsl(var(--primary))' : 'transparent'}`,
+                color: value === opt.value ? 'hsl(var(--primary))' : 'hsl(var(--fg))',
+                fontSize: 12, fontFamily: 'var(--font-mono)', cursor: 'pointer',
+              }}
+            >{opt.label}</button>
+          ))}
+        </div>,
+        document.body
+      )}
+    </>
+  );
+}
+
 /* ── Slide-in widget drawer ─────────────────────────────────────────── */
 function WidgetDrawer({ open, editing, devices, onSave, onClose }: {
   open: boolean;
@@ -658,10 +729,12 @@ function WidgetDrawer({ open, editing, devices, onSave, onClose }: {
             {needsDevice && !needsDeviceIds && (
               <div>
                 {inputLabel('Device')}
-                <select className="select" value={deviceId} onChange={e => { setDeviceId(e.target.value); setField(''); setXField(''); setYField(''); }}>
-                  <option value="">— select device —</option>
-                  {devices.map((d: any) => <option key={d._id} value={d._id}>{d.name}</option>)}
-                </select>
+                <OrionSelect
+                  value={deviceId}
+                  onChange={v => { setDeviceId(v); setField(''); setXField(''); setYField(''); }}
+                  placeholder="— select device —"
+                  options={devices.map((d: any) => ({ value: d._id, label: d.name }))}
+                />
               </div>
             )}
 
@@ -684,10 +757,12 @@ function WidgetDrawer({ open, editing, devices, onSave, onClose }: {
             {needsField && deviceId && (
               <div>
                 {inputLabel('Field')}
-                <select className="select" value={field} onChange={e => setField(e.target.value)}>
-                  <option value="">— select field —</option>
-                  {availableFields.map(f => <option key={f} value={f}>{f}</option>)}
-                </select>
+                <OrionSelect
+                  value={field}
+                  onChange={setField}
+                  placeholder="— select field —"
+                  options={availableFields.map(f => ({ value: f, label: f }))}
+                />
               </div>
             )}
 
@@ -695,17 +770,21 @@ function WidgetDrawer({ open, editing, devices, onSave, onClose }: {
               <>
                 <div>
                   {inputLabel('X-axis field')}
-                  <select className="select" value={xField} onChange={e => setXField(e.target.value)}>
-                    <option value="">— X field —</option>
-                    {availableFields.map(f => <option key={f} value={f}>{f}</option>)}
-                  </select>
+                  <OrionSelect
+                    value={xField}
+                    onChange={setXField}
+                    placeholder="— X field —"
+                    options={availableFields.map(f => ({ value: f, label: f }))}
+                  />
                 </div>
                 <div>
                   {inputLabel('Y-axis field')}
-                  <select className="select" value={yField} onChange={e => setYField(e.target.value)}>
-                    <option value="">— Y field —</option>
-                    {availableFields.filter(f => f !== xField).map(f => <option key={f} value={f}>{f}</option>)}
-                  </select>
+                  <OrionSelect
+                    value={yField}
+                    onChange={setYField}
+                    placeholder="— Y field —"
+                    options={availableFields.filter(f => f !== xField).map(f => ({ value: f, label: f }))}
+                  />
                 </div>
               </>
             )}
