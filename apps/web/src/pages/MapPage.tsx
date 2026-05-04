@@ -1,4 +1,4 @@
-import {
+import React, {
   useState, useMemo, useEffect, useRef, useCallback,
   type CSSProperties, type ReactNode,
 } from 'react';
@@ -620,6 +620,34 @@ function DeviceCard({ device, onClose, isMobile = false }: { device: RichDevice;
   const id       = device._id ?? device.id;
   const catColor = CAT_COLOR[device.category] ?? '#FF5B1F';
 
+  // Drag-to-dismiss for mobile
+  const cardRef      = useRef<HTMLDivElement>(null);
+  const cardDragY    = useRef<number | null>(null);
+  const cardDragDist = useRef(0);
+
+  const onCardDragStart = (e: React.TouchEvent) => {
+    cardDragY.current    = e.touches[0].clientY;
+    cardDragDist.current = 0;
+    if (cardRef.current) cardRef.current.style.transition = 'none';
+  };
+  const onCardDragMove = (e: React.TouchEvent) => {
+    if (cardDragY.current === null) return;
+    const delta = Math.max(0, e.touches[0].clientY - cardDragY.current);
+    cardDragDist.current = delta;
+    if (cardRef.current) cardRef.current.style.transform = `translateY(${delta}px)`;
+  };
+  const onCardDragEnd = () => {
+    const dismiss = cardDragDist.current > 80;
+    if (cardRef.current) {
+      cardRef.current.style.transition = 'transform 0.25s cubic-bezier(0.4,0,0.2,1)';
+      cardRef.current.style.transform  = dismiss ? 'translateY(100%)' : 'translateY(0)';
+    }
+    if (dismiss) setTimeout(onClose, 260);
+    else setTimeout(() => { if (cardRef.current) cardRef.current.style.transform = ''; }, 260);
+    cardDragY.current    = null;
+    cardDragDist.current = 0;
+  };
+
   const { data: telem } = useQuery({
     queryKey: ['map-telem', id],
     queryFn:  () => telemetryApi.latest(id),
@@ -641,7 +669,7 @@ function DeviceCard({ device, onClose, isMobile = false }: { device: RichDevice;
     : null;
 
   return (
-    <div style={{
+    <div ref={cardRef} style={{
       ...(isMobile ? {
         position: 'fixed', bottom: 0, left: 0, right: 0,
         borderRadius: '14px 14px 0 0',
@@ -657,7 +685,12 @@ function DeviceCard({ device, onClose, isMobile = false }: { device: RichDevice;
       boxShadow: '0 -8px 40px rgba(0,0,0,0.45), 0 2px 8px rgba(0,0,0,0.2)',
     }}>
       {isMobile && (
-        <div style={{ display: 'flex', justifyContent: 'center', padding: '10px 0 4px', flexShrink: 0 }}>
+        <div
+          onTouchStart={onCardDragStart}
+          onTouchMove={onCardDragMove}
+          onTouchEnd={onCardDragEnd}
+          style={{ display: 'flex', justifyContent: 'center', padding: '12px 0 4px', flexShrink: 0, cursor: 'grab', touchAction: 'none' }}
+        >
           <div style={{ width: 36, height: 4, borderRadius: 2, background: 'hsl(var(--border))' }} />
         </div>
       )}
@@ -1100,6 +1133,39 @@ export function MapPage() {
   const [isMobile, setIsMobile]       = useState(() => window.innerWidth < 768);
   const [mobilePanel, setMobilePanel] = useState(false);
 
+  // Bottom-sheet drag-to-dismiss
+  const panelRef   = useRef<HTMLDivElement>(null);
+  const dragStartY = useRef<number | null>(null);
+  const dragOffset = useRef(0);
+
+  const onPanelDragStart = useCallback((e: React.TouchEvent) => {
+    dragStartY.current = e.touches[0].clientY;
+    dragOffset.current = 0;
+    if (panelRef.current) panelRef.current.style.transition = 'none';
+  }, []);
+
+  const onPanelDragMove = useCallback((e: React.TouchEvent) => {
+    if (dragStartY.current === null) return;
+    const delta = Math.max(0, e.touches[0].clientY - dragStartY.current);
+    dragOffset.current = delta;
+    if (panelRef.current) panelRef.current.style.transform = `translateY(${delta}px)`;
+  }, []);
+
+  const onPanelDragEnd = useCallback(() => {
+    const dismiss = dragOffset.current > 80;
+    if (panelRef.current) {
+      panelRef.current.style.transition = 'transform 0.25s cubic-bezier(0.4,0,0.2,1)';
+      panelRef.current.style.transform  = dismiss ? 'translateY(100%)' : 'translateY(0)';
+    }
+    if (dismiss) {
+      setTimeout(() => { setMobilePanel(false); if (panelRef.current) panelRef.current.style.transform = ''; }, 260);
+    } else {
+      setTimeout(() => { if (panelRef.current) panelRef.current.style.transform = ''; }, 260);
+    }
+    dragStartY.current = null;
+    dragOffset.current = 0;
+  }, []);
+
   useEffect(() => {
     const onResize = () => setIsMobile(window.innerWidth < 768);
     window.addEventListener('resize', onResize);
@@ -1356,7 +1422,7 @@ export function MapPage() {
       )}
 
       {/* ── Right panel ── */}
-      <div style={isMobile ? {
+      <div ref={panelRef} style={isMobile ? {
         position: 'fixed', bottom: 0, left: 0, right: 0,
         height: '68vh',
         transform: mobilePanel ? 'translateY(0)' : 'translateY(100%)',
@@ -1377,8 +1443,11 @@ export function MapPage() {
         {/* Mobile drag handle */}
         {isMobile && (
           <div
+            onTouchStart={onPanelDragStart}
+            onTouchMove={onPanelDragMove}
+            onTouchEnd={onPanelDragEnd}
             onClick={() => setMobilePanel(false)}
-            style={{ display: 'flex', justifyContent: 'center', padding: '10px 0 6px', flexShrink: 0, cursor: 'pointer' }}
+            style={{ display: 'flex', justifyContent: 'center', padding: '12px 0 6px', flexShrink: 0, cursor: 'grab', touchAction: 'none' }}
           >
             <div style={{ width: 36, height: 4, borderRadius: 2, background: 'hsl(var(--border))' }} />
           </div>

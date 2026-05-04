@@ -340,10 +340,15 @@ function DeviceShareView({ token, data }: { token: string; data: any }) {
         @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
         @keyframes orion-spin { to { transform: rotate(360deg); } }
         @keyframes orion-pulse { 0%{transform:scale(0.9);opacity:0.7} 100%{transform:scale(2.2);opacity:0} }
+        @media (max-width: 640px) {
+          .share-doc { margin: 8px auto 24px !important; width: calc(100% - 16px) !important; }
+          .share-content { padding: 28px 16px 40px !important; }
+          .share-loc-grid { grid-template-columns: 1fr !important; }
+        }
       `}</style>
 
       {/* Paper document */}
-      <div style={{
+      <div className="share-doc" style={{
         maxWidth: 1120, margin: '24px auto 48px', width: 'calc(100% - 40px)',
         background: T.bg, boxShadow: docShadow, position: 'relative',
       }}>
@@ -354,7 +359,7 @@ function DeviceShareView({ token, data }: { token: string; data: any }) {
         }} />
 
           {/* Main content */}
-          <div style={{ padding: '52px 48px 60px', minWidth: 0, position: 'relative' }}>
+          <div className="share-content" style={{ padding: '52px 48px 60px', minWidth: 0, position: 'relative' }}>
             {/* Hero */}
             <div style={{ marginBottom: 44 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
@@ -463,7 +468,7 @@ function DeviceShareView({ token, data }: { token: string; data: any }) {
             {sections.includes('location') && device.location?.lat && (
               <div style={{ marginBottom: 44 }}>
                 <SectionHeading label="Location" T={T} />
-                <div style={{ display: 'grid', gridTemplateColumns: 'minmax(180px,200px) 1fr', gap: 16 }}>
+                <div className="share-loc-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(180px,200px) 1fr', gap: 16 }}>
                   <div style={{ background: T.surface, border: `1px solid ${T.border}`, padding: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
                     {[['LAT', device.location.lat?.toFixed(6)], ['LNG', (device.location.lng ?? device.location.lon)?.toFixed(6)]].map(([k, v]) => (
                       <div key={k}>
@@ -494,7 +499,7 @@ function DeviceShareView({ token, data }: { token: string; data: any }) {
             {sections.includes('history') && (
               <div style={{ marginBottom: 44 }}>
                 <SectionHeading label="Command History" T={T} />
-                <div style={{ background: T.surface, border: `1px solid ${T.border}`, overflow: 'hidden' }}>
+                <div style={{ background: T.surface, border: `1px solid ${T.border}`, overflowX: 'auto' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: T.fontMono, fontSize: 11 }}>
                     <thead>
                       <tr style={{ background: T.surfaceActive }}>
@@ -556,10 +561,16 @@ function PageShareView({ pageData }: { pageData: any }) {
         @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
         @keyframes orion-spin { to { transform: rotate(360deg); } }
         @keyframes orion-pulse { 0%{transform:scale(0.9);opacity:0.7} 100%{transform:scale(2.2);opacity:0} }
+        @media (max-width: 640px) {
+          .share-page-doc { margin: 8px auto 24px !important; width: calc(100% - 16px) !important; }
+          .share-page-content { padding: 28px 16px 40px !important; }
+          .share-widget-grid { grid-template-columns: 1fr !important; grid-auto-rows: auto !important; }
+          .share-widget-grid > * { grid-column: 1 !important; grid-row: auto !important; min-height: 180px; }
+        }
       `}</style>
 
       {/* Paper document */}
-      <div style={{
+      <div className="share-page-doc" style={{
         maxWidth: 1560, margin: '24px auto 48px', width: 'calc(100% - 40px)',
         background: T.bg, boxShadow: docShadow, position: 'relative',
       }}>
@@ -569,7 +580,7 @@ function PageShareView({ pageData }: { pageData: any }) {
           background: `radial-gradient(ellipse 80% 60% at 50% 0%, ${T.primaryMuted} 0%, transparent 80%)`,
         }} />
 
-        <div style={{ padding: '52px 40px 60px', minWidth: 0, position: 'relative' }}>
+        <div className="share-page-content" style={{ padding: '52px 40px 60px', minWidth: 0, position: 'relative' }}>
           {/* Hero */}
           <div style={{ marginBottom: 48, paddingBottom: 40, borderBottom: `1px solid ${T.border}` }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
@@ -593,7 +604,7 @@ function PageShareView({ pageData }: { pageData: any }) {
               <p style={{ fontSize: 13, color: T.fgMuted }}>This page has no visible widgets.</p>
             </div>
           ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(12, 1fr)', gridAutoRows: '70px', gap: '12px' }}>
+            <div className="share-widget-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(12, 1fr)', gridAutoRows: '70px', gap: '12px' }}>
               {visibleWidgets.map((w: any) => {
                 const pos = w.position ?? { x: 0, y: 0, w: 4, h: 3 };
                 const contentH = Math.max(80, pos.h * 82 - 55);
