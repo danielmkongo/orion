@@ -7,8 +7,7 @@ import { useAuthStore } from '@/store/auth.store';
 import { OrionMark } from '@/components/ui/OrionLogo';
 import toast from 'react-hot-toast';
 
-/* ── Animated live feature cards ────────────────────────────────────── */
-
+/* ── Live feature tile animations ───────────────────────────────────── */
 function ProtocolTicker() {
   const PROTOS = ['MQTT', 'HTTP · REST', 'WebSocket', 'CoAP · UDP'];
   const [cur, setCur] = useState(0);
@@ -21,8 +20,8 @@ function ProtocolTicker() {
     return () => clearInterval(id);
   }, []);
   return (
-    <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 9, color: '#FF5B1F',
-      opacity: vis ? 1 : 0, transition: 'opacity 0.24s', whiteSpace: 'nowrap' }}>
+    <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 11,
+      color: 'rgba(255,255,255,0.38)', opacity: vis ? 1 : 0, transition: 'opacity 0.24s' }}>
       {PROTOS[cur]}
     </span>
   );
@@ -35,7 +34,7 @@ function LiveSparkline() {
     const id = setInterval(() => setPts(p => [...p.slice(1), 26 + Math.random() * 50]), 650);
     return () => clearInterval(id);
   }, []);
-  const W = 56, H = 22;
+  const W = 60, H = 22;
   const min = Math.min(...pts), range = Math.max(...pts) - min || 1;
   const coords = pts.map((v, i) => [
     (i / (pts.length - 1)) * W,
@@ -57,14 +56,14 @@ function LiveSparkline() {
 
 function RulesPulse() {
   return (
-    <svg width={28} height={20} style={{ overflow: 'visible', display: 'block' }}>
+    <svg width={32} height={22} style={{ overflow: 'visible', display: 'block' }}>
       {[0, 1, 2].map(i => (
-        <circle key={i} cx={14} cy={10} r={3} fill="none" stroke="#FF5B1F" strokeWidth="0.8">
-          <animate attributeName="r"       values={`3;${5 + i * 4};3`}   dur="1.9s" begin={`${i * 0.55}s`} repeatCount="indefinite" />
-          <animate attributeName="opacity" values="0.9;0;0.9"             dur="1.9s" begin={`${i * 0.55}s`} repeatCount="indefinite" />
+        <circle key={i} cx={16} cy={11} r={3} fill="none" stroke="#FF5B1F" strokeWidth="0.8">
+          <animate attributeName="r"       values={`3;${5 + i * 4};3`} dur="1.9s" begin={`${i * 0.55}s`} repeatCount="indefinite" />
+          <animate attributeName="opacity" values="0.9;0;0.9"           dur="1.9s" begin={`${i * 0.55}s`} repeatCount="indefinite" />
         </circle>
       ))}
-      <circle cx={14} cy={10} r={3} fill="#FF5B1F" />
+      <circle cx={16} cy={11} r={3} fill="#FF5B1F" />
     </svg>
   );
 }
@@ -72,9 +71,9 @@ function RulesPulse() {
 function SignalBars() {
   const heights = [5, 9, 13, 17];
   return (
-    <svg width={26} height={18} style={{ overflow: 'visible', display: 'block' }}>
+    <svg width={28} height={18} style={{ overflow: 'visible', display: 'block' }}>
       {heights.map((h, i) => (
-        <rect key={i} x={i * 6.5} y={18 - h} width={4.5} height={h} rx={1} fill="#FF5B1F">
+        <rect key={i} x={i * 7} y={18 - h} width={5} height={h} rx={1} fill="#FF5B1F">
           <animate attributeName="opacity" values="0.25;1;0.25"
             dur="1.5s" begin={`${i * 0.2}s`} repeatCount="indefinite" />
         </rect>
@@ -83,23 +82,12 @@ function SignalBars() {
   );
 }
 
-function FeatureCard({ icon: Icon, label, children }: { icon: React.ElementType; label: string; children: React.ReactNode }) {
-  return (
-    <div style={{
-      padding: '13px 14px 12px',
-      border: '1px solid rgba(255,255,255,0.07)',
-      background: 'rgba(8,8,7,0.78)',
-      backdropFilter: 'blur(10px)',
-      display: 'flex', flexDirection: 'column', gap: 10,
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-        <Icon size={11} style={{ color: '#FF5B1F', flexShrink: 0 }} />
-        <span style={{ fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.82)', letterSpacing: '-0.01em' }}>{label}</span>
-      </div>
-      {children}
-    </div>
-  );
-}
+const FEATURES = [
+  { icon: Wifi,      label: 'Any Protocol',  Live: ProtocolTicker },
+  { icon: BarChart2, label: 'Live Analytics', Live: LiveSparkline  },
+  { icon: Shield,    label: 'Rules Engine',   Live: RulesPulse     },
+  { icon: Cpu,       label: 'Device Control', Live: SignalBars      },
+];
 
 /* ── Orion constellation star field ─────────────────────────────────── */
 function StarField() {
@@ -173,7 +161,7 @@ function StarField() {
       {/* Background field stars */}
       {bgStars.map(s => (
         <circle key={s.id} cx={s.cx} cy={s.cy} r={s.r} fill="white">
-          <animate attributeName="opacity" values="0.03;0.38;0.03"
+          <animate attributeName="opacity" values="0.03;0.28;0.03"
             dur={`${s.opDur}s`} begin={`${s.opDel}s`} repeatCount="indefinite" />
           <animateTransform attributeName="transform" type="translate"
             values={`0 0;${s.dx} ${s.dy};0 0`}
@@ -211,7 +199,7 @@ function StarField() {
           {/* Star disc */}
           <circle cx={s.cx} cy={s.cy} r={s.r} fill={s.color ?? 'white'}>
             <animate attributeName="opacity"
-              values="0.52;1.0;0.52"
+              values="0.45;0.9;0.45"
               dur={`${s.dur}s`} begin={`${s.del}s`} repeatCount="indefinite" />
           </circle>
         </g>
@@ -288,6 +276,12 @@ export function LoginPage() {
           background: 'radial-gradient(ellipse at bottom right, rgba(255,91,31,0.2) 0%, transparent 65%)',
         }} />
 
+        {/* Haze layer — upper portion clear so Orion glows, lower portion darkens so text/tiles are always readable */}
+        <div style={{
+          position: 'absolute', inset: 0, pointerEvents: 'none',
+          background: 'linear-gradient(to bottom, transparent 0%, transparent 28%, rgba(11,11,10,0.50) 55%, rgba(11,11,10,0.78) 100%)',
+        }} />
+
         {/* Watermark Orion mark */}
         <div style={{ position: 'absolute', right: -80, top: '50%', transform: 'translateY(-50%)', opacity: 0.04, pointerEvents: 'none' }}>
           <OrionMark size={480} className="text-white" />
@@ -299,7 +293,7 @@ export function LoginPage() {
           <span style={{ color: 'white', fontSize: 17, fontWeight: 600, letterSpacing: '-0.02em' }}>Orion</span>
         </div>
 
-        {/* Headline block — centre of the panel, Orion fills the background */}
+        {/* Headline block */}
         <motion.div
           initial={{ opacity: 0, y: 24 }}
           animate={{ opacity: 1, y: 0 }}
@@ -321,25 +315,28 @@ export function LoginPage() {
           <p style={{ fontSize: 16, color: 'rgba(255,255,255,0.5)', lineHeight: 1.6, maxWidth: '44ch' }}>
             Monitor, control, and analyze any connected device — from GPS trackers to industrial sensors — in one cohesive platform.
           </p>
+
+          {/* Feature grid with live animations */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 40 }}>
+            {FEATURES.map(({ icon: Icon, label, Live }) => (
+              <div key={label} style={{
+                padding: '16px',
+                border: '1px solid rgba(255,255,255,0.08)',
+                background: 'rgba(255,255,255,0.04)',
+              }}>
+                <div style={{ width: 28, height: 28, background: 'rgba(255,91,31,0.18)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
+                  <Icon size={13} style={{ color: '#FF5B1F' }} />
+                </div>
+                <p style={{ fontSize: 13, fontWeight: 600, color: 'white', marginBottom: 6 }}>{label}</p>
+                <Live />
+              </div>
+            ))}
+          </div>
         </motion.div>
 
-        {/* Live feature strip — bottom of panel, above copyright */}
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.3 }}
-          style={{ position: 'relative', zIndex: 1 }}
-        >
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 20 }}>
-            <FeatureCard icon={Wifi}      label="Any Protocol">  <ProtocolTicker /></FeatureCard>
-            <FeatureCard icon={BarChart2} label="Live Analytics"><LiveSparkline /></FeatureCard>
-            <FeatureCard icon={Shield}    label="Rules Engine">  <RulesPulse /></FeatureCard>
-            <FeatureCard icon={Cpu}       label="Device Control"><SignalBars /></FeatureCard>
-          </div>
-          <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.22)' }}>
-            © {new Date().getFullYear()} Orion by Vortan
-          </p>
-        </motion.div>
+        <p style={{ position: 'relative', fontSize: 12, color: 'rgba(255,255,255,0.22)', zIndex: 1 }}>
+          © {new Date().getFullYear()} Orion by Vortan
+        </p>
       </motion.div>
 
       {/* ── Right form panel ── */}
