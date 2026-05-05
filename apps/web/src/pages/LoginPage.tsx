@@ -161,7 +161,7 @@ function StarField() {
       {/* Background field stars */}
       {bgStars.map(s => (
         <circle key={s.id} cx={s.cx} cy={s.cy} r={s.r} fill="white">
-          <animate attributeName="opacity" values="0.02;0.12;0.02"
+          <animate attributeName="opacity" values="0.01;0.07;0.01"
             dur={`${s.opDur}s`} begin={`${s.opDel}s`} repeatCount="indefinite" />
           <animateTransform attributeName="transform" type="translate"
             values={`0 0;${s.dx} ${s.dy};0 0`}
@@ -181,7 +181,7 @@ function StarField() {
         return (
           <line key={i}
             x1={p1.cx} y1={p1.cy} x2={p2.cx} y2={p2.cy}
-            stroke="rgba(255,255,255,0.08)" strokeWidth="0.28" strokeLinecap="round"
+            stroke="rgba(255,255,255,0.05)" strokeWidth="0.25" strokeLinecap="round"
           />
         );
       })}
@@ -199,7 +199,7 @@ function StarField() {
           {/* Star disc */}
           <circle cx={s.cx} cy={s.cy} r={s.r} fill={s.color ?? 'white'}>
             <animate attributeName="opacity"
-              values="0.18;0.40;0.18"
+              values="0.10;0.24;0.10"
               dur={`${s.dur}s`} begin={`${s.del}s`} repeatCount="indefinite" />
           </circle>
         </g>
