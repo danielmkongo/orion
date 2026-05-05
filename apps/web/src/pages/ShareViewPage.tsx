@@ -312,9 +312,16 @@ function DeviceShareView({ token, data }: { token: string; data: any }) {
   const [telemView, setTelemView] = useState<'chart' | 'table'>('chart');
   const [chartField, setChartField] = useState(numericFields[0]?.[0] ?? '');
   const [chartRange, setChartRange] = useState('24h');
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo]     = useState('');
 
-  const hoursMap: Record<string, number> = { '1h': 1, '6h': 6, '24h': 24, '7d': 168 };
-  const fromTs = new Date(Date.now() - (hoursMap[chartRange] ?? 24) * 3600_000).toISOString();
+  const hoursMap: Record<string, number> = { '1h': 1, '6h': 6, '24h': 24, '7d': 168, '30d': 720 };
+  const fromTs = chartRange === 'custom' && customFrom
+    ? new Date(customFrom).toISOString()
+    : new Date(Date.now() - (hoursMap[chartRange] ?? 24) * 3600_000).toISOString();
+  const toTs = chartRange === 'custom' && customTo
+    ? new Date(customTo).toISOString()
+    : new Date().toISOString();
   const fm = schemaFields.find((f: any) => f.key === chartField);
   const chartColor = fm?.chartColor ?? T.primary;
 
@@ -432,14 +439,24 @@ function DeviceShareView({ token, data }: { token: string; data: any }) {
                         <TableProperties size={11} style={{ verticalAlign: 'middle', marginRight: 4 }} />Table
                       </button>
                     </div>
-                    <div style={seg}>
-                      {['1h', '6h', '24h', '7d'].map(r => <button key={r} style={segBtn(chartRange === r)} onClick={() => setChartRange(r)}>{r.toUpperCase()}</button>)}
+                    <div style={{ ...seg, flexWrap: 'wrap' }}>
+                      {['1h', '6h', '24h', '7d', '30d'].map(r => <button key={r} style={segBtn(chartRange === r)} onClick={() => setChartRange(r)}>{r.toUpperCase()}</button>)}
+                      <button style={segBtn(chartRange === 'custom')} onClick={() => setChartRange('custom')}>Custom</button>
                     </div>
                   </div>
+                  {chartRange === 'custom' && (
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 10 }}>
+                      <input type="date" value={customFrom} onChange={e => setCustomFrom(e.target.value)}
+                        style={{ padding: '5px 8px', background: T.surface, border: `1px solid ${T.border}`, color: T.fg, fontSize: 11, fontFamily: T.fontMono, outline: 'none', flex: '1 1 130px' }} />
+                      <span style={{ fontSize: 11, color: T.fgMuted, fontFamily: T.fontMono }}>→</span>
+                      <input type="date" value={customTo} onChange={e => setCustomTo(e.target.value)}
+                        style={{ padding: '5px 8px', background: T.surface, border: `1px solid ${T.border}`, color: T.fg, fontSize: 11, fontFamily: T.fontMono, outline: 'none', flex: '1 1 130px' }} />
+                    </div>
+                  )}
                 </div>
                 <div style={{ background: T.surface, border: `1px solid ${T.border}`, overflow: 'hidden' }}>
                   {telemView === 'chart'
-                    ? <DeviceChart token={token} field={chartField} color={chartColor} from={fromTs} T={T} />
+                    ? <DeviceChart token={token} field={chartField} color={chartColor} from={fromTs} to={toTs} T={T} />
                     : <DeviceTable token={token} field={chartField} schemaFields={schemaFields} from={fromTs} T={T} />}
                 </div>
               </div>
@@ -1135,10 +1152,10 @@ function ExportBtn({ onClick, T }: { onClick: () => void; T: Tokens }) {
 }
 
 /* ── Device share chart ──────────────────────────────────────────────── */
-function DeviceChart({ token, field, color, from, T }: { token: string; field: string; color: string; from: string; T: Tokens }) {
+function DeviceChart({ token, field, color, from, to, T }: { token: string; field: string; color: string; from: string; to?: string; T: Tokens }) {
   const { data, isLoading } = useQuery({
-    queryKey: ['share-series', token, field, from],
-    queryFn: () => publicClient.get(`/public/device/${token}/series`, { params: { field, from } }).then(r => r.data),
+    queryKey: ['share-series', token, field, from, to],
+    queryFn: () => publicClient.get(`/public/device/${token}/series`, { params: { field, from, ...(to ? { to } : {}) } }).then(r => r.data),
     enabled: !!field,
   });
   const raw: any[] = data?.data ?? [];
