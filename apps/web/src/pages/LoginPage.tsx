@@ -9,7 +9,7 @@ import toast from 'react-hot-toast';
 
 /* ── Live feature tile animations ───────────────────────────────────── */
 function ProtocolTicker() {
-  const PROTOS = ['MQTT', 'HTTP · REST', 'WebSocket', 'CoAP · UDP'];
+  const PROTOS = ['MQTT', 'HTTP · REST', 'WebSocket', 'TCP · UDP', 'CoAP'];
   const [cur, setCur] = useState(0);
   const [vis, setVis] = useState(true);
   useEffect(() => {
@@ -161,7 +161,7 @@ function StarField() {
       {/* Background field stars */}
       {bgStars.map(s => (
         <circle key={s.id} cx={s.cx} cy={s.cy} r={s.r} fill="white">
-          <animate attributeName="opacity" values="0.03;0.28;0.03"
+          <animate attributeName="opacity" values="0.02;0.12;0.02"
             dur={`${s.opDur}s`} begin={`${s.opDel}s`} repeatCount="indefinite" />
           <animateTransform attributeName="transform" type="translate"
             values={`0 0;${s.dx} ${s.dy};0 0`}
@@ -171,7 +171,7 @@ function StarField() {
 
       {/* Orion Nebula (M42) — soft warm glow near sword */}
       <ellipse cx="52" cy="75" rx="5" ry="3.5" fill="rgba(255,140,60,0.0)">
-        <animate attributeName="fill-opacity" values="0.05;0.18;0.05" dur="7s" repeatCount="indefinite" />
+        <animate attributeName="fill-opacity" values="0.02;0.08;0.02" dur="7s" repeatCount="indefinite" />
       </ellipse>
 
       {/* Constellation stick lines */}
@@ -181,7 +181,7 @@ function StarField() {
         return (
           <line key={i}
             x1={p1.cx} y1={p1.cy} x2={p2.cx} y2={p2.cy}
-            stroke="rgba(255,255,255,0.22)" strokeWidth="0.32" strokeLinecap="round"
+            stroke="rgba(255,255,255,0.08)" strokeWidth="0.28" strokeLinecap="round"
           />
         );
       })}
@@ -193,13 +193,13 @@ function StarField() {
           {s.r >= 2 && (
             <circle cx={s.cx} cy={s.cy} r={s.r * 3.2} fill={s.color ?? 'white'} fillOpacity="0">
               <animate attributeName="fill-opacity"
-                values="0.05;0.18;0.05" dur={`${s.dur * 1.6}s`} begin={`${s.del}s`} repeatCount="indefinite" />
+                values="0.02;0.08;0.02" dur={`${s.dur * 1.6}s`} begin={`${s.del}s`} repeatCount="indefinite" />
             </circle>
           )}
           {/* Star disc */}
           <circle cx={s.cx} cy={s.cy} r={s.r} fill={s.color ?? 'white'}>
             <animate attributeName="opacity"
-              values="0.45;0.9;0.45"
+              values="0.18;0.40;0.18"
               dur={`${s.dur}s`} begin={`${s.del}s`} repeatCount="indefinite" />
           </circle>
         </g>
