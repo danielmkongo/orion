@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Eye, EyeOff, ArrowRight, Loader2, Wifi, BarChart2, Shield, Cpu, Sun, Moon } from 'lucide-react';
@@ -7,12 +7,99 @@ import { useAuthStore } from '@/store/auth.store';
 import { OrionMark } from '@/components/ui/OrionLogo';
 import toast from 'react-hot-toast';
 
-const FEATURES = [
-  { icon: Wifi,      label: 'Any Protocol',    desc: 'MQTT · HTTP · WebSocket' },
-  { icon: BarChart2, label: 'Live Analytics',   desc: 'Real-time dashboards'    },
-  { icon: Shield,    label: 'Rules Engine',     desc: 'Automated responses'     },
-  { icon: Cpu,       label: 'Device Control',   desc: 'OTA · Commands · Alerts' },
-];
+/* ── Animated live feature cards ────────────────────────────────────── */
+
+function ProtocolTicker() {
+  const PROTOS = ['MQTT', 'HTTP · REST', 'WebSocket', 'CoAP · UDP'];
+  const [cur, setCur] = useState(0);
+  const [vis, setVis] = useState(true);
+  useEffect(() => {
+    const id = setInterval(() => {
+      setVis(false);
+      setTimeout(() => { setCur(i => (i + 1) % PROTOS.length); setVis(true); }, 240);
+    }, 2200);
+    return () => clearInterval(id);
+  }, []);
+  return (
+    <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 9, color: '#FF5B1F',
+      opacity: vis ? 1 : 0, transition: 'opacity 0.24s', whiteSpace: 'nowrap' }}>
+      {PROTOS[cur]}
+    </span>
+  );
+}
+
+function LiveSparkline() {
+  const seed = [38, 52, 41, 67, 44, 58, 72, 49, 63, 55, 48, 70];
+  const [pts, setPts] = useState(seed);
+  useEffect(() => {
+    const id = setInterval(() => setPts(p => [...p.slice(1), 26 + Math.random() * 50]), 650);
+    return () => clearInterval(id);
+  }, []);
+  const W = 56, H = 22;
+  const min = Math.min(...pts), range = Math.max(...pts) - min || 1;
+  const coords = pts.map((v, i) => [
+    (i / (pts.length - 1)) * W,
+    H - ((v - min) / range) * H * 0.82 - H * 0.09,
+  ]);
+  const poly = coords.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
+  const [lx, ly] = coords[coords.length - 1];
+  return (
+    <svg width={W} height={H} style={{ overflow: 'visible', display: 'block' }}>
+      <polyline points={poly} fill="none" stroke="#FF5B1F" strokeWidth="1.5"
+        strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx={lx} cy={ly} r="2.5" fill="#FF5B1F">
+        <animate attributeName="r"       values="2.5;4.5;2.5" dur="0.65s" repeatCount="indefinite" />
+        <animate attributeName="opacity" values="1;0.3;1"     dur="0.65s" repeatCount="indefinite" />
+      </circle>
+    </svg>
+  );
+}
+
+function RulesPulse() {
+  return (
+    <svg width={28} height={20} style={{ overflow: 'visible', display: 'block' }}>
+      {[0, 1, 2].map(i => (
+        <circle key={i} cx={14} cy={10} r={3} fill="none" stroke="#FF5B1F" strokeWidth="0.8">
+          <animate attributeName="r"       values={`3;${5 + i * 4};3`}   dur="1.9s" begin={`${i * 0.55}s`} repeatCount="indefinite" />
+          <animate attributeName="opacity" values="0.9;0;0.9"             dur="1.9s" begin={`${i * 0.55}s`} repeatCount="indefinite" />
+        </circle>
+      ))}
+      <circle cx={14} cy={10} r={3} fill="#FF5B1F" />
+    </svg>
+  );
+}
+
+function SignalBars() {
+  const heights = [5, 9, 13, 17];
+  return (
+    <svg width={26} height={18} style={{ overflow: 'visible', display: 'block' }}>
+      {heights.map((h, i) => (
+        <rect key={i} x={i * 6.5} y={18 - h} width={4.5} height={h} rx={1} fill="#FF5B1F">
+          <animate attributeName="opacity" values="0.25;1;0.25"
+            dur="1.5s" begin={`${i * 0.2}s`} repeatCount="indefinite" />
+        </rect>
+      ))}
+    </svg>
+  );
+}
+
+function FeatureCard({ icon: Icon, label, children }: { icon: React.ElementType; label: string; children: React.ReactNode }) {
+  return (
+    <div style={{
+      padding: '13px 14px 12px',
+      border: '1px solid rgba(255,255,255,0.07)',
+      background: 'rgba(8,8,7,0.78)',
+      backdropFilter: 'blur(10px)',
+      display: 'flex', flexDirection: 'column', gap: 10,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+        <Icon size={11} style={{ color: '#FF5B1F', flexShrink: 0 }} />
+        <span style={{ fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.82)', letterSpacing: '-0.01em' }}>{label}</span>
+      </div>
+      {children}
+    </div>
+  );
+}
 
 /* ── Orion constellation star field ─────────────────────────────────── */
 function StarField() {
@@ -86,7 +173,7 @@ function StarField() {
       {/* Background field stars */}
       {bgStars.map(s => (
         <circle key={s.id} cx={s.cx} cy={s.cy} r={s.r} fill="white">
-          <animate attributeName="opacity" values="0.02;0.18;0.02"
+          <animate attributeName="opacity" values="0.03;0.38;0.03"
             dur={`${s.opDur}s`} begin={`${s.opDel}s`} repeatCount="indefinite" />
           <animateTransform attributeName="transform" type="translate"
             values={`0 0;${s.dx} ${s.dy};0 0`}
@@ -96,7 +183,7 @@ function StarField() {
 
       {/* Orion Nebula (M42) — soft warm glow near sword */}
       <ellipse cx="52" cy="75" rx="5" ry="3.5" fill="rgba(255,140,60,0.0)">
-        <animate attributeName="fill-opacity" values="0.04;0.13;0.04" dur="7s" repeatCount="indefinite" />
+        <animate attributeName="fill-opacity" values="0.05;0.18;0.05" dur="7s" repeatCount="indefinite" />
       </ellipse>
 
       {/* Constellation stick lines */}
@@ -106,7 +193,7 @@ function StarField() {
         return (
           <line key={i}
             x1={p1.cx} y1={p1.cy} x2={p2.cx} y2={p2.cy}
-            stroke="rgba(255,255,255,0.10)" strokeWidth="0.25" strokeLinecap="round"
+            stroke="rgba(255,255,255,0.22)" strokeWidth="0.32" strokeLinecap="round"
           />
         );
       })}
@@ -118,13 +205,13 @@ function StarField() {
           {s.r >= 2 && (
             <circle cx={s.cx} cy={s.cy} r={s.r * 3.2} fill={s.color ?? 'white'} fillOpacity="0">
               <animate attributeName="fill-opacity"
-                values="0.03;0.11;0.03" dur={`${s.dur * 1.6}s`} begin={`${s.del}s`} repeatCount="indefinite" />
+                values="0.05;0.18;0.05" dur={`${s.dur * 1.6}s`} begin={`${s.del}s`} repeatCount="indefinite" />
             </circle>
           )}
           {/* Star disc */}
           <circle cx={s.cx} cy={s.cy} r={s.r} fill={s.color ?? 'white'}>
             <animate attributeName="opacity"
-              values="0.18;0.45;0.18"
+              values="0.52;1.0;0.52"
               dur={`${s.dur}s`} begin={`${s.del}s`} repeatCount="indefinite" />
           </circle>
         </g>
@@ -212,7 +299,7 @@ export function LoginPage() {
           <span style={{ color: 'white', fontSize: 17, fontWeight: 600, letterSpacing: '-0.02em' }}>Orion</span>
         </div>
 
-        {/* Headline block */}
+        {/* Headline block — centre of the panel, Orion fills the background */}
         <motion.div
           initial={{ opacity: 0, y: 24 }}
           animate={{ opacity: 1, y: 0 }}
@@ -234,31 +321,25 @@ export function LoginPage() {
           <p style={{ fontSize: 16, color: 'rgba(255,255,255,0.5)', lineHeight: 1.6, maxWidth: '44ch' }}>
             Monitor, control, and analyze any connected device — from GPS trackers to industrial sensors — in one cohesive platform.
           </p>
-
-          {/* Feature grid */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 40 }}>
-            {FEATURES.map(({ icon: Icon, label, desc }) => (
-              <div
-                key={label}
-                style={{
-                  padding: '16px',
-                  border: '1px solid rgba(255,255,255,0.08)',
-                  background: 'rgba(255,255,255,0.04)',
-                }}
-              >
-                <div style={{ width: 28, height: 28, background: 'rgba(255,91,31,0.18)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
-                  <Icon size={13} style={{ color: '#FF5B1F' }} />
-                </div>
-                <p style={{ fontSize: 13, fontWeight: 600, color: 'white', marginBottom: 2 }}>{label}</p>
-                <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.38)' }}>{desc}</p>
-              </div>
-            ))}
-          </div>
         </motion.div>
 
-        <p style={{ position: 'relative', fontSize: 12, color: 'rgba(255,255,255,0.22)', zIndex: 1 }}>
-          © {new Date().getFullYear()} Orion by Vortan
-        </p>
+        {/* Live feature strip — bottom of panel, above copyright */}
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.3 }}
+          style={{ position: 'relative', zIndex: 1 }}
+        >
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 20 }}>
+            <FeatureCard icon={Wifi}      label="Any Protocol">  <ProtocolTicker /></FeatureCard>
+            <FeatureCard icon={BarChart2} label="Live Analytics"><LiveSparkline /></FeatureCard>
+            <FeatureCard icon={Shield}    label="Rules Engine">  <RulesPulse /></FeatureCard>
+            <FeatureCard icon={Cpu}       label="Device Control"><SignalBars /></FeatureCard>
+          </div>
+          <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.22)' }}>
+            © {new Date().getFullYear()} Orion by Vortan
+          </p>
+        </motion.div>
       </motion.div>
 
       {/* ── Right form panel ── */}
