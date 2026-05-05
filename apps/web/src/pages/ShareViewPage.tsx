@@ -1272,19 +1272,23 @@ function SectionHeading({ label, T }: { label: string; T: Tokens }) {
 export function ShareViewPage() {
   const { token } = useParams<{ token: string }>();
 
-  const { data: deviceData, isLoading: loadingDevice, isError: deviceErr } = useQuery({
+  const { data: deviceData, isLoading: loadingDevice, isError: deviceErr, error: deviceError } = useQuery({
     queryKey: ['share-device', token],
     queryFn: () => publicClient.get(`/public/device/${token}`).then(r => r.data),
     enabled: !!token, retry: false,
   });
 
-  const { data: pageData, isLoading: loadingPage } = useQuery({
+  const { data: pageData, isLoading: loadingPage, isError: pageErr, error: pageError } = useQuery({
     queryKey: ['share-page', token],
     queryFn: () => publicClient.get(`/public/page/${token}`).then(r => r.data),
     enabled: !!token && deviceErr, retry: false,
   });
 
   const isLoading = loadingDevice || (deviceErr && loadingPage);
+
+  const deviceStatus = (deviceError as any)?.response?.status;
+  const pageStatus   = (pageError as any)?.response?.status;
+  const isExpired    = deviceStatus === 410 || (deviceErr && pageStatus === 410);
 
   return (
     <ThemeProvider>
@@ -1294,7 +1298,9 @@ export function ShareViewPage() {
           ? <DeviceShareView token={token!} data={deviceData} />
           : pageData?.page
             ? <PageShareView pageData={pageData} />
-            : <NotFoundScreen />}
+            : isExpired
+              ? <ExpiredScreen />
+              : <NotFoundScreen />}
     </ThemeProvider>
   );
 }
@@ -1364,6 +1370,31 @@ function LoadingScreen() {
   );
 }
 
+/* ── Expired screen ──────────────────────────────────────────────────── */
+function ExpiredScreen() {
+  const { T } = useT();
+  return (
+    <div style={{ minHeight: '100vh', background: T.bg, color: T.fg, display: 'flex', flexDirection: 'column' }}>
+      <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}} @keyframes orion-spin{to{transform:rotate(360deg)}}`}</style>
+      <TopNav />
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 20, padding: 32 }}>
+        <OrionMark size={48} />
+        <div style={{ fontFamily: T.fontDisplay, fontSize: 'clamp(28px,4vw,48px)', letterSpacing: '-0.03em', color: T.fg, textAlign: 'center' }}>
+          This link has <em style={{ color: T.bad, fontStyle: 'italic' }}>expired</em>
+        </div>
+        <p style={{ fontSize: 14, color: T.fgMuted, maxWidth: 380, textAlign: 'center', lineHeight: 1.7, margin: 0 }}>
+          The owner set an expiry time on this link and it has passed.<br />
+          Ask them to extend or reshare it from their Pages section.
+        </p>
+        <a href="https://orion.vortan.io" style={{ fontSize: 12, fontFamily: T.fontMono, color: T.primary, textDecoration: 'none', letterSpacing: '0.08em', marginTop: 4 }}>
+          BUILD YOUR OWN WITH ORION →
+        </a>
+      </div>
+      <PageFooter />
+    </div>
+  );
+}
+
 /* ── Not found screen ────────────────────────────────────────────────── */
 function NotFoundScreen() {
   const { T } = useT();
@@ -1374,10 +1405,10 @@ function NotFoundScreen() {
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 20, padding: 32 }}>
         <OrionMark size={48} />
         <div style={{ fontFamily: T.fontDisplay, fontSize: 'clamp(28px,4vw,48px)', letterSpacing: '-0.03em', color: T.fg }}>
-          Link <em style={{ color: T.primary, fontStyle: 'italic' }}>expired</em>
+          Link <em style={{ color: T.primary, fontStyle: 'italic' }}>not found</em>
         </div>
         <p style={{ fontSize: 14, color: T.fgMuted, maxWidth: 380, textAlign: 'center', lineHeight: 1.7, margin: 0 }}>
-          This share link has expired or doesn't exist.<br />Ask the sender for a fresh link.
+          This share link doesn't exist or has been revoked.<br />Ask the sender for a fresh link.
         </p>
         <a href="https://orion.vortan.io" style={{ fontSize: 12, fontFamily: T.fontMono, color: T.primary, textDecoration: 'none', letterSpacing: '0.08em', marginTop: 4 }}>
           EXPLORE ORION →

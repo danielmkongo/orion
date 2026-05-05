@@ -62,9 +62,16 @@ export async function pageRoutes(app: FastifyInstance) {
     const existing = await Page.findOne({ _id: (req.params as any).id, orgId: req.user.orgId });
     if (!existing) return reply.code(404).send({ error: 'Not found' });
 
-    // Reuse existing token if already published
+    const { expiresSeconds } = (req.body as any) ?? {};
+    const expiresAt = expiresSeconds ? new Date(Date.now() + expiresSeconds * 1000) : null;
+
+    // If already published, update the expiry on the existing share record
     if (existing.shareToken) {
-      return reply.send({ token: existing.shareToken });
+      if (expiresSeconds !== undefined) {
+        await Share.findOneAndUpdate({ token: existing.shareToken }, { $set: { expiresAt } });
+      }
+      const share = await Share.findOne({ token: existing.shareToken }).lean();
+      return reply.send({ token: existing.shareToken, expiresAt: share?.expiresAt ?? null });
     }
 
     const token = nanoid(21);
@@ -75,10 +82,11 @@ export async function pageRoutes(app: FastifyInstance) {
       sections: [],
       token,
       createdBy: req.user.sub,
+      expiresAt,
     });
     existing.shareToken = token;
     await existing.save();
-    return reply.send({ token });
+    return reply.send({ token, expiresAt });
   });
 
   /* ── Live preview data (authenticated) — same shape as public endpoint ── */

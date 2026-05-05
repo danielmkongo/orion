@@ -21,6 +21,14 @@ const ResponsiveGridLayout = WidthProvider(GridLayout);
 const API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
 const MAP_ID  = import.meta.env.VITE_GOOGLE_MAP_ID || 'DEMO_MAP_ID';
 
+const SHARE_DURATIONS = [
+  { value: '24h',   label: '24 hours',  seconds: 86_400 },
+  { value: '7d',    label: '7 days',    seconds: 604_800 },
+  { value: '30d',   label: '30 days',   seconds: 2_592_000 },
+  { value: '90d',   label: '90 days',   seconds: 7_776_000 },
+  { value: 'never', label: 'No expiry', seconds: null },
+];
+
 const WIDGET_TYPES = [
   { type: 'kpi_card',        label: 'KPI Card',      icon: '▣', desc: 'Single metric, big number',     defaultW: 3, defaultH: 2 },
   { type: 'stat_card',       label: 'Stat + Trend',  icon: '▲', desc: 'KPI with sparkline trend',       defaultW: 3, defaultH: 3 },
@@ -954,6 +962,8 @@ export function PageBuilderPage() {
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [drawer, setDrawer]           = useState<{ open: boolean; widget?: Widget }>({ open: false });
   const [publishing, setPublishing]   = useState(false);
+  const [publishDuration, setPublishDuration] = useState('30d');
+  const [showPublishPicker, setShowPublishPicker] = useState(false);
   const [hoveredCard, setHoveredCard] = useState<string | null>(null);
   const [selectedCard, setSelectedCard] = useState<string | null>(null);
   const [editingName, setEditingName] = useState(false);
@@ -1073,11 +1083,13 @@ export function PageBuilderPage() {
     if (selectedCard === wid) setSelectedCard(null);
   };
 
-  const publish = async () => {
+  const publish = async (duration = publishDuration) => {
     if (saveTimerRef.current) { clearTimeout(saveTimerRef.current); saveTimerRef.current = null; try { await apiClient.patch(`/pages/${id}`, { widgets }); } catch {} }
     setPublishing(true);
+    setShowPublishPicker(false);
     try {
-      const res = await apiClient.post(`/pages/${id}/publish`);
+      const opt = SHARE_DURATIONS.find(o => o.value === duration);
+      const res = await apiClient.post(`/pages/${id}/publish`, { ...(opt?.seconds ? { expiresSeconds: opt.seconds } : {}) });
       queryClient.setQueryData(['page', id], (old: any) => ({ ...old, shareToken: res.data.token }));
       await copyText(`${window.location.origin}/s/${res.data.token}`);
       toast.success('Published! Link copied.');
@@ -1150,9 +1162,29 @@ export function PageBuilderPage() {
               <button onClick={unpublish} className="btn btn-sm btn-outline" style={{ gap:6,color:'hsl(var(--bad))' }}><Lock size={13} /> Unpublish</button>
             </>
           ) : (
-            <button onClick={publish} disabled={publishing} className="btn btn-sm btn-outline" style={{ gap:6 }}>
-              <Globe size={13} /> {publishing ? 'Publishing…' : 'Publish'}
-            </button>
+            <div style={{ position: 'relative' }}>
+              {showPublishPicker ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <select
+                    value={publishDuration}
+                    onChange={e => setPublishDuration(e.target.value)}
+                    className="input"
+                    style={{ fontSize: 11, padding: '4px 8px', height: 'auto' }}
+                    autoFocus
+                  >
+                    {SHARE_DURATIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </select>
+                  <button onClick={() => publish(publishDuration)} disabled={publishing} className="btn btn-sm btn-primary" style={{ gap:6, whiteSpace: 'nowrap' }}>
+                    <Globe size={13} /> {publishing ? 'Publishing…' : 'Publish'}
+                  </button>
+                  <button onClick={() => setShowPublishPicker(false)} className="btn btn-sm btn-ghost" style={{ padding: '0 8px' }}>✕</button>
+                </div>
+              ) : (
+                <button onClick={() => setShowPublishPicker(true)} disabled={publishing} className="btn btn-sm btn-outline" style={{ gap:6 }}>
+                  <Globe size={13} /> Publish
+                </button>
+              )}
+            </div>
           )}
         </div>
       </div>

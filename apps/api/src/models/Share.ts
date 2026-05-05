@@ -9,6 +9,7 @@ export interface IShare extends Document {
   label?: string;
   createdBy: Schema.Types.ObjectId;
   createdAt: Date;
+  expiresAt?: Date | null;
 }
 
 const ShareSchema = new Schema<IShare>(
@@ -20,6 +21,7 @@ const ShareSchema = new Schema<IShare>(
     token:      { type: String, required: true, unique: true, index: true },
     label:      String,
     createdBy:  { type: Schema.Types.ObjectId, required: true, ref: 'User' },
+    expiresAt:  { type: Date, default: null },
   },
   { timestamps: { createdAt: true, updatedAt: false } }
 );

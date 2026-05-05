@@ -15,6 +15,25 @@ import type { DeviceCommand } from '@/components/devices/CommandWidget';
 
 const COLORS = ['hsl(var(--primary))', 'hsl(var(--info))', 'hsl(var(--good))', 'hsl(var(--warn))', '#A06CD5', '#06B6D4'];
 
+const SHARE_DURATIONS = [
+  { value: '24h',   label: '24 hours',   seconds: 86_400 },
+  { value: '7d',    label: '7 days',     seconds: 604_800 },
+  { value: '30d',   label: '30 days',    seconds: 2_592_000 },
+  { value: '90d',   label: '90 days',    seconds: 7_776_000 },
+  { value: 'never', label: 'No expiry',  seconds: null },
+];
+
+function expiryLabel(expiresAt?: string | null): { text: string; expired: boolean; warn: boolean } {
+  if (!expiresAt) return { text: 'No expiry', expired: false, warn: false };
+  const diff = new Date(expiresAt).getTime() - Date.now();
+  if (diff < 0) return { text: 'Expired', expired: true, warn: false };
+  const days = Math.floor(diff / 86_400_000);
+  const hours = Math.floor(diff / 3_600_000);
+  if (hours < 24) return { text: `Expires in ${hours}h`, expired: false, warn: true };
+  if (days < 7)   return { text: `Expires in ${days}d`,  expired: false, warn: true };
+  return { text: `Expires in ${days}d`, expired: false, warn: false };
+}
+
 const API_BASE       = (import.meta as any).env?.VITE_API_URL ?? 'https://orion.vortan.io/api/v1';
 const MQTT_BROKER    = (import.meta as any).env?.VITE_MQTT_BROKER ?? '45.79.206.183';
 const MQTT_PORT      = (import.meta as any).env?.VITE_MQTT_PORT   ?? '1883';
@@ -103,8 +122,11 @@ export function DeviceDetailPage() {
   const [telemView, setTelemView] = useState<'chart' | 'table'>('chart');
   const [shareMode, setShareMode] = useState(false);
   const [selectedSections, setSelectedSections] = useState<string[]>([]);
+  const [shareDuration, setShareDuration] = useState('30d');
   const [creatingShare, setCreatingShare] = useState(false);
   const [showSharePanel, setShowSharePanel] = useState(false);
+  const [extendDuration, setExtendDuration] = useState('30d');
+  const [showExtend, setShowExtend] = useState(false);
   const [newCmdName, setNewCmdName] = useState('');
   const [newCmdLabel, setNewCmdLabel] = useState('');
   const [newCmdType, setNewCmdType] = useState<'boolean' | 'number' | 'enum' | 'action' | 'string'>('action');
@@ -235,7 +257,11 @@ export function DeviceDetailPage() {
       if (existingShare?.token) {
         await apiClient.delete(`/share/${existingShare.token}`).catch(() => {});
       }
-      const res = await apiClient.post('/share', { type: 'device', resourceId: id, sections: selectedSections });
+      const durationOpt = SHARE_DURATIONS.find(o => o.value === shareDuration);
+      const res = await apiClient.post('/share', {
+        type: 'device', resourceId: id, sections: selectedSections,
+        ...(durationOpt?.seconds ? { expiresSeconds: durationOpt.seconds } : {}),
+      });
       const url = `${window.location.origin}/s/${res.data.token}`;
       await copyText(url);
       toast.success('Share link copied to clipboard!');
@@ -410,60 +436,107 @@ export function DeviceDetailPage() {
           <button className="btn btn-sm" style={{ gap: 6 }} onClick={() => { setShowRawCmd(true); }}>
             <Terminal size={13} /> Send command
           </button>
-          {existingShare ? (
+          {existingShare ? (() => {
+            const exp = expiryLabel(existingShare.expiresAt);
+            return (
             <div style={{ position: 'relative' }}>
               <button
                 data-share-panel
                 className="btn btn-sm btn-outline"
-                style={{ gap: 6, color: 'hsl(var(--good))' }}
-                onClick={() => setShowSharePanel(v => !v)}
+                style={{ gap: 6, color: exp.expired ? 'hsl(var(--bad))' : exp.warn ? 'hsl(var(--warn))' : 'hsl(var(--good))' }}
+                onClick={() => { setShowSharePanel(v => !v); setShowExtend(false); }}
               >
-                <Globe size={13} /> Shared
+                <Globe size={13} /> {exp.expired ? 'Expired' : 'Shared'}
               </button>
               {showSharePanel && (
                 <div data-share-panel style={{
                   position: 'absolute', top: '100%', right: 0, marginTop: 6, zIndex: 100,
                   background: 'hsl(var(--surface))', border: '1px solid hsl(var(--border))',
-                  minWidth: 220, boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
+                  minWidth: 240, boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
                 }}>
                   <div style={{ padding: '10px 14px', borderBottom: '1px solid hsl(var(--rule-ghost))' }}>
-                    <div className="eyebrow" style={{ fontSize: 9 }}>Active share</div>
+                    <div className="eyebrow" style={{ fontSize: 9 }}>{exp.expired ? 'Expired share' : 'Active share'}</div>
                     <div className="mono" style={{ fontSize: 10.5, marginTop: 4, wordBreak: 'break-all', color: 'hsl(var(--muted-fg))' }}>
                       {`${window.location.origin}/s/${existingShare.token}`.slice(0, 44)}…
                     </div>
                     <div className="mono faint" style={{ fontSize: 9, marginTop: 4 }}>
                       Sections: {(existingShare.sections ?? []).join(', ')}
                     </div>
+                    <div className="mono" style={{ fontSize: 9, marginTop: 4, color: exp.expired ? 'hsl(var(--bad))' : exp.warn ? 'hsl(var(--warn))' : 'hsl(var(--muted-fg))' }}>
+                      {exp.text}
+                    </div>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column' }}>
-                    <button
-                      className="btn btn-ghost btn-sm"
-                      style={{ justifyContent: 'flex-start', gap: 6, borderRadius: 0, borderBottom: '1px solid hsl(var(--rule-ghost))' }}
-                      onClick={async () => {
-                        await copyText(`${window.location.origin}/s/${existingShare.token}`);
-                        toast.success('Link copied!');
-                        setShowSharePanel(false);
-                      }}
-                    >
-                      <Copy size={11} /> Copy link
-                    </button>
-                    <a
-                      href={`/s/${existingShare.token}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="btn btn-ghost btn-sm"
-                      style={{ justifyContent: 'flex-start', gap: 6, borderRadius: 0, borderBottom: '1px solid hsl(var(--rule-ghost))' }}
-                      onClick={() => setShowSharePanel(false)}
-                    >
-                      <ExternalLink size={11} /> View public page
-                    </a>
-                    <button
-                      className="btn btn-ghost btn-sm"
-                      style={{ justifyContent: 'flex-start', gap: 6, borderRadius: 0, borderBottom: '1px solid hsl(var(--rule-ghost))' }}
-                      onClick={() => { setShareMode(true); setSelectedSections(existingShare.sections ?? []); setShowSharePanel(false); }}
-                    >
-                      <LinkIcon size={11} /> Update sections
-                    </button>
+                    {!exp.expired && (
+                      <>
+                        <button
+                          className="btn btn-ghost btn-sm"
+                          style={{ justifyContent: 'flex-start', gap: 6, borderRadius: 0, borderBottom: '1px solid hsl(var(--rule-ghost))' }}
+                          onClick={async () => {
+                            await copyText(`${window.location.origin}/s/${existingShare.token}`);
+                            toast.success('Link copied!');
+                            setShowSharePanel(false);
+                          }}
+                        >
+                          <Copy size={11} /> Copy link
+                        </button>
+                        <a
+                          href={`/s/${existingShare.token}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="btn btn-ghost btn-sm"
+                          style={{ justifyContent: 'flex-start', gap: 6, borderRadius: 0, borderBottom: '1px solid hsl(var(--rule-ghost))' }}
+                          onClick={() => setShowSharePanel(false)}
+                        >
+                          <ExternalLink size={11} /> View public page
+                        </a>
+                        <button
+                          className="btn btn-ghost btn-sm"
+                          style={{ justifyContent: 'flex-start', gap: 6, borderRadius: 0, borderBottom: '1px solid hsl(var(--rule-ghost))' }}
+                          onClick={() => { setShareMode(true); setSelectedSections(existingShare.sections ?? []); setShowSharePanel(false); }}
+                        >
+                          <LinkIcon size={11} /> Update sections
+                        </button>
+                      </>
+                    )}
+                    {/* Extend expiry */}
+                    {showExtend ? (
+                      <div style={{ padding: '10px 14px', borderBottom: '1px solid hsl(var(--rule-ghost))', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        <div className="eyebrow" style={{ fontSize: 9 }}>Extend expiry</div>
+                        <select
+                          value={extendDuration}
+                          onChange={e => setExtendDuration(e.target.value)}
+                          className="input"
+                          style={{ fontSize: 11, padding: '4px 8px' }}
+                        >
+                          {SHARE_DURATIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                        </select>
+                        <button
+                          className="btn btn-primary btn-sm"
+                          style={{ width: '100%', justifyContent: 'center' }}
+                          onClick={async () => {
+                            const opt = SHARE_DURATIONS.find(o => o.value === extendDuration);
+                            try {
+                              await apiClient.patch(`/share/${existingShare.token}`, { expiresSeconds: opt?.seconds ?? null });
+                              toast.success('Expiry updated');
+                              refetchShares();
+                              setShowExtend(false);
+                              setShowSharePanel(false);
+                            } catch { toast.error('Failed to update expiry'); }
+                          }}
+                        >
+                          Confirm
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        className="btn btn-ghost btn-sm"
+                        style={{ justifyContent: 'flex-start', gap: 6, borderRadius: 0, borderBottom: '1px solid hsl(var(--rule-ghost))' }}
+                        onClick={() => setShowExtend(true)}
+                      >
+                        <RefreshCw size={11} /> {exp.expired ? 'Reshare (extend)' : 'Extend expiry'}
+                      </button>
+                    )}
                     <button
                       className="btn btn-ghost btn-sm"
                       style={{ justifyContent: 'flex-start', gap: 6, borderRadius: 0, color: 'hsl(var(--bad))' }}
@@ -475,7 +548,7 @@ export function DeviceDetailPage() {
                 </div>
               )}
             </div>
-          ) : (
+          );})() : (
             <button className="btn btn-sm btn-outline" style={{ gap: 6 }} onClick={() => { setShareMode(true); setSelectedSections([]); setShowSharePanel(false); }}>
               <Share2 size={13} /> Share
             </button>
@@ -1278,9 +1351,9 @@ export function DeviceDetailPage() {
           <div style={{
             position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 20,
             background: 'hsl(var(--surface-raised))', borderTop: '1px solid hsl(var(--border))',
-            padding: '14px 24px', display: 'flex', alignItems: 'center', gap: 16,
+            padding: '14px 24px', display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap',
           }}>
-            <div style={{ flex: 1 }}>
+            <div style={{ flex: 1, minWidth: 160 }}>
               <div style={{ fontFamily: 'var(--font-display)', fontSize: 16, lineHeight: 1 }}>
                 {selectedSections.length === 0 ? 'Select sections to share' : `${selectedSections.length} section${selectedSections.length > 1 ? 's' : ''} selected`}
               </div>
@@ -1289,6 +1362,17 @@ export function DeviceDetailPage() {
                   {selectedSections.join(' · ')}
                 </div>
               )}
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span className="eyebrow" style={{ fontSize: 9, whiteSpace: 'nowrap', color: 'hsl(var(--muted-fg))' }}>Link expires</span>
+              <select
+                value={shareDuration}
+                onChange={e => setShareDuration(e.target.value)}
+                className="input"
+                style={{ fontSize: 11, padding: '4px 8px', height: 'auto', minWidth: 110 }}
+              >
+                {SHARE_DURATIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
             </div>
             <button
               onClick={generateShareLink}

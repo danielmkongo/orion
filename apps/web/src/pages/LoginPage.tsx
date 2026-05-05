@@ -14,22 +14,68 @@ const FEATURES = [
   { icon: Cpu,       label: 'Device Control',   desc: 'OTA · Commands · Alerts' },
 ];
 
-/* ── Animated SVG star field ─────────────────────────────────────────── */
+/* ── Orion constellation star field ─────────────────────────────────── */
 function StarField() {
-  const stars = useMemo(() =>
-    Array.from({ length: 60 }, (_, i) => ({
+  // Background field stars — random but stable
+  const bgStars = useMemo(() =>
+    Array.from({ length: 72 }, (_, i) => ({
       id: i,
-      cx: (Math.random() * 100).toFixed(2),
-      cy: (Math.random() * 100).toFixed(2),
-      r:  (Math.random() * 0.85 + 0.25).toFixed(2),
-      opDur:  (Math.random() * 3 + 2).toFixed(2),
-      opDel:  (Math.random() * 6).toFixed(2),
-      mvDur:  (Math.random() * 8 + 5).toFixed(2),
-      mvDel:  (Math.random() * 4).toFixed(2),
-      dx: ((Math.random() - 0.5) * 4).toFixed(1),
-      dy: ((Math.random() - 0.5) * 4).toFixed(1),
+      cx: parseFloat((Math.random() * 100).toFixed(2)),
+      cy: parseFloat((Math.random() * 100).toFixed(2)),
+      r:  parseFloat((Math.random() * 0.45 + 0.12).toFixed(2)),
+      opDur: parseFloat((Math.random() * 3 + 2).toFixed(1)),
+      opDel: parseFloat((Math.random() * 7).toFixed(1)),
+      dx:    parseFloat(((Math.random() - 0.5) * 1.8).toFixed(1)),
+      dy:    parseFloat(((Math.random() - 0.5) * 1.8).toFixed(1)),
+      mvDur: parseFloat((Math.random() * 10 + 7).toFixed(1)),
     })), []
   );
+
+  // Named Orion stars — astronomically correct relative positions
+  // Orientation: north up, east left (standard star chart)
+  // Betelgeuse=upper-left, Bellatrix=upper-right,
+  // Belt runs L→R (Alnitak→Alnilam→Mintaka),
+  // Rigel=lower-right (bright blue), Saiph=lower-left,
+  // Shield arc on right, Sword hangs below belt center
+  const STARS = [
+    { id: 'meissa',     cx: 48,  cy: 7,   r: 1.1, dur: 4.5, del: 0.8  },
+    { id: 'betelgeuse', cx: 24,  cy: 27,  r: 2.8, dur: 3.2, del: 1.4, color: '#ffc580' },
+    { id: 'bellatrix',  cx: 70,  cy: 23,  r: 1.8, dur: 4.0, del: 0.3  },
+    { id: 'alnitak',    cx: 37,  cy: 54,  r: 1.7, dur: 4.2, del: 1.8  },
+    { id: 'alnilam',    cx: 50,  cy: 53,  r: 1.8, dur: 3.5, del: 0.6  },
+    { id: 'mintaka',    cx: 63,  cy: 52,  r: 1.4, dur: 3.8, del: 2.1  },
+    { id: 'saiph',      cx: 25,  cy: 82,  r: 1.4, dur: 4.8, del: 0.2  },
+    { id: 'rigel',      cx: 73,  cy: 80,  r: 2.8, dur: 3.0, del: 1.0, color: '#b8d4ff' },
+    // Sword
+    { id: 'eta',        cx: 51,  cy: 63,  r: 0.9, dur: 5.0, del: 2.5  },
+    { id: 'iota',       cx: 52,  cy: 73,  r: 1.0, dur: 4.5, del: 3.0  },
+    // Shield (π Ori arc, west/right side)
+    { id: 'pi3',        cx: 86,  cy: 22,  r: 0.9, dur: 5.2, del: 1.3  },
+    { id: 'pi4',        cx: 89,  cy: 33,  r: 0.9, dur: 4.8, del: 0.9  },
+    { id: 'pi5',        cx: 89,  cy: 44,  r: 0.9, dur: 5.5, del: 2.2  },
+    { id: 'pi6',        cx: 86,  cy: 53,  r: 0.8, dur: 4.0, del: 1.7  },
+  ] as { id: string; cx: number; cy: number; r: number; dur: number; del: number; color?: string }[];
+
+  // Constellation stick lines
+  const LINES: [string, string][] = [
+    ['meissa',    'betelgeuse'],  // head → left shoulder
+    ['meissa',    'bellatrix'],   // head → right shoulder
+    ['betelgeuse','alnitak'],     // left shoulder → left belt
+    ['bellatrix', 'mintaka'],     // right shoulder → right belt
+    ['alnitak',   'alnilam'],     // belt
+    ['alnilam',   'mintaka'],     // belt
+    ['alnitak',   'saiph'],       // left belt → left foot
+    ['mintaka',   'rigel'],       // right belt → right foot (Rigel)
+    ['alnilam',   'eta'],         // belt → sword top
+    ['eta',       'iota'],        // sword
+    ['bellatrix', 'pi3'],         // shoulder → shield top
+    ['pi3',       'pi4'],         // shield arc
+    ['pi4',       'pi5'],
+    ['pi5',       'pi6'],
+    ['pi6',       'mintaka'],     // shield bottom → right belt
+  ];
+
+  const pos = Object.fromEntries(STARS.map(s => [s.id, s]));
 
   return (
     <svg
@@ -37,26 +83,51 @@ function StarField() {
       preserveAspectRatio="xMidYMid slice"
       style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}
     >
-      {stars.map(s => (
+      {/* Background field stars */}
+      {bgStars.map(s => (
         <circle key={s.id} cx={s.cx} cy={s.cy} r={s.r} fill="white">
-          <animate
-            attributeName="opacity"
-            values="0.06;0.72;0.06"
-            dur={`${s.opDur}s`}
-            begin={`${s.opDel}s`}
-            repeatCount="indefinite"
-          />
-          <animateTransform
-            attributeName="transform"
-            type="translate"
+          <animate attributeName="opacity" values="0.04;0.42;0.04"
+            dur={`${s.opDur}s`} begin={`${s.opDel}s`} repeatCount="indefinite" />
+          <animateTransform attributeName="transform" type="translate"
             values={`0 0;${s.dx} ${s.dy};0 0`}
-            dur={`${s.mvDur}s`}
-            begin={`${s.mvDel}s`}
-            repeatCount="indefinite"
-            calcMode="spline"
-            keySplines="0.45 0 0.55 1;0.45 0 0.55 1"
-          />
+            dur={`${s.mvDur}s`} begin={`${s.opDel}s`} repeatCount="indefinite" />
         </circle>
+      ))}
+
+      {/* Orion Nebula (M42) — soft warm glow near sword */}
+      <ellipse cx="52" cy="75" rx="5" ry="3.5" fill="rgba(255,140,60,0.0)">
+        <animate attributeName="fill-opacity" values="0.04;0.13;0.04" dur="7s" repeatCount="indefinite" />
+      </ellipse>
+
+      {/* Constellation stick lines */}
+      {LINES.map(([a, b], i) => {
+        const p1 = pos[a], p2 = pos[b];
+        if (!p1 || !p2) return null;
+        return (
+          <line key={i}
+            x1={p1.cx} y1={p1.cy} x2={p2.cx} y2={p2.cy}
+            stroke="rgba(255,255,255,0.25)" strokeWidth="0.3" strokeLinecap="round"
+          />
+        );
+      })}
+
+      {/* Named constellation stars */}
+      {STARS.map(s => (
+        <g key={s.id}>
+          {/* Diffraction glow for bright stars (Rigel, Betelgeuse) */}
+          {s.r >= 2 && (
+            <circle cx={s.cx} cy={s.cy} r={s.r * 3.2} fill={s.color ?? 'white'} fillOpacity="0">
+              <animate attributeName="fill-opacity"
+                values="0.03;0.11;0.03" dur={`${s.dur * 1.6}s`} begin={`${s.del}s`} repeatCount="indefinite" />
+            </circle>
+          )}
+          {/* Star disc */}
+          <circle cx={s.cx} cy={s.cy} r={s.r} fill={s.color ?? 'white'}>
+            <animate attributeName="opacity"
+              values="0.55;1.0;0.55"
+              dur={`${s.dur}s`} begin={`${s.del}s`} repeatCount="indefinite" />
+          </circle>
+        </g>
       ))}
     </svg>
   );

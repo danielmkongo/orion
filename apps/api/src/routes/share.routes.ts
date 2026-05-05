@@ -13,9 +13,10 @@ export async function shareRoutes(app: FastifyInstance) {
 
   /* ── Authenticated: create a share ──────────────────────────── */
   app.post('/share', { preHandler: authenticate }, async (req, reply) => {
-    const { type, resourceId, sections = [], label } = req.body as any;
+    const { type, resourceId, sections = [], label, expiresSeconds } = req.body as any;
     if (!type || !resourceId) return reply.code(400).send({ error: 'type and resourceId required' });
 
+    const expiresAt = expiresSeconds ? new Date(Date.now() + expiresSeconds * 1000) : null;
     const token = nanoid(21);
     const share = await Share.create({
       orgId: req.user.orgId,
@@ -25,8 +26,9 @@ export async function shareRoutes(app: FastifyInstance) {
       token,
       label,
       createdBy: req.user.sub,
+      expiresAt,
     });
-    return reply.code(201).send({ token, id: share._id });
+    return reply.code(201).send({ token, id: share._id, expiresAt });
   });
 
   /* ── Authenticated: list org shares ─────────────────────────── */
@@ -43,11 +45,28 @@ export async function shareRoutes(app: FastifyInstance) {
     return reply.send({ ok: true });
   });
 
+  /* ── Authenticated: extend/update share expiry ───────────────── */
+  app.patch('/share/:token', { preHandler: authenticate }, async (req, reply) => {
+    const { token } = req.params as any;
+    const { expiresSeconds } = req.body as any;
+    const expiresAt = expiresSeconds ? new Date(Date.now() + expiresSeconds * 1000) : null;
+    const result = await Share.findOneAndUpdate(
+      { token, orgId: req.user.orgId },
+      { $set: { expiresAt } },
+      { new: true }
+    );
+    if (!result) return reply.code(404).send({ error: 'Not found' });
+    return reply.send({ ok: true, expiresAt: result.expiresAt });
+  });
+
   /* ── Public: resolve share token → device data ───────────────── */
   app.get('/public/device/:token', async (req, reply) => {
     const { token } = req.params as any;
     const share = await Share.findOne({ token, type: 'device' }).lean();
     if (!share) return reply.code(404).send({ error: 'Share not found' });
+    if (share.expiresAt && new Date() > share.expiresAt) {
+      return reply.code(410).send({ error: 'Share link has expired', expired: true });
+    }
 
     const device = await deviceService.getById(String(share.resourceId), String(share.orgId));
     if (!device) return reply.code(404).send({ error: 'Device not found' });
@@ -79,6 +98,9 @@ export async function shareRoutes(app: FastifyInstance) {
 
     const share = await Share.findOne({ token, type: 'device' }).lean();
     if (!share) return reply.code(404).send({ error: 'Share not found' });
+    if (share.expiresAt && new Date() > share.expiresAt) {
+      return reply.code(410).send({ error: 'Share link has expired', expired: true });
+    }
     if (!share.sections.includes('chart')) return reply.code(403).send({ error: 'Chart not shared' });
     if (!field) return reply.code(400).send({ error: 'field required' });
 
@@ -97,6 +119,9 @@ export async function shareRoutes(app: FastifyInstance) {
 
     // Try Share model first (from page.routes publish), then Page.shareToken directly
     const share = await Share.findOne({ token, type: 'page' }).lean();
+    if (share?.expiresAt && new Date() > share.expiresAt) {
+      return reply.code(410).send({ error: 'Share link has expired', expired: true });
+    }
     const page = share
       ? await Page.findOne({ _id: share.resourceId }).lean()
       : await Page.findOne({ shareToken: token }).lean();
