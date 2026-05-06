@@ -2,35 +2,33 @@ import type { FastifyInstance } from 'fastify';
 import { requirePermission } from '../middleware/auth.js';
 import { GeneratedCode } from '../models/GeneratedCode.js';
 
-/* ── Per-user hourly generation limit ───────────────────────────────
-   Stored in-memory; resets every clock hour. Upgrade to Redis if needed. */
-const hourlyUsage = new Map<string, { hour: string; count: number }>();
-export const HOURLY_LIMIT = 2;
+/* ── Per-user daily generation limit ────────────────────────────────
+   Stored in-memory; resets at UTC midnight. Upgrade to Redis if needed. */
+const dailyUsage = new Map<string, { date: string; count: number }>();
+export const DAILY_LIMIT = 30;
 
-function currentHour() {
-  return new Date().toISOString().slice(0, 13); // "YYYY-MM-DDTHH"
+function today() {
+  return new Date().toISOString().slice(0, 10); // "YYYY-MM-DD"
 }
 
 export function checkDailyLimit(userId: string): { allowed: boolean; remaining: number } {
-  const hour  = currentHour();
-  const entry = hourlyUsage.get(userId);
-  if (!entry || entry.hour !== hour) {
-    hourlyUsage.set(userId, { hour, count: 0 });
-    return { allowed: true, remaining: HOURLY_LIMIT };
+  const date  = today();
+  const entry = dailyUsage.get(userId);
+  if (!entry || entry.date !== date) {
+    dailyUsage.set(userId, { date, count: 0 });
+    return { allowed: true, remaining: DAILY_LIMIT };
   }
-  const remaining = HOURLY_LIMIT - entry.count;
+  const remaining = DAILY_LIMIT - entry.count;
   return { allowed: remaining > 0, remaining };
 }
 
 export function incrementDailyUsage(userId: string) {
-  const hour  = currentHour();
-  const entry = hourlyUsage.get(userId) ?? { hour, count: 0 };
-  if (entry.hour !== hour) { entry.hour = hour; entry.count = 0; }
+  const date  = today();
+  const entry = dailyUsage.get(userId) ?? { date, count: 0 };
+  if (entry.date !== date) { entry.date = date; entry.count = 0; }
   entry.count++;
-  hourlyUsage.set(userId, entry);
+  dailyUsage.set(userId, entry);
 }
-
-export { HOURLY_LIMIT as DAILY_LIMIT };
 
 export async function generatedCodeRoutes(app: FastifyInstance) {
 

@@ -33,19 +33,30 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
           <Toaster
             position="top-right"
             toastOptions={{
+              duration: 4000,
               style: {
                 background: 'hsl(var(--surface))',
                 color: 'hsl(var(--fg))',
-                border: '1px solid hsl(var(--rule))',
+                border: '1px solid hsl(var(--border))',
                 borderRadius: '0',
-                fontSize: '14px',
-                boxShadow: '0 4px 16px rgb(0 0 0/0.08)',
+                fontSize: '13px',
+                fontFamily: 'var(--font-sans)',
+                boxShadow: '0 8px 32px rgba(0,0,0,0.25)',
+                maxWidth: 380,
+                padding: '12px 16px',
               },
               success: {
-                iconTheme: { primary: 'hsl(var(--good))', secondary: 'hsl(var(--fg))' },
+                style: {
+                  borderLeft: '3px solid hsl(var(--good))',
+                },
+                iconTheme: { primary: 'hsl(var(--good))', secondary: 'hsl(var(--surface))' },
               },
               error: {
-                iconTheme: { primary: 'hsl(var(--bad))', secondary: 'hsl(var(--fg))' },
+                duration: 6000,
+                style: {
+                  borderLeft: '3px solid hsl(var(--bad))',
+                },
+                iconTheme: { primary: 'hsl(var(--bad))', secondary: 'hsl(var(--surface))' },
               },
             }}
           />

@@ -92,7 +92,7 @@ export async function aiRoutes(app: FastifyInstance) {
     const { allowed, remaining } = checkDailyLimit(userId);
     if (!allowed) {
       return reply.code(429).send({
-        error: `Hourly limit of ${DAILY_LIMIT} generations reached. Resets at the top of the hour.`,
+        error: `Daily limit of ${DAILY_LIMIT} generations reached. Resets at midnight UTC.`,
       });
     }
 
@@ -125,12 +125,12 @@ export async function aiRoutes(app: FastifyInstance) {
         send({ type: 'queued', position: waiting, estimatedSeconds: est, remaining });
       }
 
-      incrementDailyUsage(userId);
-
       for await (const chunk of aiService.generateFirmwareStream(fwReq)) {
         if (cancelled) { send({ type: 'cancelled' }); return; }
         send({ type: 'chunk', text: chunk });
       }
+      // Only count a completed generation — errors and cancels don't consume quota
+      incrementDailyUsage(userId);
       send({ type: 'done', remaining: remaining - 1 });
     } catch (err: any) {
       const { message } = orionError(err);

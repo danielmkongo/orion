@@ -32,7 +32,7 @@ class RateLimiter {
   }
 }
 
-export const rateLimiter = new RateLimiter();
+export const rateLimiter = new RateLimiter(14); // Gemini free tier: 15 req/min
 
 /* ── Base system prompt ────────────────────────────────────────────── */
 const ORION_SYSTEM_PROMPT = `

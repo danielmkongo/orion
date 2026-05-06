@@ -353,7 +353,7 @@ export function CodeGenWizard({ deviceId, deviceName, deviceProtocol, onClose }:
             </div>
           </div>
           {remaining != null && (
-            <span className="mono faint" style={{ fontSize: 9.5 }}>{remaining}/hr left</span>
+            <span className="mono faint" style={{ fontSize: 9.5 }}>{remaining}/day left</span>
           )}
           <button onClick={onClose} className="btn btn-ghost btn-sm btn-icon"><X size={15} /></button>
         </div>
