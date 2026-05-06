@@ -125,7 +125,9 @@ export async function aiRoutes(app: FastifyInstance) {
         send({ type: 'queued', position: waiting, estimatedSeconds: est, remaining });
       }
 
-      for await (const chunk of aiService.generateFirmwareStream(fwReq)) {
+      for await (const chunk of aiService.generateFirmwareStream(fwReq, (seconds) => {
+        send({ type: 'queued', position: 0, estimatedSeconds: seconds, remaining });
+      })) {
         if (cancelled) { send({ type: 'cancelled' }); return; }
         send({ type: 'chunk', text: chunk });
       }
@@ -133,6 +135,7 @@ export async function aiRoutes(app: FastifyInstance) {
       incrementDailyUsage(userId);
       send({ type: 'done', remaining: remaining - 1 });
     } catch (err: any) {
+      console.error('[OrionAI] stream failed:', err?.message ?? err);
       const { message } = orionError(err);
       send({ type: 'error', message });
     } finally {

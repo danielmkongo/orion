@@ -247,16 +247,43 @@ export const aiService = {
     return code;
   },
 
-  async *generateFirmwareStream(req: CodeGenRequest): AsyncGenerator<string> {
-    await rateLimiter.claim();
+  async *generateFirmwareStream(
+    req: CodeGenRequest,
+    onWait?: (seconds: number) => void,
+  ): AsyncGenerator<string> {
     const model = getClient().getGenerativeModel({
       model: 'gemini-2.0-flash',
       systemInstruction: CODEGEN_SYSTEM_PROMPT,
     });
-    const result = await model.generateContentStream(buildFirmwarePrompt(req));
-    for await (const chunk of result.stream) {
-      const text = chunk.text();
-      if (text) yield text;
+    const prompt = buildFirmwarePrompt(req);
+
+    const MAX_RETRIES = 3;
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        await rateLimiter.claim();
+        const result = await model.generateContentStream(prompt);
+        for await (const chunk of result.stream) {
+          const text = chunk.text();
+          if (text) yield text;
+        }
+        return; // success
+      } catch (err: any) {
+        // GoogleGenerativeAIFetchError has .status; fall back to message scan
+        const status: number =
+          err?.status ??
+          err?.response?.status ??
+          (typeof err?.message === 'string' && /\b429\b/.test(err.message) ? 429 : 0);
+
+        console.error(`[OrionAI] attempt ${attempt + 1} failed — status=${status} message=${err?.message}`);
+
+        if (status === 429 && attempt < MAX_RETRIES) {
+          const waitSeconds = 65;
+          if (onWait) onWait(waitSeconds);
+          await new Promise(r => setTimeout(r, waitSeconds * 1000));
+          continue;
+        }
+        throw err;
+      }
     }
   },
 
