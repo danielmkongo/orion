@@ -26,6 +26,7 @@ import { shareRoutes } from './routes/share.routes.js';
 import { pageRoutes } from './routes/page.routes.js';
 import { exportRoutes } from './routes/export.routes.js';
 import { aiRoutes } from './routes/ai.routes.js';
+import { generatedCodeRoutes } from './routes/generated-code.routes.js';
 import multipart from '@fastify/multipart';
 import staticPlugin from '@fastify/static';
 import path from 'path';
@@ -79,6 +80,7 @@ async function bootstrap() {
     await api.register(pageRoutes);
     await api.register(exportRoutes);
     await api.register(aiRoutes);
+    await api.register(generatedCodeRoutes);
   }, { prefix });
 
   // Health check

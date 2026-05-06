@@ -1399,6 +1399,8 @@ export function DeviceDetailPage() {
         <CodeGenWizard
           deviceId={id}
           deviceName={d.name}
+          deviceProtocol={d.protocol ?? 'http'}
+          serialNumber={d.serialNumber}
           onClose={() => setShowCodeGen(false)}
         />
       )}
