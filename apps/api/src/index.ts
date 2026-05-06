@@ -25,6 +25,7 @@ import { geofenceRoutes } from './routes/geofence.routes.js';
 import { shareRoutes } from './routes/share.routes.js';
 import { pageRoutes } from './routes/page.routes.js';
 import { exportRoutes } from './routes/export.routes.js';
+import { aiRoutes } from './routes/ai.routes.js';
 import multipart from '@fastify/multipart';
 import staticPlugin from '@fastify/static';
 import path from 'path';
@@ -77,6 +78,7 @@ async function bootstrap() {
     await api.register(shareRoutes);
     await api.register(pageRoutes);
     await api.register(exportRoutes);
+    await api.register(aiRoutes);
   }, { prefix });
 
   // Health check

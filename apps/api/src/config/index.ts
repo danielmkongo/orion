@@ -29,4 +29,6 @@ export const config = {
   tcpPort:  parseInt(process.env.TCP_PORT  ?? '8883'),
   udpPort:  parseInt(process.env.UDP_PORT  ?? '8884'),
   coapPort: parseInt(process.env.COAP_PORT ?? '5683'),
+
+  geminiApiKey: process.env.GEMINI_API_KEY ?? '',
 } as const;

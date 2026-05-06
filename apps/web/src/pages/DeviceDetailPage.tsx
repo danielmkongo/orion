@@ -7,11 +7,12 @@ import apiClient from '@/api/client';
 import { timeAgo, formatDate as fmtDate, getCategoryIconInfo, copyText, formatPayloadStr, formatCommandStr } from '@/lib/utils';
 import { useSocket } from '@/hooks/useSocket';
 import { LineChart, BarChart } from '@/components/charts/Charts';
-import { ArrowLeft, Eye, EyeOff, Copy, RefreshCw, Terminal, Plus, Trash2, Check, ChevronDown, ChevronRight, Pencil, X, Share2, BarChart2, TableProperties, Globe, ExternalLink, LinkIcon } from 'lucide-react';
+import { ArrowLeft, Eye, EyeOff, Copy, RefreshCw, Terminal, Plus, Trash2, Check, ChevronDown, ChevronRight, Pencil, X, Share2, BarChart2, TableProperties, Globe, ExternalLink, LinkIcon, Cpu } from 'lucide-react';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import toast from 'react-hot-toast';
 import { CommandWidget } from '@/components/devices/CommandWidget';
 import type { DeviceCommand } from '@/components/devices/CommandWidget';
+import { CodeGenWizard } from '@/components/devices/CodeGenWizard';
 
 const COLORS = ['hsl(var(--primary))', 'hsl(var(--info))', 'hsl(var(--good))', 'hsl(var(--warn))', '#A06CD5', '#06B6D4'];
 
@@ -137,6 +138,7 @@ export function DeviceDetailPage() {
   const [newCmdValues, setNewCmdValues] = useState('');
   const [savingCmd, setSavingCmd] = useState(false);
   const [editCmds, setEditCmds] = useState(false);
+  const [showCodeGen, setShowCodeGen] = useState(false);
   const { on, subscribeDevice } = useSocket();
   const queryClient = useQueryClient();
 
@@ -433,6 +435,9 @@ export function DeviceDetailPage() {
           </p>
         </div>
         <div style={{ gridColumn: 3, display: 'flex', alignItems: 'flex-end', gap: 8, paddingBottom: 20 }}>
+          <button className="btn btn-sm" style={{ gap: 6 }} onClick={() => setShowCodeGen(true)}>
+            <Cpu size={13} /> Generate code
+          </button>
           <button className="btn btn-sm" style={{ gap: 6 }} onClick={() => { setShowRawCmd(true); }}>
             <Terminal size={13} /> Send command
           </button>
@@ -1388,6 +1393,14 @@ export function DeviceDetailPage() {
             </button>
           </div>
         </>
+      )}
+
+      {showCodeGen && id && d && (
+        <CodeGenWizard
+          deviceId={id}
+          deviceName={d.name}
+          onClose={() => setShowCodeGen(false)}
+        />
       )}
 
       {showRegenConfirm && (
