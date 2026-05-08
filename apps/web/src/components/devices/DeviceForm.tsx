@@ -656,6 +656,7 @@ export function DeviceForm({ onClose }: { onClose: () => void }) {
   // Step 2
   const [fields, setFields] = useState<DataField[]>([EMPTY_FIELD()]);
   const [selectedFieldIdx, setSelIdx] = useState<number | null>(null);
+  const [showPaste, setShowPaste] = useState(false);
   const [pasteJson, setPasteJson] = useState('');
   const [pasteError, setPasteError] = useState('');
 
@@ -698,6 +699,7 @@ export function DeviceForm({ onClose }: { onClose: () => void }) {
     const result = parseJsonToFields(pasteJson);
     if (!result) { setPasteError('Invalid JSON or not a flat object'); return; }
     setFields(result.length > 0 ? result : [EMPTY_FIELD()]);
+    setShowPaste(false);
     setPasteJson('');
     setPasteError('');
     setSelIdx(0);
@@ -940,12 +942,12 @@ export function DeviceForm({ onClose }: { onClose: () => void }) {
                       <p className="text-[13px] font-semibold">Define your data fields</p>
                       <p className="text-[11px] text-muted-foreground mt-1">Fields power dashboards, alerts, and controls.</p>
                     </div>
-                    <button type="button" onClick={() => setPasteJson('')} className="btn btn-secondary btn-sm">
+                    <button type="button" onClick={() => { setShowPaste(true); setPasteJson(''); setPasteError(''); }} className="btn btn-secondary btn-sm">
                       Paste JSON
                     </button>
                   </div>
 
-                  {pasteJson === '' ? (
+                  {!showPaste ? (
                     <div className="space-y-3">
                       {/* Fields list */}
                       <div className="space-y-2">
@@ -1092,7 +1094,7 @@ export function DeviceForm({ onClose }: { onClose: () => void }) {
                       )}
                       <div className="flex gap-2">
                         <button onClick={applyPaste} className="btn btn-primary btn-sm">Import fields</button>
-                        <button onClick={() => setPasteJson('')} className="btn btn-secondary btn-sm">Cancel</button>
+                        <button onClick={() => { setShowPaste(false); setPasteJson(''); setPasteError(''); }} className="btn btn-secondary btn-sm">Cancel</button>
                       </div>
                     </div>
                   )}
