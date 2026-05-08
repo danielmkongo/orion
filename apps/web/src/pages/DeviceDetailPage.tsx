@@ -682,7 +682,7 @@ export function DeviceDetailPage() {
                           const color = fm?.chartColor ?? 'hsl(var(--muted-fg))';
                           return (
                             <th key={fk} style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', fontSize: 9.5, color, borderBottom: '1px solid hsl(var(--border))', whiteSpace: 'nowrap' }}>
-                              {fk.replace(/_/g, ' ')}{fm?.unit ? ` (${fm.unit})` : ''}
+                              {fm?.label ?? fk.replace(/_/g, ' ')}{fm?.unit ? ` (${fm.unit})` : ''}
                             </th>
                           );
                         })}
