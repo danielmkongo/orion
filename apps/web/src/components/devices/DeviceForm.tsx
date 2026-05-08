@@ -1230,7 +1230,7 @@ export function DeviceForm({ onClose }: { onClose: () => void }) {
                             <p className="eyebrow text-[8px] mb-3">Preview</p>
                             <CommandPreview key={`${i}-${cmd.ctype}`} cmd={cmd} payloadFormat={payloadFormat} />
                           </div>
-                        </motion.div>
+                        </div>
                       ))}
                   </div>
 
