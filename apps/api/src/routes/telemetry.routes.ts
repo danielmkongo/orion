@@ -19,7 +19,10 @@ export async function telemetryRoutes(app: FastifyInstance) {
     const device = await deviceService.getByApiKey(apiKey);
     if (!device) return reply.code(401).send({ error: 'Invalid API key' });
 
-    const timestamp = (body.timestamp as string) ?? new Date().toISOString();
+    const rawTs = body.timestamp as string | undefined;
+    const timestamp = (rawTs && !isNaN(new Date(rawTs).getTime()))
+      ? new Date(rawTs).toISOString()
+      : new Date().toISOString();
     const fields: Record<string, number | string | boolean | null> = {};
 
     // Flatten top-level scalar values; strip auth/meta fields
