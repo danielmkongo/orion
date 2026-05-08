@@ -692,7 +692,7 @@ export function DeviceDetailPage() {
                       {rows.map((row: any, i: number) => (
                         <tr key={row._id ?? i} style={{ background: i % 2 === 0 ? 'transparent' : 'hsl(var(--surface-raised) / 0.4)' }}>
                           <td style={{ padding: '7px 12px', color: 'hsl(var(--muted-fg))', whiteSpace: 'nowrap', borderBottom: '1px solid hsl(var(--rule-ghost))' }}>
-                            {new Date(row.ts ?? row.createdAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                            {(() => { const d = new Date(new Date(row.ts ?? row.createdAt).getTime() + 3 * 3600_000); return d.toISOString().slice(0, 19); })()}
                           </td>
                           {allFields.map((fk: string) => {
                             const val = row.fields?.[fk];

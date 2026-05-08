@@ -49,9 +49,13 @@ async function bootstrap() {
     prefix: '/uploads/',
   });
 
-  // CORS
+  // CORS — browsers must match allowed origins; device firmware (no Origin header) is always allowed
   await app.register(cors, {
-    origin: [config.cors.origin, config.frontendUrl],
+    origin: (origin, cb) => {
+      if (!origin) return cb(null, true); // firmware, curl, modem — no Origin header
+      const allowed = [config.cors.origin, config.frontendUrl].filter(Boolean);
+      cb(null, allowed.includes(origin));
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   });

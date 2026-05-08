@@ -1099,6 +1099,12 @@ export function DeviceForm({ onClose }: { onClose: () => void }) {
                     </div>
                   )}
 
+                  {/* Built-in reserved fields */}
+                  <div className="flex items-center gap-2 text-[10px] text-muted-foreground border border-dashed border-[hsl(var(--rule))] px-3 py-2">
+                    <span className="font-mono text-primary">timestamp</span>
+                    <span>— optional, auto-recognized. Send ISO 8601 EAT: <span className="font-mono">2025-05-08T14:32:01</span></span>
+                  </div>
+
                   {/* JSON Payload - BELOW */}
                   <div className="border-t border-[hsl(var(--rule))] pt-4 mt-6">
                     <div className="flex items-center justify-between mb-2">
@@ -1130,15 +1136,10 @@ export function DeviceForm({ onClose }: { onClose: () => void }) {
                     </button>
                   </div>
 
-                  <AnimatePresence mode="popLayout">
-                    <div className="space-y-4">
+                  <div className="space-y-4">
                       {commands.map((cmd, i) => (
-                        <motion.div
+                        <div
                           key={i}
-                          layout
-                          initial={{ opacity: 0, y: 20 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: -20 }}
                           className="border border-[hsl(var(--rule))] p-4 space-y-3"
                         >
                           <div className="flex items-start gap-2">
@@ -1231,8 +1232,7 @@ export function DeviceForm({ onClose }: { onClose: () => void }) {
                           </div>
                         </motion.div>
                       ))}
-                    </div>
-                  </AnimatePresence>
+                  </div>
 
                   {commands.length === 0 && (
                     <div className="border-2 border-dashed border-[hsl(var(--rule))] p-8 text-center">
