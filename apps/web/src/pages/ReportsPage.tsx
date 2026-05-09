@@ -1,4 +1,6 @@
 import { useState, useMemo } from 'react';
+const prettyKey = (k: string) =>
+  k.replace(/([A-Z])/g, ' $1').replace(/[_-]/g, ' ').replace(/\b\w/g, c => c.toUpperCase()).trim();
 import { useQuery } from '@tanstack/react-query';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Download, Plus, X, Printer, Trash2 } from 'lucide-react';
@@ -648,7 +650,7 @@ export function ReportsPage() {
                     <tr>
                       {Object.keys(xlsxPreview.rows[0] ?? {}).map(k => (
                         <th key={k} style={{ padding: '10px 14px', textAlign: 'left', fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'hsl(var(--primary))', borderBottom: '1px solid hsl(var(--border))', whiteSpace: 'nowrap' }}>
-                          {k.replace(/_/g, ' ')}
+                          {prettyKey(k)}
                         </th>
                       ))}
                     </tr>

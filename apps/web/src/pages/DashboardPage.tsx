@@ -67,6 +67,23 @@ export function DashboardPage() {
     ? Object.entries(featuredLatest.fields).filter(([, v]) => typeof v === 'number').map(([k]) => k)
     : [];
 
+  const { data: featuredDeviceData } = useQuery({
+    queryKey: ['device-schema', effectiveDeviceId],
+    queryFn: () => apiClient.get(`/devices/${effectiveDeviceId}`).then(r => r.data),
+    enabled: !!effectiveDeviceId,
+    staleTime: 300_000,
+  });
+  const _prettyKey = (k: string) =>
+    k.replace(/([A-Z])/g, ' $1').replace(/[_-]/g, ' ').replace(/\b\w/g, c => c.toUpperCase()).trim();
+  const _normalizeKey = (k: string) => k.toLowerCase().replace(/[_\-\s]/g, '');
+  const featuredSchema: any[] = featuredDeviceData?.meta?.dataSchema?.fields ?? [];
+  const fieldLabel = (key: string) => {
+    const fm = featuredSchema.find((f: any) => f.key === key)
+      ?? featuredSchema.find((f: any) => _normalizeKey(f.key) === _normalizeKey(key));
+    const lbl = fm?.label?.trim();
+    return (lbl && lbl !== fm?.key) ? lbl : _prettyKey(key);
+  };
+
   const numericFieldsKey = numericFields.join(',');
   useEffect(() => {
     if (numericFields.length > 0 && !numericFields.includes(featuredField)) {
@@ -241,8 +258,8 @@ export function DashboardPage() {
                   disabled={numericFields.length === 0}
                 >
                   {numericFields.length > 0
-                    ? numericFields.map(f => <option key={f} value={f}>{f}</option>)
-                    : <option value={featuredField}>{featuredField}</option>
+                    ? numericFields.map(f => <option key={f} value={f}>{fieldLabel(f)}</option>)
+                    : <option value={featuredField}>{fieldLabel(featuredField)}</option>
                   }
                 </select>
               </div>
@@ -258,12 +275,12 @@ export function DashboardPage() {
               {effectiveDeviceId ? 'No telemetry data for this field' : 'No devices registered'}
             </div>
           ) : (
-            <LineChart series={[{ name: featuredField, data: featuredPoints, color: 'hsl(var(--primary))' }]} height={260} showArea />
+            <LineChart series={[{ name: fieldLabel(featuredField), data: featuredPoints, color: 'hsl(var(--primary))' }]} height={260} showArea />
           )}
           <div style={{ display: 'flex', gap: '16px', marginTop: '12px', paddingTop: '12px', borderTop: '1px solid hsl(var(--border))' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
               <span style={{ width: '10px', height: '2px', background: 'hsl(var(--primary))' }} />
-              <span className="mono" style={{ fontSize: '11px' }}>{featuredField}</span>
+              <span className="mono" style={{ fontSize: '11px' }}>{fieldLabel(featuredField)}</span>
             </div>
           </div>
         </div>

@@ -21,6 +21,17 @@ const ResponsiveGridLayout = WidthProvider(GridLayout);
 const API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
 const MAP_ID  = import.meta.env.VITE_GOOGLE_MAP_ID || 'DEMO_MAP_ID';
 
+const prettyKey = (k: string) =>
+  k.replace(/([A-Z])/g, ' $1').replace(/[_-]/g, ' ').replace(/\b\w/g, c => c.toUpperCase()).trim();
+const normalizeKey = (k: string) => k.toLowerCase().replace(/[_\-\s]/g, '');
+const makeFieldLabel = (schemaFields: any[]) => (key: string) => {
+  if (!key) return key;
+  const fm = schemaFields.find((f: any) => f.key === key)
+    ?? schemaFields.find((f: any) => normalizeKey(f.key) === normalizeKey(key));
+  const lbl = fm?.label?.trim();
+  return (lbl && lbl !== fm?.key) ? lbl : prettyKey(key);
+};
+
 const SHARE_DURATIONS = [
   { value: '24h',   label: '24 hours',  seconds: 86_400 },
   { value: '7d',    label: '7 days',    seconds: 604_800 },
@@ -148,6 +159,13 @@ function SeriesRow({ series, index, devices, onUpdate, onRemove }: {
     queryFn: () => apiClient.get('/telemetry/latest', { params: { deviceId: series.deviceId } }).then(r => r.data),
     enabled: !!series.deviceId,
   });
+  const { data: srowDevice } = useQuery({
+    queryKey: ['srow-schema', series.deviceId],
+    queryFn: () => apiClient.get(`/devices/${series.deviceId}`).then(r => r.data),
+    enabled: !!series.deviceId,
+    staleTime: 300_000,
+  });
+  const srowLabel = makeFieldLabel(srowDevice?.meta?.dataSchema?.fields ?? []);
   const fields = Object.keys(latestData?.fields ?? {}).filter(k => typeof latestData?.fields?.[k] === 'number');
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 30px 28px', gap: 6, alignItems: 'center', padding: '6px 0', borderBottom: '1px solid hsl(var(--rule-ghost))' }}>
@@ -157,7 +175,7 @@ function SeriesRow({ series, index, devices, onUpdate, onRemove }: {
       </select>
       <select className="select" value={series.field} onChange={e => onUpdate(index, { ...series, field: e.target.value })} style={{ fontSize: 11 }}>
         <option value="">Field…</option>
-        {fields.map(f => <option key={f} value={f}>{f}</option>)}
+        {fields.map(f => <option key={f} value={f}>{srowLabel(f)}</option>)}
       </select>
       <input type="color" value={series.color || '#3b82f6'} onChange={e => onUpdate(index, { ...series, color: e.target.value })}
         style={{ width: 30, height: 30, border: '1px solid hsl(var(--border))', cursor: 'pointer', padding: 2 }} />
@@ -204,6 +222,15 @@ function WidgetContent({ widget }: { widget: Widget }) {
     queryFn: () => apiClient.get(`/devices/${widget.deviceId}`).then(r => r.data),
     enabled: widget.type === 'map' && !!widget.deviceId,
   });
+
+  // Schema — for display labels
+  const { data: schemaDevice } = useQuery({
+    queryKey: ['wschema', widget.deviceId],
+    queryFn: () => apiClient.get(`/devices/${widget.deviceId}`).then(r => r.data),
+    enabled: !!widget.deviceId,
+    staleTime: 300_000,
+  });
+  const fieldLabel = makeFieldLabel(schemaDevice?.meta?.dataSchema?.fields ?? []);
 
   // Multi-line chart — fetch all configured series
   const multiSeriesCfg: any[] = (widget.config?.series as any[]) ?? [];
@@ -252,7 +279,7 @@ function WidgetContent({ widget }: { widget: Widget }) {
     return (
       <ChartWrapper render={h => (
         <div style={{ display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:'100%',gap:4 }}>
-          <div className="eyebrow" style={{ fontSize: 9 }}>{(widget.field ?? 'value').replace(/_/g, ' ')}</div>
+          <div className="eyebrow" style={{ fontSize: 9 }}>{fieldLabel(widget.field ?? 'value')}</div>
           <div style={{ fontFamily:'var(--font-display)', fontSize:`clamp(20px,${Math.max(20,h*0.38)}px,72px)`, lineHeight:1, color:'hsl(var(--primary))' }}>
             {val !== undefined ? val.toFixed(2) : <span className="dim" style={{ fontSize:20 }}>—</span>}
           </div>
@@ -270,7 +297,7 @@ function WidgetContent({ widget }: { widget: Widget }) {
     return (
       <div style={{ display:'flex',flexDirection:'column',justifyContent:'space-between',height:'100%',padding:'4px 0' }}>
         <div style={{ flex:1,display:'flex',flexDirection:'column',alignItems:'flex-start',justifyContent:'center',gap:4 }}>
-          <div className="eyebrow" style={{ fontSize:9 }}>{(widget.field ?? 'value').replace(/_/g,' ')}</div>
+          <div className="eyebrow" style={{ fontSize:9 }}>{fieldLabel(widget.field ?? 'value')}</div>
           <div style={{ fontFamily:'var(--font-display)',fontSize:'clamp(20px,3.5vw,44px)',color:'hsl(var(--primary))',lineHeight:1 }}>
             {val?.toFixed(2) ?? <span className="dim" style={{ fontSize:18 }}>—</span>}
           </div>
@@ -301,7 +328,7 @@ function WidgetContent({ widget }: { widget: Widget }) {
           <path d={`M ${s.x} ${s.y} A ${r} ${r} 0 1 1 ${e.x} ${e.y}`} fill="none" stroke="hsl(var(--border))" strokeWidth={10} strokeLinecap="round" />
           {pct>0 && <path d={`M ${s.x} ${s.y} A ${r} ${r} 0 ${large} 1 ${a.x} ${a.y}`} fill="none" stroke="hsl(var(--primary))" strokeWidth={10} strokeLinecap="round" />}
           <text x={cx} y={cy - 4} textAnchor="middle" style={{ fontFamily:'var(--font-display)',fontSize:22,fill:'hsl(var(--fg))' }}>{val?.toFixed(1) ?? '—'}</text>
-          <text x={cx} y={cy + 14} textAnchor="middle" style={{ fontFamily:'var(--font-mono)',fontSize:9,fill:'hsl(var(--muted-fg))',textTransform:'uppercase' }}>{widget.field ?? ''}</text>
+          <text x={cx} y={cy + 14} textAnchor="middle" style={{ fontFamily:'var(--font-mono)',fontSize:9,fill:'hsl(var(--muted-fg))',textTransform:'uppercase' }}>{fieldLabel(widget.field ?? '')}</text>
         </svg>
       </div>
     );
@@ -355,7 +382,7 @@ function WidgetContent({ widget }: { widget: Widget }) {
     const pts = (series?.data ?? []).map((p: any) => ({ ts: new Date(p.ts).getTime(), value: p.value }));
     return (
       <ChartWrapper render={h => pts.length > 0
-        ? <LineChart series={[{ name: widget.field ?? '', data: pts, color: 'hsl(var(--primary))' }]} height={h} showArea />
+        ? <LineChart series={[{ name: fieldLabel(widget.field ?? ''), data: pts, color: 'hsl(var(--primary))' }]} height={h} showArea />
         : <div className="dim" style={dim}>No data yet</div>} />
     );
   }
@@ -392,7 +419,7 @@ function WidgetContent({ widget }: { widget: Widget }) {
       if (Math.abs(closest.ts - xp.ts) < 120_000) pairs.push({ x: xp.value, y: closest.value });
     }
     if (!xField || !yField) return <div className="dim" style={dim}>Configure X and Y fields</div>;
-    return <ScatterPlot pairs={pairs} xField={xField} yField={yField} color={WIDGET_ACCENT['scatter_chart']} />;
+    return <ScatterPlot pairs={pairs} xField={fieldLabel(xField)} yField={fieldLabel(yField)} color={WIDGET_ACCENT['scatter_chart']} />;
   }
 
   // ── Data Table ──
@@ -408,7 +435,7 @@ function WidgetContent({ widget }: { widget: Widget }) {
               ? <tr><td colSpan={2} className="dim" style={{ padding:'16px 0',textAlign:'center' }}>No data</td></tr>
               : entries.map(([k, v]) => (
                 <tr key={k} style={{ borderBottom:'1px solid hsl(var(--rule-ghost))' }}>
-                  <td style={{ padding:'5px 8px',color:'hsl(var(--muted-fg))' }}>{k.replace(/_/g,' ')}</td>
+                  <td style={{ padding:'5px 8px',color:'hsl(var(--muted-fg))' }}>{fieldLabel(k)}</td>
                   <td style={{ padding:'5px 8px',textAlign:'right' }}>{(v as number).toFixed(3)}</td>
                 </tr>
               ))}
@@ -616,6 +643,13 @@ function WidgetDrawer({ open, editing, devices, onSave, onClose }: {
     queryFn: () => apiClient.get('/telemetry/latest', { params: { deviceId } }).then(r => r.data),
     enabled: !!deviceId,
   });
+  const { data: drawerDevice } = useQuery({
+    queryKey: ['wdrawer-schema', deviceId],
+    queryFn: () => apiClient.get(`/devices/${deviceId}`).then(r => r.data),
+    enabled: !!deviceId,
+    staleTime: 300_000,
+  });
+  const drawerFieldLabel = makeFieldLabel(drawerDevice?.meta?.dataSchema?.fields ?? []);
   const availableFields = Object.entries(latestData?.fields ?? {})
     .filter(([, v]) => typeof v === 'number').map(([k]) => k);
 
@@ -769,7 +803,7 @@ function WidgetDrawer({ open, editing, devices, onSave, onClose }: {
                   value={field}
                   onChange={setField}
                   placeholder="— select field —"
-                  options={availableFields.map(f => ({ value: f, label: f }))}
+                  options={availableFields.map(f => ({ value: f, label: drawerFieldLabel(f) }))}
                 />
               </div>
             )}
@@ -782,7 +816,7 @@ function WidgetDrawer({ open, editing, devices, onSave, onClose }: {
                     value={xField}
                     onChange={setXField}
                     placeholder="— X field —"
-                    options={availableFields.map(f => ({ value: f, label: f }))}
+                    options={availableFields.map(f => ({ value: f, label: drawerFieldLabel(f) }))}
                   />
                 </div>
                 <div>
@@ -791,7 +825,7 @@ function WidgetDrawer({ open, editing, devices, onSave, onClose }: {
                     value={yField}
                     onChange={setYField}
                     placeholder="— Y field —"
-                    options={availableFields.filter(f => f !== xField).map(f => ({ value: f, label: f }))}
+                    options={availableFields.filter(f => f !== xField).map(f => ({ value: f, label: drawerFieldLabel(f) }))}
                   />
                 </div>
               </>
@@ -820,7 +854,7 @@ function WidgetDrawer({ open, editing, devices, onSave, onClose }: {
                       borderColor:tableFields.includes(f)?'hsl(var(--primary))':'hsl(var(--border))',
                       background:tableFields.includes(f)?'hsl(var(--primary) / 0.1)':'transparent',
                       color:tableFields.includes(f)?'hsl(var(--primary))':'hsl(var(--muted-fg))',
-                    }}>{f}</button>
+                    }}>{drawerFieldLabel(f)}</button>
                   ))}
                 </div>
               </div>
