@@ -1,15 +1,23 @@
-import { useQuery } from '@tanstack/react-query';
-import { useState, useEffect } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { devicesApi } from '@/api/devices';
 import { telemetryApi } from '@/api/telemetry';
 import { getCategoryIconInfo, downloadCSV, formatDate } from '@/lib/utils';
 import { LineChart } from '@/components/charts/Charts';
 import { Download, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { io } from 'socket.io-client';
 
 const COLORS = ['hsl(var(--primary))', 'hsl(var(--fg))', 'hsl(var(--info))', 'hsl(var(--good))', 'hsl(var(--warn))', '#A06CD5'];
 const RANGES = [{ label: '24h', h: 24 }, { label: '7d', h: 168 }, { label: '30d', h: 720 }];
 
+const prettyKey = (k: string) =>
+  k.replace(/_/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2')
+   .split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+
+const normalizeKey = (k: string) => k.toLowerCase().replace(/[_\-\s]/g, '');
+
 export function TelemetryPage() {
+  const queryClient = useQueryClient();
   const [selectedDeviceId, setSelectedDeviceId] = useState('');
   const [selectedFields, setSelectedFields] = useState<string[]>([]);
   const [featuredField, setFeaturedField] = useState('');
@@ -19,6 +27,8 @@ export function TelemetryPage() {
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo]   = useState('');
   const isCustom = range.label === 'custom';
+  const rangeRef = useRef({ range, isCustom, customFrom, customTo });
+  useEffect(() => { rangeRef.current = { range, isCustom, customFrom, customTo }; }, [range, isCustom, customFrom, customTo]);
 
   const { data: devicesData } = useQuery({
     queryKey: ['devices', 'telemetry-page'],
@@ -49,6 +59,15 @@ export function TelemetryPage() {
       setFeaturedField(numericFields[0].key);
   }, [numericFields.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const getRangeBounds = useCallback(() => {
+    const { range: r, isCustom: ic, customFrom: cf, customTo: ct } = rangeRef.current;
+    const now = Date.now();
+    const f = ic && cf ? new Date(cf).toISOString() : new Date(now - r.h * 3600_000).toISOString();
+    const t = ic && ct ? new Date(ct + 'T23:59:59').toISOString() : new Date(now).toISOString();
+    return { from: f, to: t };
+  }, []);
+
+  // Stable from/to for queryKeys (triggers re-fetch when range changes)
   const from = isCustom && customFrom
     ? new Date(customFrom).toISOString()
     : new Date(Date.now() - range.h * 3600_000).toISOString();
@@ -56,32 +75,62 @@ export function TelemetryPage() {
     ? new Date(customTo + 'T23:59:59').toISOString()
     : new Date().toISOString();
 
+  const schemaFields: any[] = selectedDevice?.meta?.dataSchema?.fields ?? [];
+
+  const fieldLabel = useCallback((key: string) => {
+    const fm = schemaFields.find((f: any) => f.key === key)
+      ?? schemaFields.find((f: any) => normalizeKey(f.key) === normalizeKey(key));
+    const lbl = fm?.label?.trim();
+    return (lbl && lbl !== fm?.key) ? lbl : prettyKey(key);
+  }, [schemaFields]);
+
   const { data: seriesData, isLoading } = useQuery({
-    queryKey: ['series-multi', deviceId, selectedFields.join(','), range.label],
+    queryKey: ['series-multi', deviceId, selectedFields.join(','), range.label, from],
     queryFn: async () => {
       if (!deviceId || selectedFields.length === 0) return [];
+      const { from: f, to: t } = getRangeBounds();
       return Promise.all(
         selectedFields.map(field =>
-          telemetryApi.series(deviceId, field, from, to, 500).catch(() => null)
+          telemetryApi.series(deviceId, field, f, t, 1000).catch(() => null)
         )
       );
     },
     enabled: !!deviceId && selectedFields.length > 0,
-    refetchInterval: 60_000,
+    refetchInterval: 10_000,
   });
 
   const { data: featuredSeriesData } = useQuery({
-    queryKey: ['series-featured', deviceId, featuredField, range.label],
-    queryFn: () => telemetryApi.series(deviceId, featuredField, from, to, 200).catch(() => null),
+    queryKey: ['series-featured', deviceId, featuredField, range.label, from],
+    queryFn: () => {
+      const { from: f, to: t } = getRangeBounds();
+      return telemetryApi.series(deviceId, featuredField, f, t, 500).catch(() => null);
+    },
     enabled: !!deviceId && !!featuredField,
-    refetchInterval: 30_000,
+    refetchInterval: 10_000,
   });
 
-  const schemaFields: any[] = selectedDevice?.meta?.dataSchema?.fields ?? [];
+  // Socket: invalidate series on live telemetry events
+  useEffect(() => {
+    if (!deviceId) return;
+    const token = localStorage.getItem('token') ?? sessionStorage.getItem('token') ?? '';
+    const sock = io(import.meta.env.VITE_API_URL ?? '', {
+      auth: { token },
+      transports: ['websocket'],
+    });
+    sock.on('connect', () => { sock.emit('subscribeDevice', deviceId); });
+    sock.on('telemetry', (msg: any) => {
+      if (msg.deviceId !== deviceId) return;
+      queryClient.invalidateQueries({ queryKey: ['series-multi', deviceId] });
+      queryClient.invalidateQueries({ queryKey: ['series-featured', deviceId] });
+      queryClient.invalidateQueries({ queryKey: ['telemetry', 'latest', deviceId] });
+    });
+    return () => { sock.disconnect(); };
+  }, [deviceId, queryClient]);
+
   const chartSeries = selectedFields.map((field, i) => {
     const fMeta = schemaFields.find((f: any) => f.key === field);
     return {
-      name: field,
+      name: fieldLabel(field),
       data: ((seriesData?.[i] as any)?.data ?? []).map((p: any) => ({
         ts: typeof p.ts === 'string' ? new Date(p.ts).getTime() : p.ts,
         value: typeof p.value === 'number' ? p.value : 0,
@@ -204,7 +253,7 @@ export function TelemetryPage() {
                 style={{ minWidth: 160 }}
               >
                 {numericFields.map(({ key }) => (
-                  <option key={key} value={key}>{key.replace(/_/g, ' ')}</option>
+                  <option key={key} value={key}>{fieldLabel(key)}</option>
                 ))}
               </select>
             </div>
@@ -241,7 +290,7 @@ export function TelemetryPage() {
                     transition: 'outline 0.1s',
                   }}
                 >
-                  <div className="eyebrow" style={{ fontSize: 9.5 }}>{key.replace(/_/g, ' ')}</div>
+                  <div className="eyebrow" style={{ fontSize: 9.5 }}>{fieldLabel(key)}</div>
                   <div style={{ fontFamily: 'var(--font-display)', fontSize: 26, lineHeight: 1, marginTop: 4, color: on ? col : 'hsl(var(--fg))' }} className="num">
                     {value.toFixed(2)}
                   </div>
@@ -277,7 +326,7 @@ export function TelemetryPage() {
                   }}
                 >
                   <span style={{ width: 7, height: 7, background: on ? col : 'transparent', border: '1px solid currentColor', display: 'inline-block' }} />
-                  {key.replace(/_/g, ' ')}
+                  {fieldLabel(key)}
                 </button>
               );
             })}
@@ -349,7 +398,7 @@ export function TelemetryPage() {
               <thead>
                 <tr>
                   <th>Timestamp</th>
-                  {chartSeries.map(s => <th key={s.name} style={{ textTransform: 'capitalize' }}>{s.name.replace(/_/g, ' ')}</th>)}
+                  {chartSeries.map(s => <th key={s.name}>{s.name}</th>)}
                 </tr>
               </thead>
               <tbody>

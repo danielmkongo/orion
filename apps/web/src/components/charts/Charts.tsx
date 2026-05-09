@@ -204,9 +204,9 @@ export function LineChart({
                 </linearGradient>
               );
             })}
-            {/* Clip path so area doesn't overflow below baseline */}
+            {/* Clip to chart area (2px vertical bleed for stroke edges) */}
             <clipPath id={`${uid}-clip`}>
-              <rect x={PAD.left} y={PAD.top} width={innerW} height={innerH} />
+              <rect x={PAD.left - 4} y={PAD.top - 4} width={innerW + 8} height={innerH + 8} />
             </clipPath>
           </defs>
 
@@ -270,6 +270,7 @@ export function LineChart({
                 d={buildPath(mapped, yFn)}
                 fill="none" stroke={color}
                 strokeWidth={2} strokeLinejoin="round" strokeLinecap="round"
+                clipPath={`url(#${uid}-clip)`}
               />
             );
           })}
