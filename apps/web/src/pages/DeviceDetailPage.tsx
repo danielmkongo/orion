@@ -13,6 +13,7 @@ import toast from 'react-hot-toast';
 import { CommandWidget } from '@/components/devices/CommandWidget';
 import type { DeviceCommand } from '@/components/devices/CommandWidget';
 import { CodeGenWizard } from '@/components/devices/CodeGenWizard';
+import { LocationPicker } from '@/components/devices/LocationPicker';
 
 const COLORS = ['hsl(var(--primary))', 'hsl(var(--info))', 'hsl(var(--good))', 'hsl(var(--warn))', '#A06CD5', '#06B6D4'];
 
@@ -145,6 +146,9 @@ export function DeviceDetailPage() {
   const [nameDraft, setNameDraft] = useState('');
   const [latDraft, setLatDraft] = useState('');
   const [lngDraft, setLngDraft] = useState('');
+  const [descDraft, setDescDraft] = useState('');
+  const [tagsDraft, setTagsDraft] = useState('');
+  const [firmwareDraft, setFirmwareDraft] = useState('');
   const [openCodeId, setOpenCodeId] = useState<string | null>(null);
   const [codeEditMode, setCodeEditMode] = useState(false);
   const [codeDraft, setCodeDraft] = useState('');
@@ -254,6 +258,7 @@ export function DeviceDetailPage() {
   const schemaFields: any[] = d?.meta?.dataSchema?.fields ?? [];
   const chartFieldMeta = schemaFields.find((f: any) => f.key === chartField);
   const chartColor = chartFieldMeta?.chartColor ?? 'hsl(var(--primary))';
+  const chartFieldLabel = chartFieldMeta?.label ?? chartField.replace(/_/g, ' ');
 
   const { Icon: CatIcon } = d ? getCategoryIconInfo(d.category) : { Icon: () => null };
 
@@ -484,7 +489,7 @@ export function DeviceDetailPage() {
           </p>
         </div>
         <div style={{ gridColumn: 3, display: 'flex', alignItems: 'flex-end', gap: 8, paddingBottom: 20 }}>
-          <button className="btn btn-sm" style={{ gap: 6 }} onClick={() => { setSchemaEdits(schemaFields.map((f: any) => ({ ...f }))); setLatDraft(d.location?.lat?.toString() ?? ''); setLngDraft((d.location?.lng ?? d.location?.lon)?.toString() ?? ''); setShowEditSchema(true); }}>
+          <button className="btn btn-sm" style={{ gap: 6 }} onClick={() => { setSchemaEdits(schemaFields.map((f: any) => ({ ...f }))); setLatDraft(d.location?.lat?.toString() ?? ''); setLngDraft((d.location?.lng ?? d.location?.lon)?.toString() ?? ''); setDescDraft(d.description ?? ''); setTagsDraft((d.tags ?? []).join(', ')); setFirmwareDraft(d.firmwareVersion ?? ''); setShowEditSchema(true); }}>
             <Pencil size={13} /> Edit device
           </button>
           <button className="btn btn-sm" style={{ gap: 6 }} onClick={() => setShowCodeGen(true)}>
@@ -655,12 +660,12 @@ export function DeviceDetailPage() {
       <div className="detail-grid" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 32, marginBottom: 0 }}>
         {/* Chart */}
         {ss('chart', <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12, gap: 12, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12, gap: 12, flexWrap: 'wrap', position: 'sticky', top: 0, zIndex: 10, background: 'hsl(var(--bg))', paddingTop: 4, paddingBottom: 12 }}>
             <div>
               <div className="eyebrow">Live telemetry</div>
               <div style={{ fontFamily: 'var(--font-display)', fontSize: 28, lineHeight: 1, marginTop: 4, textTransform: 'capitalize' }}>
                 {telemView === 'chart' ? (
-                  <>{chartField.replace(/_/g, ' ')} <span style={{ fontStyle: 'italic', color: 'hsl(var(--primary))' }}>· {chartRange}</span></>
+                  <>{chartFieldLabel} <span style={{ fontStyle: 'italic', color: 'hsl(var(--primary))' }}>· {chartRange}</span></>
                 ) : (
                   <>All fields <span style={{ fontStyle: 'italic', color: 'hsl(var(--primary))' }}>· {chartRange}</span></>
                 )}
@@ -700,7 +705,7 @@ export function DeviceDetailPage() {
               </div>
             )}
           </div>
-          <div className="panel" style={{ padding: telemView === 'table' ? 0 : '16px 12px 8px', overflow: 'hidden' }}>
+          <div className="panel" style={{ padding: telemView === 'table' ? 0 : '16px 12px 8px', overflow: telemView === 'table' ? 'visible' : 'hidden' }}>
             {telemView === 'table' ? (() => {
               const rows: any[] = tableData?.data ?? [];
               const allFields = schemaFields.length > 0
@@ -715,7 +720,7 @@ export function DeviceDetailPage() {
               }
               return (
                 <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 320 }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--font-mono)', fontSize: 11 }}>
+                  <table style={{ width: 'max-content', minWidth: '100%', borderCollapse: 'collapse', fontFamily: 'var(--font-mono)', fontSize: 11 }}>
                     <thead style={{ position: 'sticky', top: 0, background: 'hsl(var(--surface-raised))', zIndex: 1 }}>
                       <tr>
                         <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', fontSize: 9.5, color: 'hsl(var(--muted-fg))', borderBottom: '1px solid hsl(var(--border))', whiteSpace: 'nowrap' }}>
@@ -757,7 +762,7 @@ export function DeviceDetailPage() {
             })() : (
               seriesPoints.length === 0 ? (
                 <div style={{ height: 280, display: 'flex', alignItems: 'center', justifyContent: 'center' }} className="dim">
-                  No data for <strong style={{ marginLeft: 4, fontFamily: 'var(--font-mono)' }}>{chartField}</strong>
+                  No data for <strong style={{ marginLeft: 4, fontFamily: 'var(--font-mono)' }}>{chartFieldLabel}</strong>
                 </div>
               ) : (() => {
                 const ct = chartFieldMeta?.chartType ?? 'line';
@@ -785,7 +790,7 @@ export function DeviceDetailPage() {
                         <path d={`M ${s.x} ${s.y} A ${r} ${r} 0 1 1 ${e.x} ${e.y}`} fill="none" stroke="hsl(var(--border))" strokeWidth={14} strokeLinecap="round" />
                         {pct > 0 && <path d={`M ${s.x} ${s.y} A ${r} ${r} 0 ${large} 1 ${a.x} ${a.y}`} fill="none" stroke={chartColor} strokeWidth={14} strokeLinecap="round" />}
                         <text x={cx} y={cy - 6} textAnchor="middle" style={{ fontFamily: 'var(--font-display)', fontSize: 28, fill: 'hsl(var(--fg))' }}>{latestVal.toFixed(1)}</text>
-                        <text x={cx} y={cy + 18} textAnchor="middle" style={{ fontFamily: 'var(--font-mono)', fontSize: 10, fill: 'hsl(var(--muted-fg))', textTransform: 'uppercase' }}>{chartFieldMeta?.unit ?? chartField}</text>
+                        <text x={cx} y={cy + 18} textAnchor="middle" style={{ fontFamily: 'var(--font-mono)', fontSize: 10, fill: 'hsl(var(--muted-fg))', textTransform: 'uppercase' }}>{chartFieldMeta?.unit ?? chartFieldLabel}</text>
                         <text x={cx - r - 4} y={cy + 32} textAnchor="middle" style={{ fontFamily: 'var(--font-mono)', fontSize: 9, fill: 'hsl(var(--muted-fg))' }}>{minV}</text>
                         <text x={cx + r + 4} y={cy + 32} textAnchor="middle" style={{ fontFamily: 'var(--font-mono)', fontSize: 9, fill: 'hsl(var(--muted-fg))' }}>{maxV}</text>
                       </svg>
@@ -803,16 +808,16 @@ export function DeviceDetailPage() {
                       </svg>
                       <div style={{ textAlign: 'center' }}>
                         <div style={{ fontFamily: 'var(--font-display)', fontSize: 52, lineHeight: 1, color: chartColor }}>{latestVal.toFixed(1)}</div>
-                        <div className="mono faint" style={{ fontSize: 12, marginTop: 4 }}>{chartFieldMeta?.unit ?? chartField}</div>
+                        <div className="mono faint" style={{ fontSize: 12, marginTop: 4 }}>{chartFieldMeta?.unit ?? chartFieldLabel}</div>
                         <div className="mono faint" style={{ fontSize: 10, marginTop: 8 }}>{pct.toFixed(0)}% of range</div>
                       </div>
                     </div>
                   );
                 }
                 if (ct === 'scatter') {
-                  return <LineChart series={[{ name: chartField, data: seriesPoints, color: chartColor }]} height={280} showArea={false} />;
+                  return <LineChart series={[{ name: chartFieldLabel, data: seriesPoints, color: chartColor }]} height={280} showArea={false} />;
                 }
-                return <LineChart series={[{ name: chartField, data: seriesPoints, color: chartColor }]} height={280} showArea={ct === 'area'} />;
+                return <LineChart series={[{ name: chartFieldLabel, data: seriesPoints, color: chartColor }]} height={280} showArea={ct === 'area'} />;
               })()
             )}
           </div>
@@ -1616,30 +1621,44 @@ export function DeviceDetailPage() {
             </div>
             <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
               {/* Device name */}
-              <div style={{ marginBottom: 20 }}>
+              <div style={{ marginBottom: 16 }}>
                 <label className="eyebrow" style={{ fontSize: 9, display: 'block', marginBottom: 6 }}>Device name</label>
                 <input className="input" defaultValue={d.name} id="edit-device-name"
                   style={{ fontSize: 14 }} placeholder="Device name" />
+              </div>
+
+              {/* Description */}
+              <div style={{ marginBottom: 16 }}>
+                <label className="eyebrow" style={{ fontSize: 9, display: 'block', marginBottom: 6 }}>Description</label>
+                <input className="input" value={descDraft} onChange={e => setDescDraft(e.target.value)}
+                  style={{ fontSize: 13 }} placeholder="Optional device description" />
+              </div>
+
+              {/* Tags + firmware */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
+                <div>
+                  <label className="eyebrow" style={{ fontSize: 9, display: 'block', marginBottom: 6 }}>Tags <span style={{ textTransform: 'none', letterSpacing: 0, fontFamily: 'var(--font-sans)', fontWeight: 400 }}>(comma-separated)</span></label>
+                  <input className="input" value={tagsDraft} onChange={e => setTagsDraft(e.target.value)}
+                    style={{ fontSize: 13 }} placeholder="e.g. outdoor, sensor" />
+                </div>
+                <div>
+                  <label className="eyebrow" style={{ fontSize: 9, display: 'block', marginBottom: 6 }}>Firmware version</label>
+                  <input className="input" value={firmwareDraft} onChange={e => setFirmwareDraft(e.target.value)}
+                    style={{ fontSize: 13 }} placeholder="e.g. 1.2.0" />
+                </div>
               </div>
 
               {/* Fixed location */}
               <div style={{ marginBottom: 20 }}>
                 <label className="eyebrow" style={{ fontSize: 9, display: 'block', marginBottom: 6 }}>Fixed location</label>
                 <p style={{ fontSize: 11, color: 'hsl(var(--muted-fg))', marginBottom: 10 }}>
-                  Manually set lat/lng for devices that don't transmit GPS. Leave both blank to clear.
+                  Pin the device on the map. Leave coordinates blank to clear the location.
                 </p>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                  <div>
-                    <label style={{ fontSize: 10, color: 'hsl(var(--muted-fg))', display: 'block', marginBottom: 4 }}>Latitude</label>
-                    <input className="input" value={latDraft} onChange={e => setLatDraft(e.target.value)}
-                      style={{ fontSize: 13 }} placeholder="e.g. -1.2921" />
-                  </div>
-                  <div>
-                    <label style={{ fontSize: 10, color: 'hsl(var(--muted-fg))', display: 'block', marginBottom: 4 }}>Longitude</label>
-                    <input className="input" value={lngDraft} onChange={e => setLngDraft(e.target.value)}
-                      style={{ fontSize: 13 }} placeholder="e.g. 36.8219" />
-                  </div>
-                </div>
+                <LocationPicker
+                  lat={parseFloat(latDraft) || 0}
+                  lng={parseFloat(lngDraft) || 0}
+                  onChange={(la, ln) => { setLatDraft(String(la)); setLngDraft(String(ln)); }}
+                />
               </div>
 
               {/* Field schema table */}
@@ -1650,15 +1669,17 @@ export function DeviceDetailPage() {
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--font-mono)', fontSize: 11 }}>
                       <thead>
                         <tr style={{ background: 'hsl(var(--surface-raised))' }}>
-                          {['Key', 'Display label', 'Unit', 'Chart'].map(h => (
+                          {['Key', 'Display label', 'Unit', 'Chart', 'Color'].map(h => (
                             <th key={h} style={{ padding: '8px 10px', textAlign: 'left', fontSize: 9, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'hsl(var(--muted-fg))', borderBottom: '1px solid hsl(var(--rule-ghost))' }}>{h}</th>
                           ))}
                         </tr>
                       </thead>
                       <tbody>
-                        {schemaEdits.map((f, i) => (
+                        {schemaEdits.map((f, i) => {
+                          const colorVal = /^#[0-9a-f]{3,6}$/i.test(f.chartColor ?? '') ? f.chartColor : COLORS[i % COLORS.length].startsWith('#') ? COLORS[i % COLORS.length] : '#ff5b1f';
+                          return (
                           <tr key={f.key} style={{ borderBottom: '1px solid hsl(var(--rule-ghost))' }}>
-                            <td style={{ padding: '6px 10px', color: 'hsl(var(--muted-fg))' }}>{f.key}</td>
+                            <td style={{ padding: '6px 10px', color: 'hsl(var(--muted-fg))', fontFamily: 'var(--font-mono)', fontSize: 11 }}>{f.key}</td>
                             <td style={{ padding: '4px 6px' }}>
                               <input className="input" style={{ fontSize: 11, height: 28, fontFamily: 'var(--font-sans)' }}
                                 value={f.label ?? ''}
@@ -1681,8 +1702,17 @@ export function DeviceDetailPage() {
                                 <option value="level">Level</option>
                               </select>
                             </td>
+                            <td style={{ padding: '4px 10px', width: 44 }}>
+                              <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }} title="Pick chart color">
+                                <div style={{ width: 22, height: 22, borderRadius: 4, background: f.chartColor ?? COLORS[i % COLORS.length], border: '2px solid hsl(var(--border))', flexShrink: 0 }} />
+                                <input type="color" value={colorVal}
+                                  style={{ width: 0, height: 0, opacity: 0, position: 'absolute' }}
+                                  onChange={e => setSchemaEdits(prev => prev.map((x, j) => j === i ? { ...x, chartColor: e.target.value } : x))} />
+                              </label>
+                            </td>
                           </tr>
-                        ))}
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
@@ -1697,6 +1727,10 @@ export function DeviceDetailPage() {
                   const newName = nameEl?.value?.trim();
                   const patch: any = {};
                   if (newName && newName !== d.name) patch.name = newName;
+                  if (descDraft !== (d.description ?? '')) patch.description = descDraft;
+                  const newTags = tagsDraft.split(',').map((t: string) => t.trim()).filter(Boolean);
+                  if (JSON.stringify(newTags) !== JSON.stringify(d.tags ?? [])) patch.tags = newTags;
+                  if (firmwareDraft !== (d.firmwareVersion ?? '')) patch.firmwareVersion = firmwareDraft;
                   if (schemaEdits.length > 0) patch.meta = { ...d.meta, dataSchema: { fields: schemaEdits } };
                   const lat = parseFloat(latDraft);
                   const lng = parseFloat(lngDraft);

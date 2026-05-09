@@ -10,6 +10,7 @@ import type { DeviceCategory, DeviceProtocol, DevicePayloadFormat } from '@orion
 import toast from 'react-hot-toast';
 import { LineChart as CustomLineChart, Sparkline } from '@/components/charts/Charts';
 import { formatPayloadStr } from '@/lib/utils';
+import { LocationPicker } from './LocationPicker';
 
 /* ─── Types ─────────────────────────────────────────────────────── */
 export interface DataField {
@@ -485,154 +486,6 @@ function CommandPreview({ cmd, payloadFormat = 'json' }: { cmd: Command; payload
   );
 }
 
-/* ─── Google Maps location picker ───────────────────────────────────── */
-const GMAPS_KEY_FORM = (import.meta as any).env?.VITE_GOOGLE_MAPS_API_KEY ?? '';
-const GMAPS_ID_FORM  = (import.meta as any).env?.VITE_GOOGLE_MAP_ID ?? 'DEMO_MAP_ID';
-
-function LocationPicker({ lat, lng, onChange }: {
-  lat: number; lng: number;
-  onChange: (lat: number, lng: number) => void;
-}) {
-  const mapRef    = useRef<HTMLDivElement | null>(null);
-  const gMapRef   = useRef<any>(null);
-  const markerRef = useRef<any>(null);
-  const [search, setSearch] = useState('');
-  const [searching, setSearching] = useState(false);
-
-  const initMap = useCallback((la: number, ln: number) => {
-    if (!mapRef.current) return;
-    const win = window as any;
-    if (!win.google?.maps) return;
-    const center = { lat: la || 20, lng: ln || 0 };
-    const map = new win.google.maps.Map(mapRef.current, {
-      center,
-      zoom: la ? 13 : 2,
-      mapTypeId: 'satellite',
-      mapId: GMAPS_ID_FORM,
-      streetViewControl: false,
-      mapTypeControl: false,
-      gestureHandling: 'cooperative',
-    });
-    gMapRef.current = map;
-
-    const makeMarker = (pos: { lat: number; lng: number }) => {
-      if (markerRef.current) markerRef.current.map = null;
-      const el = document.createElement('div');
-      el.style.cssText = 'width:14px;height:14px;background:hsl(var(--primary));border:2px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.5);cursor:pointer';
-      const m = new win.google.maps.marker.AdvancedMarkerElement({ map, position: pos, content: el, gmpDraggable: true });
-      m.addListener('dragend', (e: any) => onChange(e.latLng.lat(), e.latLng.lng()));
-      markerRef.current = m;
-    };
-
-    if (la && ln) makeMarker(center);
-    map.addListener('click', (e: any) => {
-      const la2 = e.latLng.lat(), ln2 = e.latLng.lng();
-      onChange(la2, ln2);
-      makeMarker({ lat: la2, lng: ln2 });
-    });
-  }, [onChange]);
-
-  useEffect(() => {
-    if (!GMAPS_KEY_FORM) return;
-    const win = window as any;
-    if (win.google?.maps) {
-      initMap(lat, lng);
-    } else {
-      const existing = document.querySelector('script[data-gmaps]');
-      if (!existing) {
-        const script = document.createElement('script');
-        script.dataset.gmaps = '1';
-        script.src = `https://maps.googleapis.com/maps/api/js?key=${GMAPS_KEY_FORM}&libraries=marker&callback=__gmapsReadyForm`;
-        win.__gmapsReadyForm = () => initMap(lat, lng);
-        document.head.appendChild(script);
-      } else {
-        existing.addEventListener('load', () => initMap(lat, lng));
-      }
-    }
-  }, []); // eslint-disable-line
-
-  const geocodeSearch = useCallback(async () => {
-    if (!search.trim() || !GMAPS_KEY_FORM) return;
-    setSearching(true);
-    try {
-      const res = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(search)}&key=${GMAPS_KEY_FORM}`);
-      const json = await res.json();
-      if (json.results?.[0]) {
-        const { lat: la, lng: ln } = json.results[0].geometry.location;
-        onChange(la, ln);
-        if (gMapRef.current) gMapRef.current.setCenter({ lat: la, lng: ln });
-        if (gMapRef.current) gMapRef.current.setZoom(13);
-        const win = window as any;
-        if (markerRef.current) markerRef.current.map = null;
-        const el = document.createElement('div');
-        el.style.cssText = 'width:14px;height:14px;background:hsl(var(--primary));border:2px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.5)';
-        markerRef.current = new win.google.maps.marker.AdvancedMarkerElement({ map: gMapRef.current, position: { lat: la, lng: ln }, content: el, gmpDraggable: true });
-        markerRef.current.addListener('dragend', (e: any) => onChange(e.latLng.lat(), e.latLng.lng()));
-      }
-    } catch { /* silent */ }
-    finally { setSearching(false); }
-  }, [search, onChange]);
-
-  return (
-    <div className="space-y-3">
-      {GMAPS_KEY_FORM ? (
-        <>
-          <div style={{ display: 'flex', gap: 6 }}>
-            <input
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') geocodeSearch(); }}
-              placeholder="Search location…"
-              className="input text-[12px]"
-              style={{ flex: 1 }}
-            />
-            <button
-              type="button"
-              onClick={geocodeSearch}
-              disabled={searching}
-              className="btn btn-sm btn-ghost"
-              style={{ gap: 4 }}
-            >
-              <MapPin size={12} /> {searching ? '…' : 'Go'}
-            </button>
-          </div>
-          <div ref={mapRef} style={{ height: 260 }} className="border border-[hsl(var(--rule))]" />
-          <p className="text-[11px] text-muted-foreground flex items-center gap-1">
-            <MapPin size={11} className="text-primary" />
-            Search or click the map to place your device
-          </p>
-        </>
-      ) : (
-        <p className="text-[12px] text-muted-foreground">
-          Add <code className="font-mono text-primary">VITE_GOOGLE_MAPS_API_KEY</code> to enable map picker.
-        </p>
-      )}
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className="eyebrow text-[9px] block mb-1.5">Latitude</label>
-          <input
-            type="number" step="any"
-            value={lat || ''}
-            onChange={e => onChange(parseFloat(e.target.value) || 0, lng)}
-            className="input font-mono text-[12px]"
-            placeholder="0.000000"
-          />
-        </div>
-        <div>
-          <label className="eyebrow text-[9px] block mb-1.5">Longitude</label>
-          <input
-            type="number" step="any"
-            value={lng || ''}
-            onChange={e => onChange(lat, parseFloat(e.target.value) || 0)}
-            className="input font-mono text-[12px]"
-            placeholder="0.000000"
-          />
-        </div>
-      </div>
-    </div>
-  );
-}
-
 /* ─── Main component ──────────────────────────────────────────────── */
 export function DeviceForm({ onClose }: { onClose: () => void }) {
   const queryClient = useQueryClient();
@@ -966,8 +819,16 @@ export function DeviceForm({ onClose }: { onClose: () => void }) {
                                 selectedFieldIdx === i ? 'border-primary/40 bg-primary/[0.025]' : 'border-[hsl(var(--rule))]'
                               }`}
                             >
-                              {/* Row 1: Label + trash + graph expand */}
+                              {/* Row 1: Color dot + Label + trash + graph expand */}
                               <div className="flex items-center gap-1.5">
+                                {field.type === 'number' && (
+                                  <label title={field.chartColor ?? 'Pick color'} style={{ cursor: 'pointer', flexShrink: 0, position: 'relative' }}>
+                                    <div style={{ width: 14, height: 14, borderRadius: '50%', background: field.chartColor ?? '#FF6A30', border: '1.5px solid rgba(255,255,255,0.25)', boxShadow: '0 0 0 1px rgba(0,0,0,0.2)' }} />
+                                    <input type="color" value={/^#/.test(field.chartColor ?? '') ? field.chartColor : '#FF6A30'}
+                                      onChange={e => updateField(i, { chartColor: e.target.value })}
+                                      style={{ position: 'absolute', inset: 0, opacity: 0, width: '100%', height: '100%', cursor: 'pointer' }} />
+                                  </label>
+                                )}
                                 <input
                                   className="input text-[10px] !h-7 flex-1"
                                   placeholder="Display label"
