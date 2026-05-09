@@ -160,14 +160,22 @@ export function DeviceDetailPage() {
     queryKey: ['device', id],
     queryFn: () => devicesApi.get(id!),
     enabled: !!id,
+    refetchInterval: 15_000,
   });
 
   const { data: latestTelemetry } = useQuery({
     queryKey: ['telemetry', 'latest', id],
     queryFn: () => telemetryApi.latest(id!),
     enabled: !!id,
-    refetchInterval: 30_000,
+    refetchInterval: 10_000,
   });
+
+  // Tick every 30s so timeAgo labels stay current without a full data refetch
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setTick(n => n + 1), 30_000);
+    return () => clearInterval(t);
+  }, []);
 
   const { data: commands } = useQuery({
     queryKey: ['commands', id],
@@ -200,14 +208,14 @@ export function DeviceDetailPage() {
     queryKey: ['series', id, chartField, chartRange],
     queryFn: () => telemetryApi.series(id!, chartField, from, to, 500),
     enabled: !!id && !!chartField,
-    refetchInterval: 60_000,
+    refetchInterval: 15_000,
   });
 
   const { data: tableData } = useQuery({
     queryKey: ['telemetry-table', id, chartRange],
     queryFn: () => telemetryApi.query({ deviceId: id!, from, to, limit: 200 }),
     enabled: !!id && telemView === 'table',
-    refetchInterval: 60_000,
+    refetchInterval: 15_000,
   });
 
   useEffect(() => {
@@ -234,6 +242,8 @@ export function DeviceDetailPage() {
       if (event.deviceId === id || event.data?.deviceId === id) {
         setLiveFields(event.data?.fields ?? {});
         queryClient.invalidateQueries({ queryKey: ['telemetry', 'latest', id] });
+        queryClient.invalidateQueries({ queryKey: ['device', id] });
+        queryClient.invalidateQueries({ queryKey: ['series', id] });
       }
     });
     return () => { unsub(); unsubT(); };
@@ -258,7 +268,16 @@ export function DeviceDetailPage() {
   const schemaFields: any[] = d?.meta?.dataSchema?.fields ?? [];
   const chartFieldMeta = schemaFields.find((f: any) => f.key === chartField);
   const chartColor = chartFieldMeta?.chartColor ?? 'hsl(var(--primary))';
-  const chartFieldLabel = chartFieldMeta?.label ?? chartField.replace(/_/g, ' ');
+
+  const prettyKey = (k: string) =>
+    k.replace(/([A-Z])/g, ' $1').replace(/[_-]/g, ' ').replace(/\b\w/g, c => c.toUpperCase()).trim();
+
+  const fieldLabel = (key: string) => {
+    const fm = schemaFields.find((f: any) => f.key === key);
+    return (fm?.label && fm.label.trim()) ? fm.label : prettyKey(key);
+  };
+
+  const chartFieldLabel = fieldLabel(chartField);
 
   const { Icon: CatIcon } = d ? getCategoryIconInfo(d.category) : { Icon: () => null };
 
@@ -634,7 +653,7 @@ export function DeviceDetailPage() {
             return (
               <button
                 key={k}
-                onClick={() => setChartField(k)}
+                onClick={() => { setChartField(k); setTelemView('chart'); }}
                 style={{
                   padding: `18px 20px 18px ${i % 4 === 0 ? 0 : 20}px`,
                   borderBottom: '1px solid hsl(var(--border))',
@@ -647,7 +666,7 @@ export function DeviceDetailPage() {
                   transition: 'background 0.1s',
                 }}
               >
-                <div className="eyebrow" style={{ fontSize: 9.5 }}>{schemaFields.find((f: any) => f.key === k)?.label ?? k.replace(/_/g, ' ')}</div>
+                <div className="eyebrow" style={{ fontSize: 9.5 }}>{fieldLabel(k)}</div>
                 <div style={{ fontFamily: 'var(--font-display)', fontSize: 32, lineHeight: 1, letterSpacing: '-0.02em', marginTop: 4, color: fColor }} className="num">
                   {v.toFixed(2)}
                 </div>
@@ -705,7 +724,7 @@ export function DeviceDetailPage() {
               </div>
             )}
           </div>
-          <div className="panel" style={{ padding: telemView === 'table' ? 0 : '16px 12px 8px', overflow: telemView === 'table' ? 'visible' : 'hidden' }}>
+          <div className="panel" style={{ padding: telemView === 'table' ? 0 : '16px 12px 8px', overflow: 'hidden' }}>
             {telemView === 'table' ? (() => {
               const rows: any[] = tableData?.data ?? [];
               const allFields = schemaFields.length > 0
@@ -731,7 +750,7 @@ export function DeviceDetailPage() {
                           const color = fm?.chartColor ?? 'hsl(var(--muted-fg))';
                           return (
                             <th key={fk} style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', fontSize: 9.5, color, borderBottom: '1px solid hsl(var(--border))', whiteSpace: 'nowrap' }}>
-                              {fm?.label ?? fk.replace(/_/g, ' ')}{fm?.unit ? ` (${fm.unit})` : ''}
+                              {fieldLabel(fk)}{fm?.unit ? ` (${fm.unit})` : ''}
                             </th>
                           );
                         })}
