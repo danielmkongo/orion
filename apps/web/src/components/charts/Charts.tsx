@@ -15,11 +15,7 @@ function useWidth(ref: RefObject<HTMLDivElement | null>): number {
 
 const PALETTE = ['#FF6A30', '#5B8DEF', '#22C55E', '#F59E0B', '#8B5CF6', '#06B6D4', '#F43F5E', '#10B981'];
 
-/**
- * Bucket-based decimation — keeps local min+max per bucket so shape is preserved
- * even when source has hundreds of points. Target ~120 rendered points.
- */
-function decimate(data: { ts: number; value: number }[], maxPts = 120): { ts: number; value: number }[] {
+function decimate(data: { ts: number; value: number }[], maxPts = 200): { ts: number; value: number }[] {
   if (data.length <= maxPts) return data;
   const bucketSize = data.length / maxPts;
   const out: { ts: number; value: number }[] = [data[0]];
@@ -29,7 +25,6 @@ function decimate(data: { ts: number; value: number }[], maxPts = 120): { ts: nu
     const bucket = data.slice(start, end);
     const minP = bucket.reduce((a, c) => c.value < a.value ? c : a, bucket[0]);
     const maxP = bucket.reduce((a, c) => c.value > a.value ? c : a, bucket[0]);
-    // push in time order
     if (minP.ts <= maxP.ts) { out.push(minP); if (minP.ts !== maxP.ts) out.push(maxP); }
     else                    { out.push(maxP); if (minP.ts !== maxP.ts) out.push(minP); }
   }
@@ -38,20 +33,20 @@ function decimate(data: { ts: number; value: number }[], maxPts = 120): { ts: nu
 }
 
 /** Catmull-Rom → cubic Bézier smooth path */
-function smoothCurve(pts: { x: number; y: number }[]): string {
+function smoothCurve(pts: { x: number; y: number }[], tension = 0.35): string {
   if (pts.length === 0) return '';
   if (pts.length === 1) return `M ${pts[0].x.toFixed(1)} ${pts[0].y.toFixed(1)}`;
-  const T = 0.4;
+  if (pts.length === 2) return `M ${pts[0].x.toFixed(1)} ${pts[0].y.toFixed(1)} L ${pts[1].x.toFixed(1)} ${pts[1].y.toFixed(1)}`;
   let d = `M ${pts[0].x.toFixed(1)} ${pts[0].y.toFixed(1)}`;
   for (let i = 1; i < pts.length; i++) {
     const p0 = pts[Math.max(0, i - 2)];
     const p1 = pts[i - 1];
     const p2 = pts[i];
     const p3 = pts[Math.min(pts.length - 1, i + 1)];
-    const cp1x = p1.x + (p2.x - p0.x) * T;
-    const cp1y = p1.y + (p2.y - p0.y) * T;
-    const cp2x = p2.x - (p3.x - p1.x) * T;
-    const cp2y = p2.y - (p3.y - p1.y) * T;
+    const cp1x = p1.x + (p2.x - p0.x) * tension;
+    const cp1y = p1.y + (p2.y - p0.y) * tension;
+    const cp2x = p2.x - (p3.x - p1.x) * tension;
+    const cp2y = p2.y - (p3.y - p1.y) * tension;
     d += ` C ${cp1x.toFixed(1)},${cp1y.toFixed(1)} ${cp2x.toFixed(1)},${cp2y.toFixed(1)} ${p2.x.toFixed(1)},${p2.y.toFixed(1)}`;
   }
   return d;
@@ -81,25 +76,27 @@ export function LineChart({
   const [hover, setHover] = useState<{
     x: number;
     items: Array<{ name: string; value: number; color: string; y: number }>;
-    ts: string;
+    tsLabel: string;
   } | null>(null);
 
-  const PAD = { top: 16, right: 16, bottom: 32, left: 48 };
+  const PAD = { top: 20, right: 20, bottom: 40, left: 54 };
 
-  const normalize_ = (s: ChartSeries) =>
-    decimate(s.data.map(p => ({ ts: typeof p.ts === 'string' ? new Date(p.ts).getTime() : p.ts, value: p.value })));
+  const prep = (s: ChartSeries) =>
+    decimate(s.data.map(p => ({
+      ts: typeof p.ts === 'string' ? new Date(p.ts).getTime() : (p.ts as number),
+      value: p.value,
+    })));
 
-  const allMapped = series.flatMap(normalize_);
+  const allMapped = series.flatMap(prep);
   const isEmpty = !w || allMapped.length === 0;
 
-  const allTs = allMapped.map(d => d.ts);
+  const allTs   = allMapped.map(d => d.ts);
+  const allVals = allMapped.map(d => d.value);
   const minTs = Math.min(...allTs);
   const maxTs = Math.max(...allTs);
-  const allVals = allMapped.map(d => d.value);
   const rawMin = Math.min(...allVals);
   const rawMax = Math.max(...allVals);
-  // Give a little breathing room so the line doesn't hug the top/bottom
-  const pad5 = (rawMax - rawMin) * 0.08 || 1;
+  const pad5 = (rawMax - rawMin) * 0.10 || Math.abs(rawMax) * 0.10 || 1;
   const globalMin = rawMin - pad5;
   const globalMax = rawMax + pad5;
   const globalRange = globalMax - globalMin || 1;
@@ -110,12 +107,13 @@ export function LineChart({
   const xScale = (ts: number) =>
     PAD.left + (maxTs === minTs ? innerW / 2 : ((ts - minTs) / (maxTs - minTs)) * innerW);
 
-  const globalY = (v: number) => PAD.top + innerH - ((v - globalMin) / globalRange) * innerH;
+  const globalY = (v: number) =>
+    PAD.top + innerH - ((v - globalMin) / globalRange) * innerH;
 
   const makeLocalY = (data: { ts: number; value: number }[]) => {
     const mn = Math.min(...data.map(d => d.value));
     const mx = Math.max(...data.map(d => d.value));
-    const p = (mx - mn) * 0.08 || 1;
+    const p = (mx - mn) * 0.10 || Math.abs(mx) * 0.10 || 1;
     const rng = (mx + p) - (mn - p) || 1;
     return (v: number) => PAD.top + innerH - ((v - (mn - p)) / rng) * innerH;
   };
@@ -123,16 +121,20 @@ export function LineChart({
   const fmtV = (v: number) => {
     const abs = Math.abs(v);
     if (abs >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`;
-    if (abs >= 1000) return `${(v / 1000).toFixed(1)}k`;
-    if (abs >= 10 || Number.isInteger(v)) return v.toFixed(0);
-    return v.toFixed(1);
+    if (abs >= 1_000)    return `${(v / 1_000).toFixed(1)}k`;
+    if (abs >= 100 || Number.isInteger(v)) return v.toFixed(0);
+    if (abs >= 10) return v.toFixed(1);
+    return v.toFixed(2);
   };
 
-  const fmtTs = (ts: number) => {
+  const totalHrs = (maxTs - minTs) / 3_600_000;
+
+  const fmtTs = (ts: number): string => {
     const d = new Date(ts);
-    const hrs = (maxTs - minTs) / 3_600_000;
-    if (hrs > 48) return d.toLocaleDateString('en', { month: 'short', day: 'numeric' });
-    return d.toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit' });
+    if (totalHrs > 7 * 24) return d.toLocaleDateString('en', { month: 'short', day: 'numeric' });
+    if (totalHrs > 24)     return d.toLocaleDateString('en', { month: 'short', day: 'numeric' }) + ' ' + d.toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit', hour12: false });
+    if (totalHrs > 1)      return d.toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit', hour12: false });
+    return d.toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
   };
 
   const toXY = (data: { ts: number; value: number }[], yFn: (v: number) => number) =>
@@ -142,53 +144,68 @@ export function LineChart({
     smoothCurve(toXY(data, yFn));
 
   const buildArea = (data: { ts: number; value: number }[], yFn: (v: number) => number) => {
-    if (data.length < 2) return '';
+    if (data.length < 1) return '';
     const xy = toXY(data, yFn);
+    if (xy.length === 1) return ''; // single point — no area
     const line = smoothCurve(xy);
     const bot = (PAD.top + innerH).toFixed(1);
     return `${line} L ${xy[xy.length - 1].x.toFixed(1)},${bot} L ${xy[0].x.toFixed(1)},${bot} Z`;
   };
 
-  const yTicks = 4;
-  const tickVals = Array.from({ length: yTicks + 1 }, (_, i) => globalMin + (i / yTicks) * globalRange);
+  // Y axis ticks
+  const Y_TICKS = 4;
+  const tickVals = Array.from({ length: Y_TICKS + 1 }, (_, i) => globalMin + (i / Y_TICKS) * globalRange);
 
-  const pivotData = normalize_(series[0]);
-  const xTickStep = Math.max(1, Math.floor(pivotData.length / 5));
-  const xTicks = pivotData.filter((_, i) => i % xTickStep === 0 || i === pivotData.length - 1);
+  // X axis ticks — pixel-distance deduplication to prevent overlap/doubling
+  const pivotData = prep(series[0] ?? { name: '', data: [] });
+  const MIN_X_PX = 68;
+  const targetCount = Math.max(2, Math.floor(innerW / MIN_X_PX));
+  const rawStep = Math.max(1, Math.floor(pivotData.length / targetCount));
+  const candidates = pivotData.filter((_, i) => i % rawStep === 0);
+  const lastP = pivotData[pivotData.length - 1];
+  if (lastP && candidates[candidates.length - 1]?.ts !== lastP.ts) candidates.push(lastP);
+  const xTicks = candidates.reduce((acc: typeof candidates, p) => {
+    if (!acc.length) return [p];
+    if (xScale(p.ts) - xScale(acc[acc.length - 1].ts) >= MIN_X_PX) acc.push(p);
+    return acc;
+  }, []);
 
-  const handleMouseMove = useCallback((e: React.MouseEvent<SVGSVGElement>) => {
-    if (!pivotData.length) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const mx = e.clientX - rect.left;
-    let closestIdx = 0;
-    let closestDist = Infinity;
-    pivotData.forEach((p, i) => {
-      const dist = Math.abs(xScale(p.ts) - mx);
-      if (dist < closestDist) { closestDist = dist; closestIdx = i; }
-    });
-    const pt = pivotData[closestIdx];
-    const items = series.map((s, si) => {
-      const color = s.color ?? PALETTE[si % PALETTE.length];
-      const mapped = normalize_(s);
-      const yFn = normalize ? makeLocalY(mapped) : globalY;
-      const val = s.data[closestIdx]?.value ?? 0;
-      return { name: s.name, value: val, color, y: yFn(val) };
-    });
-    setHover({ x: xScale(pt.ts), items, ts: fmtTs(pt.ts) });
-  }, [series, pivotData]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Show data dots when dataset is sparse
+  const showDots = allMapped.length > 0 && allMapped.length <= 60;
 
   const baselineY = PAD.top + innerH;
+
+  const handleMouseMove = useCallback((e: React.MouseEvent<SVGSVGElement>) => {
+    if (!pivotData.length || !w) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    let ci = 0, cd = Infinity;
+    pivotData.forEach((p, i) => {
+      const dist = Math.abs(xScale(p.ts) - mx);
+      if (dist < cd) { cd = dist; ci = i; }
+    });
+    const pt = pivotData[ci];
+    const items = series.map((s, si) => {
+      const color = s.color ?? PALETTE[si % PALETTE.length];
+      const mapped = prep(s);
+      const yFn = normalize ? makeLocalY(mapped) : globalY;
+      const closest = mapped.reduce((a, b) => Math.abs(b.ts - pt.ts) < Math.abs(a.ts - pt.ts) ? b : a, mapped[0]);
+      const val = closest?.value ?? 0;
+      return { name: s.name, value: val, color, y: yFn(val) };
+    });
+    setHover({ x: xScale(pt.ts), items, tsLabel: fmtTs(pt.ts) });
+  }, [series, pivotData, w, normalize]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div ref={wrapRef} style={{ position: 'relative', height }}>
       {isEmpty ? (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height, opacity: 0.35 }}>
-          <span style={{ fontSize: 13, fontFamily: 'var(--font-mono, monospace)' }}>No data</span>
+        <div style={{ height, display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0.3 }}>
+          <span style={{ fontSize: 12, fontFamily: 'var(--font-mono, monospace)', letterSpacing: '0.05em' }}>No data</span>
         </div>
       ) : (
         <svg
           width={w} height={height}
-          style={{ overflow: 'visible', display: 'block', cursor: 'crosshair' }}
+          style={{ overflow: 'hidden', display: 'block', cursor: 'crosshair' }}
           shapeRendering="geometricPrecision"
           onMouseMove={handleMouseMove}
           onMouseLeave={() => setHover(null)}
@@ -198,38 +215,39 @@ export function LineChart({
               const color = s.color ?? PALETTE[si % PALETTE.length];
               return (
                 <linearGradient key={si} id={`${uid}-g${si}`} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%"   stopColor={color} stopOpacity="0.28" />
-                  <stop offset="45%"  stopColor={color} stopOpacity="0.10" />
+                  <stop offset="0%"   stopColor={color} stopOpacity="0.22" />
+                  <stop offset="60%"  stopColor={color} stopOpacity="0.06" />
                   <stop offset="100%" stopColor={color} stopOpacity="0" />
                 </linearGradient>
               );
             })}
-            {/* Clip to chart area (2px vertical bleed for stroke edges) */}
             <clipPath id={`${uid}-clip`}>
-              <rect x={PAD.left - 4} y={PAD.top - 4} width={innerW + 8} height={innerH + 8} />
+              <rect x={PAD.left} y={PAD.top - 4} width={innerW} height={innerH + 8} />
             </clipPath>
           </defs>
 
-          {/* Subtle Y grid lines */}
+          {/* Y gridlines */}
           {tickVals.map((v, i) => (
-            <line key={i}
-              x1={PAD.left} x2={w - PAD.right}
-              y1={globalY(v)} y2={globalY(v)}
-              stroke="currentColor" strokeOpacity={i === 0 ? 0 : 0.07} strokeWidth={1}
-              strokeDasharray={i === 0 ? undefined : '3 4'}
-            />
+            i > 0 && (
+              <line key={i}
+                x1={PAD.left} x2={PAD.left + innerW}
+                y1={globalY(v)} y2={globalY(v)}
+                stroke="currentColor" strokeOpacity={0.06} strokeWidth={1}
+                strokeDasharray="4 5"
+              />
+            )
           ))}
 
           {/* Baseline */}
-          <line x1={PAD.left} x2={w - PAD.right} y1={baselineY} y2={baselineY}
-            stroke="currentColor" strokeOpacity={0.14} strokeWidth={1} />
+          <line x1={PAD.left} x2={PAD.left + innerW} y1={baselineY} y2={baselineY}
+            stroke="currentColor" strokeOpacity={0.12} strokeWidth={1} />
 
           {/* Y labels */}
           {tickVals.map((v, i) => (
             <text key={i}
-              x={PAD.left - 8} y={globalY(v)}
+              x={PAD.left - 10} y={globalY(v)}
               textAnchor="end" dominantBaseline="middle"
-              fill="currentColor" fillOpacity={0.38} fontSize={10}
+              fill="currentColor" fillOpacity={0.35} fontSize={10}
               fontFamily="var(--font-mono, monospace)">
               {fmtV(v)}
             </text>
@@ -238,7 +256,8 @@ export function LineChart({
           {/* X labels */}
           {xTicks.map((p, i) => (
             <text key={i}
-              x={xScale(p.ts)} y={height - 6}
+              x={Math.min(Math.max(xScale(p.ts), PAD.left + 4), PAD.left + innerW - 4)}
+              y={height - 8}
               textAnchor="middle"
               fill="currentColor" fillOpacity={0.38} fontSize={10}
               fontFamily="var(--font-mono, monospace)">
@@ -246,10 +265,10 @@ export function LineChart({
             </text>
           ))}
 
-          {/* Area fills (clipped) */}
+          {/* Area fills */}
           {showArea && series.map((s, si) => {
             const color = s.color ?? PALETTE[si % PALETTE.length];
-            const mapped = normalize_(s);
+            const mapped = prep(s);
             const yFn = normalize ? makeLocalY(mapped) : globalY;
             return (
               <path key={si}
@@ -263,23 +282,38 @@ export function LineChart({
           {/* Lines */}
           {series.map((s, si) => {
             const color = s.color ?? PALETTE[si % PALETTE.length];
-            const mapped = normalize_(s);
+            const mapped = prep(s);
             const yFn = normalize ? makeLocalY(mapped) : globalY;
             return (
               <path key={si}
                 d={buildPath(mapped, yFn)}
                 fill="none" stroke={color}
-                strokeWidth={2} strokeLinejoin="round" strokeLinecap="round"
+                strokeWidth={1.75} strokeLinejoin="round" strokeLinecap="round"
                 clipPath={`url(#${uid}-clip)`}
               />
             );
+          })}
+
+          {/* Data dots — shown when dataset is sparse */}
+          {showDots && series.map((s, si) => {
+            const color = s.color ?? PALETTE[si % PALETTE.length];
+            const mapped = prep(s);
+            const yFn = normalize ? makeLocalY(mapped) : globalY;
+            return mapped.map((p, pi) => (
+              <circle key={`${si}-${pi}`}
+                cx={xScale(p.ts)} cy={yFn(p.value)} r={3}
+                fill={color} opacity={0.9}
+                clipPath={`url(#${uid}-clip)`}
+              />
+            ));
           })}
 
           {/* Hover crosshair */}
           {hover && (
             <line
               x1={hover.x} x2={hover.x} y1={PAD.top} y2={baselineY}
-              stroke="currentColor" strokeOpacity={0.2} strokeWidth={1}
+              stroke="currentColor" strokeOpacity={0.15} strokeWidth={1}
+              strokeDasharray="3 3"
             />
           )}
 
@@ -287,43 +321,46 @@ export function LineChart({
           {hover && hover.items.map((item, i) => (
             <g key={i}>
               <circle cx={hover.x} cy={item.y} r={5} fill={item.color} opacity={0.9} />
-              <circle cx={hover.x} cy={item.y} r={3} fill="var(--chart-dot-bg, #fff)" opacity={0.85} />
+              <circle cx={hover.x} cy={item.y} r={2.5} fill="var(--chart-dot-bg, #fff)" opacity={0.9} />
             </g>
           ))}
         </svg>
       )}
 
       {/* Tooltip */}
-      {!isEmpty && hover && (
-        <div style={{
-          position: 'absolute',
-          top: PAD.top + 4,
-          left: hover.x > w * 0.62 ? hover.x - 12 : hover.x + 12,
-          transform: hover.x > w * 0.62 ? 'translateX(-100%)' : 'none',
-          pointerEvents: 'none',
-          background: 'var(--tt-bg, rgba(10,10,9,0.92))',
-          border: '1px solid var(--tt-border, rgba(255,255,255,0.09))',
-          backdropFilter: 'blur(12px)',
-          padding: '8px 12px',
-          minWidth: 110,
-          boxShadow: '0 8px 32px rgba(0,0,0,0.45)',
-        }}>
-          <div style={{ fontSize: 9.5, fontFamily: 'var(--font-mono, monospace)', color: 'var(--tt-ts, rgba(200,200,190,0.55))', marginBottom: 7, letterSpacing: '0.05em' }}>
-            {hover.ts}
-          </div>
-          {hover.items.map(item => (
-            <div key={item.name} style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 4 }}>
-              <span style={{ width: 8, height: 2, background: item.color, borderRadius: 1, flexShrink: 0 }} />
-              <span style={{ fontSize: 10.5, color: 'var(--tt-label, rgba(200,200,190,0.6))', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {item.name}
-              </span>
-              <strong style={{ fontSize: 12, fontFamily: 'var(--font-mono, monospace)', color: item.color, letterSpacing: '-0.02em' }}>
-                {typeof item.value === 'number' ? item.value.toFixed(2) : item.value}
-              </strong>
+      {!isEmpty && hover && (() => {
+        const tooltipW = 140;
+        const leftPos = hover.x + tooltipW + 16 > w ? hover.x - tooltipW - 12 : hover.x + 12;
+        return (
+          <div style={{
+            position: 'absolute',
+            top: PAD.top,
+            left: leftPos,
+            pointerEvents: 'none',
+            background: 'var(--tt-bg, rgba(12,12,11,0.93))',
+            border: '1px solid var(--tt-border, rgba(255,255,255,0.08))',
+            backdropFilter: 'blur(16px)',
+            padding: '8px 12px',
+            minWidth: tooltipW,
+            boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+          }}>
+            <div style={{ fontSize: 9.5, fontFamily: 'var(--font-mono, monospace)', color: 'var(--tt-ts, rgba(200,200,190,0.45))', marginBottom: 7, letterSpacing: '0.06em', whiteSpace: 'nowrap' }}>
+              {hover.tsLabel}
             </div>
-          ))}
-        </div>
-      )}
+            {hover.items.map(item => (
+              <div key={item.name} style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 4 }}>
+                <span style={{ width: 8, height: 2, background: item.color, flexShrink: 0 }} />
+                <span style={{ fontSize: 10, color: 'var(--tt-label, rgba(200,200,190,0.55))', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {item.name}
+                </span>
+                <strong style={{ fontSize: 11.5, fontFamily: 'var(--font-mono, monospace)', color: item.color, letterSpacing: '-0.02em' }}>
+                  {typeof item.value === 'number' ? fmtV(item.value) : item.value}
+                </strong>
+              </div>
+            ))}
+          </div>
+        );
+      })()}
     </div>
   );
 }
@@ -408,7 +445,6 @@ export function BarChart({
       <div ref={ref} style={{ height }}>
         {!isEmpty && (
           <svg width={w} height={height} style={{ overflow: 'visible', display: 'block' }}>
-            {/* Track lines */}
             {data.map((_, i) => {
               const y = PAD.top + i * slotH + (slotH - barH) / 2 + barH / 2;
               return <line key={i} x1={PAD.left} x2={w - PAD.right} y1={y} y2={y}
@@ -446,7 +482,6 @@ export function BarChart({
     );
   }
 
-  // Vertical
   const slotW = innerW / data.length;
   const barW = Math.max(3, slotW * 0.55);
   const baselineY = PAD.top + innerH;
@@ -455,7 +490,6 @@ export function BarChart({
     <div ref={ref} style={{ height }}>
       {!isEmpty && (
         <svg width={w} height={height} style={{ overflow: 'visible', display: 'block' }}>
-          {/* Grid lines */}
           {[0.25, 0.5, 0.75, 1.0].map((f, i) => {
             const y = PAD.top + innerH - f * innerH;
             return (
@@ -470,10 +504,8 @@ export function BarChart({
               </g>
             );
           })}
-          {/* Baseline */}
           <line x1={PAD.left} x2={w - PAD.right} y1={baselineY} y2={baselineY}
             stroke="currentColor" strokeOpacity={0.14} strokeWidth={1} />
-          {/* Bars */}
           {data.map((d, i) => {
             const bc = d.color ?? color;
             const x = PAD.left + i * slotW + (slotW - barW) / 2;
