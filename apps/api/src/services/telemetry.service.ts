@@ -155,6 +155,15 @@ export class TelemetryService {
     }
     return grouped;
   }
+
+  async renameField(deviceId: string, orgId: string, oldKey: string, newKey: string): Promise<number> {
+    if (!oldKey || !newKey || oldKey === newKey) return 0;
+    const result = await Telemetry.updateMany(
+      { deviceId, orgId, [`fields.${oldKey}`]: { $exists: true } },
+      { $rename: { [`fields.${oldKey}`]: `fields.${newKey}` } }
+    );
+    return (result as any).modifiedCount ?? 0;
+  }
 }
 
 export const telemetryService = new TelemetryService();

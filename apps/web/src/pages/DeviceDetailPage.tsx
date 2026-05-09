@@ -530,7 +530,7 @@ export function DeviceDetailPage() {
           </p>
         </div>
         <div style={{ gridColumn: 3, display: 'flex', alignItems: 'flex-end', gap: 8, paddingBottom: 20 }}>
-          <button className="btn btn-sm" style={{ gap: 6 }} onClick={() => { setSchemaEdits(schemaFields.map((f: any) => ({ ...f }))); setLatDraft(d.location?.lat?.toString() ?? ''); setLngDraft((d.location?.lng ?? d.location?.lon)?.toString() ?? ''); setDescDraft(d.description ?? ''); setTagsDraft((d.tags ?? []).join(', ')); setFirmwareDraft(d.firmwareVersion ?? ''); setShowEditSchema(true); }}>
+          <button className="btn btn-sm" style={{ gap: 6 }} onClick={() => { setSchemaEdits(schemaFields.map((f: any) => ({ ...f, _originalKey: f.key }))); setLatDraft(d.location?.lat?.toString() ?? ''); setLngDraft((d.location?.lng ?? d.location?.lon)?.toString() ?? ''); setDescDraft(d.description ?? ''); setTagsDraft((d.tags ?? []).join(', ')); setFirmwareDraft(d.firmwareVersion ?? ''); setShowEditSchema(true); }}>
             <Pencil size={13} /> Edit device
           </button>
           <button className="btn btn-sm" style={{ gap: 6 }} onClick={() => setShowCodeGen(true)}>
@@ -1819,7 +1819,9 @@ export function DeviceDetailPage() {
                   const newTags = tagsDraft.split(',').map((t: string) => t.trim()).filter(Boolean);
                   if (JSON.stringify(newTags) !== JSON.stringify(d.tags ?? [])) patch.tags = newTags;
                   if (firmwareDraft !== (d.firmwareVersion ?? '')) patch.firmwareVersion = firmwareDraft;
-                  const cleanedFields = schemaEdits.filter(f => f.key?.trim());
+                  const cleanedFields = schemaEdits
+                    .filter(f => f.key?.trim())
+                    .map(({ _originalKey: _, ...rest }) => rest);
                   patch.meta = { ...d.meta, dataSchema: { fields: cleanedFields } };
                   const lat = parseFloat(latDraft);
                   const lng = parseFloat(lngDraft);
@@ -1828,9 +1830,21 @@ export function DeviceDetailPage() {
                   } else if (latDraft.trim() === '' && lngDraft.trim() === '' && d.location?.lat) {
                     patch.location = null;
                   }
+                  // Rename historical telemetry for any fields whose key changed
+                  const renames = schemaEdits.filter(f =>
+                    f._originalKey && f.key?.trim() && f._originalKey !== f.key.trim()
+                  );
+                  if (renames.length > 0) {
+                    await Promise.all(renames.map(f =>
+                      apiClient.post(`/devices/${id}/rename-field`, { oldKey: f._originalKey, newKey: f.key.trim() })
+                        .catch(() => {})
+                    ));
+                  }
                   if (Object.keys(patch).length > 0) await patchDevice.mutateAsync(patch);
                   setShowEditSchema(false);
-                  toast.success('Saved');
+                  toast.success(renames.length > 0
+                    ? `Saved · renamed ${renames.length} field${renames.length > 1 ? 's' : ''} in history`
+                    : 'Saved');
                 }}>
                 {patchDevice.isPending ? 'Saving…' : 'Save changes'}
               </button>

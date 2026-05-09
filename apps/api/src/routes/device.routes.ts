@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { deviceService } from '../services/device.service.js';
+import { telemetryService } from '../services/telemetry.service.js';
 import { authenticate, requirePermission } from '../middleware/auth.js';
 
 export async function deviceRoutes(app: FastifyInstance) {
@@ -51,5 +52,15 @@ export async function deviceRoutes(app: FastifyInstance) {
     const { id } = req.params as any;
     const newKey = await deviceService.regenerateApiKey(id, req.user.orgId);
     return reply.send({ apiKey: newKey });
+  });
+
+  app.post('/devices/:id/rename-field', { preHandler: requirePermission('devices:write') }, async (req, reply) => {
+    const { id } = req.params as any;
+    const { oldKey, newKey } = req.body as any;
+    if (!oldKey || !newKey) return reply.code(400).send({ error: 'oldKey and newKey required' });
+    const device = await deviceService.getById(id, req.user.orgId);
+    if (!device) return reply.code(404).send({ error: 'Device not found' });
+    const modified = await telemetryService.renameField(id, req.user.orgId, oldKey, newKey);
+    return reply.send({ ok: true, modified });
   });
 }
