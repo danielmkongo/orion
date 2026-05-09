@@ -309,6 +309,16 @@ function DeviceShareView({ token, data }: { token: string; data: any }) {
   const numericFields = Object.entries(fields).filter(([, v]) => typeof v === 'number') as [string, number][];
   const schemaFields: any[] = device?.meta?.dataSchema?.fields ?? [];
 
+  const prettyKey = (k: string) =>
+    k.replace(/([A-Z])/g, ' $1').replace(/[_-]/g, ' ').replace(/\b\w/g, c => c.toUpperCase()).trim();
+  const normalizeKey = (k: string) => k.toLowerCase().replace(/[_\-\s]/g, '');
+  const fieldLabel = (key: string) => {
+    const fm = schemaFields.find((f: any) => f.key === key)
+      ?? schemaFields.find((f: any) => normalizeKey(f.key) === normalizeKey(key));
+    const lbl = fm?.label?.trim();
+    return (lbl && lbl !== fm?.key) ? lbl : prettyKey(key);
+  };
+
   const [telemView, setTelemView] = useState<'chart' | 'table'>('chart');
   const [chartField, setChartField] = useState(numericFields[0]?.[0] ?? '');
   const [chartRange, setChartRange] = useState('24h');
@@ -316,12 +326,12 @@ function DeviceShareView({ token, data }: { token: string; data: any }) {
   const [customTo, setCustomTo]     = useState('');
 
   const hoursMap: Record<string, number> = { '1h': 1, '6h': 6, '24h': 24, '7d': 168, '30d': 720 };
+  // fromTs is used as a stable key; actual `to` is computed fresh inside DeviceChart/DeviceTable queryFns
   const fromTs = chartRange === 'custom' && customFrom
     ? new Date(customFrom).toISOString()
     : new Date(Date.now() - (hoursMap[chartRange] ?? 24) * 3600_000).toISOString();
-  const toTs = chartRange === 'custom' && customTo
-    ? new Date(customTo).toISOString()
-    : new Date().toISOString();
+  const customToTs = chartRange === 'custom' && customTo ? new Date(customTo).toISOString() : undefined;
+
   const fm = schemaFields.find((f: any) => f.key === chartField);
   const chartColor = fm?.chartColor ?? T.primary;
 
@@ -404,7 +414,7 @@ function DeviceShareView({ token, data }: { token: string; data: any }) {
                         transition: 'background 0.15s', color: T.fg,
                       }}
                     >
-                      <div style={{ fontSize: 9.5, fontFamily: T.fontMono, letterSpacing: '0.1em', textTransform: 'uppercase', color: T.fgMuted, marginBottom: 8 }}>{k.replace(/_/g, ' ')}</div>
+                      <div style={{ fontSize: 9.5, fontFamily: T.fontMono, letterSpacing: '0.1em', textTransform: 'uppercase', color: T.fgMuted, marginBottom: 8 }}>{fieldLabel(k)}</div>
                       <div style={{ fontFamily: T.fontDisplay, fontSize: 38, lineHeight: 1, color, letterSpacing: '-0.02em' }}>{v.toFixed(2)}</div>
                       {fmeta?.unit && <div style={{ fontSize: 10, fontFamily: T.fontMono, color: T.fgFaint, marginTop: 5 }}>{fmeta.unit}</div>}
                     </button>
@@ -420,7 +430,7 @@ function DeviceShareView({ token, data }: { token: string; data: any }) {
                   <div>
                     <div style={{ fontSize: 9.5, fontFamily: T.fontMono, letterSpacing: '0.12em', textTransform: 'uppercase', color: T.fgMuted, marginBottom: 6 }}>Telemetry</div>
                     <div style={{ fontFamily: T.fontDisplay, fontSize: 30, lineHeight: 1, color: T.fg, letterSpacing: '-0.02em', textTransform: 'capitalize' }}>
-                      {telemView === 'chart' ? chartField.replace(/_/g, ' ') : 'All fields'}{' '}
+                      {telemView === 'chart' ? fieldLabel(chartField) : 'All fields'}{' '}
                       <span style={{ fontStyle: 'italic', color: T.primary }}>· {chartRange}</span>
                     </div>
                   </div>
@@ -428,7 +438,7 @@ function DeviceShareView({ token, data }: { token: string; data: any }) {
                     {telemView === 'chart' && numericFields.length > 1 && (
                       <select value={chartField} onChange={e => setChartField(e.target.value)}
                         style={{ padding: '5px 10px', background: T.surface, border: `1px solid ${T.border}`, color: T.fg, fontSize: 11, fontFamily: T.fontMono, outline: 'none', cursor: 'pointer' }}>
-                        {numericFields.map(([k]) => <option key={k} value={k}>{k.replace(/_/g, ' ')}</option>)}
+                        {numericFields.map(([k]) => <option key={k} value={k}>{fieldLabel(k)}</option>)}
                       </select>
                     )}
                     <div style={seg}>
@@ -456,8 +466,8 @@ function DeviceShareView({ token, data }: { token: string; data: any }) {
                 </div>
                 <div style={{ background: T.surface, border: `1px solid ${T.border}`, overflow: 'hidden' }}>
                   {telemView === 'chart'
-                    ? <DeviceChart token={token} field={chartField} color={chartColor} from={fromTs} to={toTs} T={T} />
-                    : <DeviceTable token={token} field={chartField} schemaFields={schemaFields} from={fromTs} T={T} />}
+                    ? <DeviceChart token={token} field={chartField} color={chartColor} from={fromTs} to={customToTs} T={T} fieldLabel={fieldLabel} />
+                    : <DeviceTable token={token} field={chartField} schemaFields={schemaFields} from={fromTs} to={customToTs} T={T} fieldLabel={fieldLabel} />}
                 </div>
               </div>
             )}
@@ -1152,11 +1162,15 @@ function ExportBtn({ onClick, T }: { onClick: () => void; T: Tokens }) {
 }
 
 /* ── Device share chart ──────────────────────────────────────────────── */
-function DeviceChart({ token, field, color, from, to, T }: { token: string; field: string; color: string; from: string; to?: string; T: Tokens }) {
+function DeviceChart({ token, field, color, from, to, T, fieldLabel }: { token: string; field: string; color: string; from: string; to?: string; T: Tokens; fieldLabel?: (k: string) => string }) {
   const { data, isLoading } = useQuery({
-    queryKey: ['share-series', token, field, from, to],
-    queryFn: () => publicClient.get(`/public/device/${token}/series`, { params: { field, from, ...(to ? { to } : {}) } }).then(r => r.data),
+    queryKey: ['share-series', token, field, from, to ?? 'live'],
+    queryFn: () => {
+      const effectiveTo = to ?? new Date().toISOString();
+      return publicClient.get(`/public/device/${token}/series`, { params: { field, from, to: effectiveTo, limit: 1000 } }).then(r => r.data);
+    },
     enabled: !!field,
+    refetchInterval: 10_000,
   });
   const raw: any[] = data?.data ?? [];
   const pts = raw.map((p: any) => ({ ts: new Date(p.ts).getTime(), value: typeof p.value === 'number' ? p.value : 0 }));
@@ -1166,6 +1180,8 @@ function DeviceChart({ token, field, color, from, to, T }: { token: string; fiel
     downloadCsv(`${field}-${new Date().toISOString().slice(0,10)}.csv`, ['timestamp', field], rows);
   };
 
+  const displayName = fieldLabel ? fieldLabel(field) : field.replace(/_/g, ' ');
+
   if (isLoading) return <div style={{ height: 280, background: T.surfaceActive, animation: 'pulse 2s infinite' }} />;
   if (pts.length === 0) return <div style={{ height: 280, display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.fgMuted, fontFamily: T.fontMono, fontSize: 12 }}>No data</div>;
   return (
@@ -1173,19 +1189,23 @@ function DeviceChart({ token, field, color, from, to, T }: { token: string; fiel
       <div style={{ position: 'absolute', top: 10, right: 10, zIndex: 5 }}>
         <ExportBtn onClick={exportCsv} T={T} />
       </div>
-      <LineChart series={[{ name: field, data: pts, color }]} height={280} showArea />
+      <LineChart series={[{ name: displayName, data: pts, color }]} height={280} showArea />
     </div>
   );
 }
 
 /* ── Device share table ──────────────────────────────────────────────── */
-function DeviceTable({ token, field, schemaFields, from, T }: { token: string; field: string; schemaFields: any[]; from: string; T: Tokens }) {
+function DeviceTable({ token, field, schemaFields, from, to, T, fieldLabel }: { token: string; field: string; schemaFields: any[]; from: string; to?: string; T: Tokens; fieldLabel?: (k: string) => string }) {
   const fm = schemaFields.find((f: any) => f.key === field);
   const color = fm?.chartColor ?? T.primary;
   const { data, isLoading } = useQuery({
-    queryKey: ['share-table', token, field, from],
-    queryFn: () => publicClient.get(`/public/device/${token}/series`, { params: { field, from, limit: 200 } }).then(r => r.data),
+    queryKey: ['share-table', token, field, from, to ?? 'live'],
+    queryFn: () => {
+      const effectiveTo = to ?? new Date().toISOString();
+      return publicClient.get(`/public/device/${token}/series`, { params: { field, from, to: effectiveTo, limit: 500 } }).then(r => r.data);
+    },
     enabled: !!field,
+    refetchInterval: 10_000,
   });
   const rows: any[] = data?.data ?? [];
 
@@ -1207,7 +1227,7 @@ function DeviceTable({ token, field, schemaFields, from, T }: { token: string; f
             <tr>
               <th style={{ padding: '9px 16px', textAlign: 'left', fontSize: 9.5, letterSpacing: '0.1em', textTransform: 'uppercase', color: T.fgMuted, borderBottom: `1px solid ${T.border}`, fontWeight: 600 }}>Timestamp</th>
               <th style={{ padding: '9px 16px', textAlign: 'right', fontSize: 9.5, letterSpacing: '0.1em', textTransform: 'uppercase', color, borderBottom: `1px solid ${T.border}`, fontWeight: 600 }}>
-                {field.replace(/_/g, ' ')}{fm?.unit ? ` (${fm.unit})` : ''}
+                {fieldLabel ? fieldLabel(field) : field.replace(/_/g, ' ')}{fm?.unit ? ` (${fm.unit})` : ''}
               </th>
             </tr>
           </thead>

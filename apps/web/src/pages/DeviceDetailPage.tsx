@@ -199,29 +199,40 @@ export function DeviceDetailPage() {
   });
 
   const hoursMap: Record<string, number> = { '1h': 1, '6h': 6, '24h': 24, '7d': 168, '30d': 720 };
+
+  // Compute range bounds — called fresh inside each queryFn so `to` is always "now"
+  const getRangeBounds = () => {
+    const now = Date.now();
+    const f = chartRange === 'custom' && customFrom
+      ? new Date(customFrom).toISOString()
+      : new Date(now - (hoursMap[chartRange] ?? 24) * 3600_000).toISOString();
+    const t = chartRange === 'custom' && customTo
+      ? new Date(customTo).toISOString()
+      : new Date(now).toISOString();
+    return { from: f, to: t };
+  };
+
+  // Stable `from` used only for the table reset effect and query keys
   const from = chartRange === 'custom' && customFrom
     ? new Date(customFrom).toISOString()
     : new Date(Date.now() - (hoursMap[chartRange] ?? 24) * 3600_000).toISOString();
-  const to   = chartRange === 'custom' && customTo
-    ? new Date(customTo).toISOString()
-    : new Date().toISOString();
 
   const { data: seriesData } = useQuery({
-    queryKey: ['series', id, chartField, chartRange],
-    queryFn: () => telemetryApi.series(id!, chartField, from, to, 500),
+    queryKey: ['series', id, chartField, chartRange, customFrom, customTo],
+    queryFn: () => { const { from: f, to: t } = getRangeBounds(); return telemetryApi.series(id!, chartField, f, t, 1000); },
     enabled: !!id && !!chartField,
-    refetchInterval: 15_000,
+    refetchInterval: 10_000,
   });
 
   const { data: tableData, isFetching: tableLoading } = useQuery({
-    queryKey: ['telemetry-table', id, chartRange, tableLimit],
-    queryFn: () => telemetryApi.query({ deviceId: id!, from, to, limit: tableLimit }),
+    queryKey: ['telemetry-table', id, chartRange, tableLimit, customFrom, customTo],
+    queryFn: () => { const { from: f, to: t } = getRangeBounds(); return telemetryApi.query({ deviceId: id!, from: f, to: t, limit: tableLimit }); },
     enabled: !!id && telemView === 'table',
-    refetchInterval: 15_000,
+    refetchInterval: 10_000,
   });
 
   // Reset table pagination when range changes
-  useEffect(() => { setTableLimit(30); }, [chartRange, from, to]); // eslint-disable-line
+  useEffect(() => { setTableLimit(30); }, [chartRange, customFrom, customTo]); // eslint-disable-line
 
   useEffect(() => {
     if (!showSharePanel) return;
@@ -249,6 +260,7 @@ export function DeviceDetailPage() {
         queryClient.invalidateQueries({ queryKey: ['telemetry', 'latest', id] });
         queryClient.invalidateQueries({ queryKey: ['device', id] });
         queryClient.invalidateQueries({ queryKey: ['series', id] });
+        queryClient.invalidateQueries({ queryKey: ['telemetry-table', id] });
       }
     });
     return () => { unsub(); unsubT(); };
@@ -277,10 +289,15 @@ export function DeviceDetailPage() {
   const prettyKey = (k: string) =>
     k.replace(/([A-Z])/g, ' $1').replace(/[_-]/g, ' ').replace(/\b\w/g, c => c.toUpperCase()).trim();
 
+  // Normalize a key for fuzzy matching (lowercase, no separators)
+  const normalizeKey = (k: string) => k.toLowerCase().replace(/[_\-\s]/g, '');
+
   const fieldLabel = (key: string) => {
-    const fm = schemaFields.find((f: any) => f.key === key);
+    // Exact match first, then case-insensitive / separator-insensitive match
+    const fm = schemaFields.find((f: any) => f.key === key)
+      ?? schemaFields.find((f: any) => normalizeKey(f.key) === normalizeKey(key));
     const lbl = fm?.label?.trim();
-    return (lbl && lbl !== key) ? lbl : prettyKey(key);
+    return (lbl && lbl !== fm?.key) ? lbl : prettyKey(key);
   };
 
   const chartFieldLabel = fieldLabel(chartField);
