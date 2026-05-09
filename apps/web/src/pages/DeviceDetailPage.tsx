@@ -1243,7 +1243,7 @@ export function DeviceDetailPage() {
             const fmt       = d.payloadFormat ?? 'json';
             const dataObj: Record<string, unknown> = {};
             (schemaFields.length > 0 ? schemaFields : [{ key: 'temperature', type: 'number' }, { key: 'humidity', type: 'number' }])
-              .forEach((f: any) => { dataObj[f.key] = f.type === 'number' ? 24.3 : f.type === 'boolean' ? false : ''; });
+              .forEach((f: any) => { dataObj[f.key] = f.type === 'boolean' ? false : f.type === 'timestamp' ? new Date().toISOString() : f.type === 'string' ? 'value' : 24.3; });
             const dataPayload = formatPayloadStr(dataObj, fmt);
             const brokerUrl = `mqtt://${MQTT_BROKER}:${MQTT_PORT}`;
             const rows = [
@@ -1339,7 +1339,7 @@ export function DeviceDetailPage() {
             const maskedKey = apiKeyVisible ? currentKey : `${currentKey?.slice(0, 8) ?? ''}••••••••`;
             const dataObj: Record<string, unknown> = { api_key: maskedKey };
             (schemaFields.length > 0 ? schemaFields : [{ key: 'temperature', type: 'number' }, { key: 'humidity', type: 'number' }])
-              .forEach((f: any) => { dataObj[f.key] = f.type === 'number' ? 0 : f.type === 'boolean' ? false : f.type === 'timestamp' ? new Date().toISOString() : ''; });
+              .forEach((f: any) => { dataObj[f.key] = f.type === 'boolean' ? false : f.type === 'timestamp' ? new Date().toISOString() : f.type === 'string' ? 'value' : 24.3; });
             const dataPayload = formatPayloadStr(dataObj, fmt);
             const ingestUrl  = `${API_BASE}/telemetry/ingest`;
             const pendingUrl = `${API_BASE}/commands/pending?apiKey=${maskedKey}`;
@@ -1837,7 +1837,7 @@ export function DeviceDetailPage() {
                   if (firmwareDraft !== (d.firmwareVersion ?? '')) patch.firmwareVersion = firmwareDraft;
                   const cleanedFields = schemaEdits
                     .filter(f => f.key?.trim())
-                    .map(({ _originalKey: _, ...rest }) => rest);
+                    .map(({ _originalKey: _, ...rest }) => ({ type: 'number', ...rest }));
                   patch.meta = { ...d.meta, dataSchema: { fields: cleanedFields } };
                   const lat = parseFloat(latDraft);
                   const lng = parseFloat(lngDraft);
