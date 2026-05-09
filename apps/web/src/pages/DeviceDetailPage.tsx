@@ -1731,7 +1731,7 @@ export function DeviceDetailPage() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                   <label className="eyebrow" style={{ fontSize: 9 }}>Field schema</label>
                   <button className="btn btn-sm btn-ghost" style={{ gap: 5, fontSize: 11 }}
-                    onClick={() => setSchemaEdits(prev => [...prev, { key: '', label: '', unit: '', chartType: 'line', chartColor: COLORS[prev.length % COLORS.length] }])}>
+                    onClick={() => setSchemaEdits(prev => [...prev, { key: '', type: 'number', label: '', unit: '', chartType: 'line', chartColor: COLORS[prev.length % COLORS.length] }])}>
                     <Plus size={11} /> Add field
                   </button>
                 </div>
@@ -1744,7 +1744,7 @@ export function DeviceDetailPage() {
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--font-mono)', fontSize: 11 }}>
                       <thead>
                         <tr style={{ background: 'hsl(var(--surface-raised))' }}>
-                          {['Key', 'Display label', 'Unit', 'Chart', 'Color', ''].map((h, hi) => (
+                          {['Key', 'Type', 'Display label', 'Unit', 'Chart', 'Color', ''].map((h, hi) => (
                             <th key={hi} style={{ padding: '8px 10px', textAlign: 'left', fontSize: 9, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'hsl(var(--muted-fg))', borderBottom: '1px solid hsl(var(--rule-ghost))' }}>{h}</th>
                           ))}
                         </tr>
@@ -1759,6 +1759,17 @@ export function DeviceDetailPage() {
                                 value={f.key ?? ''}
                                 placeholder="field_key"
                                 onChange={e => setSchemaEdits(prev => prev.map((x, j) => j === i ? { ...x, key: e.target.value } : x))} />
+                            </td>
+                            <td style={{ padding: '4px 6px', width: 100 }}>
+                              <select className="select" style={{ fontSize: 11, height: 28 }}
+                                value={f.type ?? 'number'}
+                                onChange={e => setSchemaEdits(prev => prev.map((x, j) => j === i ? { ...x, type: e.target.value } : x))}>
+                                <option value="number">Number</option>
+                                <option value="string">String</option>
+                                <option value="boolean">Boolean</option>
+                                <option value="location">Location</option>
+                                <option value="timestamp">Timestamp</option>
+                              </select>
                             </td>
                             <td style={{ padding: '4px 6px' }}>
                               <input className="input" style={{ fontSize: 11, height: 28, fontFamily: 'var(--font-sans)' }}
