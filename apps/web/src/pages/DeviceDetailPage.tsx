@@ -1,5 +1,5 @@
 import { useParams, Link } from 'react-router-dom';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { useState, useEffect, useRef, useMemo, type ReactNode } from 'react';
 import { devicesApi } from '@/api/devices';
 import { telemetryApi } from '@/api/telemetry';
@@ -139,6 +139,12 @@ export function DeviceDetailPage() {
   const [savingCmd, setSavingCmd] = useState(false);
   const [editCmds, setEditCmds] = useState(false);
   const [showCodeGen, setShowCodeGen] = useState(false);
+  const [showEditSchema, setShowEditSchema] = useState(false);
+  const [schemaEdits, setSchemaEdits] = useState<any[]>([]);
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState('');
+  const [latDraft, setLatDraft] = useState('');
+  const [lngDraft, setLngDraft] = useState('');
   const [openCodeId, setOpenCodeId] = useState<string | null>(null);
   const [codeEditMode, setCodeEditMode] = useState(false);
   const [codeDraft, setCodeDraft] = useState('');
@@ -366,6 +372,33 @@ export function DeviceDetailPage() {
     return formatCommandStr(newCmdName, sampleValue, d?.payloadFormat ?? 'json');
   }, [newCmdName, newCmdType, newCmdMin, newCmdValues, d?.payloadFormat]); // eslint-disable-line
 
+  const patchDevice = useMutation({
+    mutationFn: (patch: any) => devicesApi.update(id!, patch),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['device', id] }),
+    onError: () => toast.error('Failed to save changes'),
+  });
+
+  const saveChartType = (fieldKey: string, chartType: string) => {
+    if (!d) return;
+    const newFields = schemaFields.map((f: any) =>
+      f.key === fieldKey ? { ...f, chartType } : f
+    );
+    patchDevice.mutate({ meta: { ...d.meta, dataSchema: { fields: newFields } } });
+  };
+
+  const saveName = async () => {
+    if (!nameDraft.trim() || nameDraft === d?.name) { setEditingName(false); return; }
+    await patchDevice.mutateAsync({ name: nameDraft.trim() });
+    setEditingName(false);
+  };
+
+  const saveSchema = async () => {
+    if (!d) return;
+    await patchDevice.mutateAsync({ meta: { ...d.meta, dataSchema: { fields: schemaEdits } } });
+    setShowEditSchema(false);
+    toast.success('Schema saved');
+  };
+
   const regenerateKey = async () => {
     try {
       const { apiKey } = await devicesApi.regenerateKey(d._id);
@@ -451,6 +484,9 @@ export function DeviceDetailPage() {
           </p>
         </div>
         <div style={{ gridColumn: 3, display: 'flex', alignItems: 'flex-end', gap: 8, paddingBottom: 20 }}>
+          <button className="btn btn-sm" style={{ gap: 6 }} onClick={() => { setSchemaEdits(schemaFields.map((f: any) => ({ ...f }))); setLatDraft(d.location?.lat?.toString() ?? ''); setLngDraft((d.location?.lng ?? d.location?.lon)?.toString() ?? ''); setShowEditSchema(true); }}>
+            <Pencil size={13} /> Edit device
+          </button>
           <button className="btn btn-sm" style={{ gap: 6 }} onClick={() => setShowCodeGen(true)}>
             <Cpu size={13} /> Generate code
           </button>
@@ -606,7 +642,7 @@ export function DeviceDetailPage() {
                   transition: 'background 0.1s',
                 }}
               >
-                <div className="eyebrow" style={{ fontSize: 9.5 }}>{k.replace(/_/g, ' ')}</div>
+                <div className="eyebrow" style={{ fontSize: 9.5 }}>{schemaFields.find((f: any) => f.key === k)?.label ?? k.replace(/_/g, ' ')}</div>
                 <div style={{ fontFamily: 'var(--font-display)', fontSize: 32, lineHeight: 1, letterSpacing: '-0.02em', marginTop: 4, color: fColor }} className="num">
                   {v.toFixed(2)}
                 </div>
@@ -639,6 +675,14 @@ export function DeviceDetailPage() {
                   <TableProperties size={12} style={{ marginRight: 4, verticalAlign: 'middle' }} />Table
                 </button>
               </div>
+              {telemView === 'chart' && (
+                <div className="seg">
+                  {(['line', 'area', 'bar'] as const).map(t => (
+                    <button key={t} className={(chartFieldMeta?.chartType ?? 'line') === t ? 'on' : ''}
+                      onClick={() => saveChartType(chartField, t)} style={{ textTransform: 'capitalize' }}>{t}</button>
+                  ))}
+                </div>
+              )}
               <div className="seg">
                 {['1h', '6h', '24h', '7d', '30d'].map(r => (
                   <button key={r} className={chartRange === r ? 'on' : ''} onClick={() => setChartRange(r)}>{r.toUpperCase()}</button>
@@ -692,7 +736,7 @@ export function DeviceDetailPage() {
                       {rows.map((row: any, i: number) => (
                         <tr key={row._id ?? i} style={{ background: i % 2 === 0 ? 'transparent' : 'hsl(var(--surface-raised) / 0.4)' }}>
                           <td style={{ padding: '7px 12px', color: 'hsl(var(--muted-fg))', whiteSpace: 'nowrap', borderBottom: '1px solid hsl(var(--rule-ghost))' }}>
-                            {(() => { const d = new Date(new Date(row.ts ?? row.createdAt).getTime() + 3 * 3600_000); return d.toISOString().slice(0, 19); })()}
+                            {(() => { const raw = row.timestamp ?? row.ts ?? row.createdAt; if (!raw) return '—'; const d = new Date(new Date(raw).getTime() + 3 * 3600_000); return isNaN(d.getTime()) ? '—' : d.toISOString().slice(0, 19); })()}
                           </td>
                           {allFields.map((fk: string) => {
                             const val = row.fields?.[fk];
@@ -716,7 +760,7 @@ export function DeviceDetailPage() {
                   No data for <strong style={{ marginLeft: 4, fontFamily: 'var(--font-mono)' }}>{chartField}</strong>
                 </div>
               ) : (() => {
-                const ct = chartFieldMeta?.chartType ?? 'area';
+                const ct = chartFieldMeta?.chartType ?? 'line';
                 const latestVal = seriesPoints[seriesPoints.length - 1]?.value ?? 0;
                 const minV = chartFieldMeta?.min ?? 0;
                 const maxV = chartFieldMeta?.max ?? 100;
@@ -1551,6 +1595,125 @@ export function DeviceDetailPage() {
           onConfirm={() => { setShowRegenConfirm(false); regenerateKey(); }}
           onCancel={() => setShowRegenConfirm(false)}
         />
+      )}
+
+      {/* ── Edit device modal ── */}
+      {showEditSchema && (
+        <>
+          <div className="modal-backdrop" onClick={() => setShowEditSchema(false)} />
+          <div style={{
+            position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
+            width: 'min(680px, 95vw)', maxHeight: '85vh', display: 'flex', flexDirection: 'column',
+            background: 'hsl(var(--bg))', border: '1px solid hsl(var(--border))',
+            boxShadow: 'var(--shadow-2)', zIndex: 95, overflow: 'hidden',
+          }}>
+            <div style={{ padding: '20px 24px 16px', borderBottom: '1px solid hsl(var(--rule-ghost))', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <p className="eyebrow" style={{ fontSize: 9 }}>Device settings</p>
+                <p style={{ fontFamily: 'var(--font-display)', fontSize: 22, marginTop: 2 }}>Edit <em style={{ color: 'hsl(var(--primary))' }}>device</em></p>
+              </div>
+              <button onClick={() => setShowEditSchema(false)} className="btn btn-sm btn-icon"><X size={14} /></button>
+            </div>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
+              {/* Device name */}
+              <div style={{ marginBottom: 20 }}>
+                <label className="eyebrow" style={{ fontSize: 9, display: 'block', marginBottom: 6 }}>Device name</label>
+                <input className="input" defaultValue={d.name} id="edit-device-name"
+                  style={{ fontSize: 14 }} placeholder="Device name" />
+              </div>
+
+              {/* Fixed location */}
+              <div style={{ marginBottom: 20 }}>
+                <label className="eyebrow" style={{ fontSize: 9, display: 'block', marginBottom: 6 }}>Fixed location</label>
+                <p style={{ fontSize: 11, color: 'hsl(var(--muted-fg))', marginBottom: 10 }}>
+                  Manually set lat/lng for devices that don't transmit GPS. Leave both blank to clear.
+                </p>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                  <div>
+                    <label style={{ fontSize: 10, color: 'hsl(var(--muted-fg))', display: 'block', marginBottom: 4 }}>Latitude</label>
+                    <input className="input" value={latDraft} onChange={e => setLatDraft(e.target.value)}
+                      style={{ fontSize: 13 }} placeholder="e.g. -1.2921" />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 10, color: 'hsl(var(--muted-fg))', display: 'block', marginBottom: 4 }}>Longitude</label>
+                    <input className="input" value={lngDraft} onChange={e => setLngDraft(e.target.value)}
+                      style={{ fontSize: 13 }} placeholder="e.g. 36.8219" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Field schema table */}
+              {schemaEdits.length > 0 && (
+                <div>
+                  <label className="eyebrow" style={{ fontSize: 9, display: 'block', marginBottom: 8 }}>Field schema</label>
+                  <div style={{ border: '1px solid hsl(var(--rule-ghost))', overflow: 'hidden' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--font-mono)', fontSize: 11 }}>
+                      <thead>
+                        <tr style={{ background: 'hsl(var(--surface-raised))' }}>
+                          {['Key', 'Display label', 'Unit', 'Chart'].map(h => (
+                            <th key={h} style={{ padding: '8px 10px', textAlign: 'left', fontSize: 9, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'hsl(var(--muted-fg))', borderBottom: '1px solid hsl(var(--rule-ghost))' }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {schemaEdits.map((f, i) => (
+                          <tr key={f.key} style={{ borderBottom: '1px solid hsl(var(--rule-ghost))' }}>
+                            <td style={{ padding: '6px 10px', color: 'hsl(var(--muted-fg))' }}>{f.key}</td>
+                            <td style={{ padding: '4px 6px' }}>
+                              <input className="input" style={{ fontSize: 11, height: 28, fontFamily: 'var(--font-sans)' }}
+                                value={f.label ?? ''}
+                                onChange={e => setSchemaEdits(prev => prev.map((x, j) => j === i ? { ...x, label: e.target.value } : x))} />
+                            </td>
+                            <td style={{ padding: '4px 6px', width: 80 }}>
+                              <input className="input" style={{ fontSize: 11, height: 28 }}
+                                value={f.unit ?? ''}
+                                placeholder="e.g. °C"
+                                onChange={e => setSchemaEdits(prev => prev.map((x, j) => j === i ? { ...x, unit: e.target.value } : x))} />
+                            </td>
+                            <td style={{ padding: '4px 6px', width: 110 }}>
+                              <select className="select" style={{ fontSize: 11, height: 28 }}
+                                value={f.chartType ?? 'line'}
+                                onChange={e => setSchemaEdits(prev => prev.map((x, j) => j === i ? { ...x, chartType: e.target.value } : x))}>
+                                <option value="line">Line</option>
+                                <option value="area">Area</option>
+                                <option value="bar">Bar</option>
+                                <option value="gauge">Gauge</option>
+                                <option value="level">Level</option>
+                              </select>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+            <div style={{ padding: '14px 24px', borderTop: '1px solid hsl(var(--rule-ghost))', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <button className="btn btn-secondary btn-sm" onClick={() => setShowEditSchema(false)}>Cancel</button>
+              <button className="btn btn-primary btn-sm" disabled={patchDevice.isPending}
+                onClick={async () => {
+                  const nameEl = document.getElementById('edit-device-name') as HTMLInputElement;
+                  const newName = nameEl?.value?.trim();
+                  const patch: any = {};
+                  if (newName && newName !== d.name) patch.name = newName;
+                  if (schemaEdits.length > 0) patch.meta = { ...d.meta, dataSchema: { fields: schemaEdits } };
+                  const lat = parseFloat(latDraft);
+                  const lng = parseFloat(lngDraft);
+                  if (!isNaN(lat) && !isNaN(lng)) {
+                    patch.location = { lat, lng };
+                  } else if (latDraft.trim() === '' && lngDraft.trim() === '' && d.location?.lat) {
+                    patch.location = null;
+                  }
+                  if (Object.keys(patch).length > 0) await patchDevice.mutateAsync(patch);
+                  setShowEditSchema(false);
+                  toast.success('Saved');
+                }}>
+                {patchDevice.isPending ? 'Saving…' : 'Save changes'}
+              </button>
+            </div>
+          </div>
+        </>
       )}
     </div>
   );

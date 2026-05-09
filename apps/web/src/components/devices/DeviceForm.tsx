@@ -157,7 +157,7 @@ function parseJsonToFields(raw: string): DataField[] | null {
     if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return null;
     return Object.entries(parsed).map(([key, value], idx) => ({
       key,
-      label: key.charAt(0).toUpperCase() + key.slice(1).replace(/[_-]/g, ' '),
+      label: key.replace(/([A-Z])/g, ' $1').replace(/[_-]/g, ' ').replace(/^\s/, '').replace(/\b\w/g, c => c.toUpperCase()).trim(),
       type: inferType(value),
       unit: '',
       chartable: inferType(value) === 'number',
@@ -781,7 +781,7 @@ export function DeviceForm({ onClose }: { onClose: () => void }) {
         <div className="flex-1 overflow-hidden flex">
           {/* Main form area */}
           <div className="flex-1 overflow-y-auto px-8 py-6">
-            <AnimatePresence mode="wait">
+            <AnimatePresence mode="sync">
               {/* Step 1: Identity */}
               {step === 1 && (
                 <motion.div key="s1" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-5">
