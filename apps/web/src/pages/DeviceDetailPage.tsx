@@ -153,6 +153,8 @@ export function DeviceDetailPage() {
   const [codeEditMode, setCodeEditMode] = useState(false);
   const [codeDraft, setCodeDraft] = useState('');
   const [codeSaving, setCodeSaving] = useState(false);
+  const [tableLimit, setTableLimit] = useState(30);
+  const tableScrollRef = useRef<HTMLDivElement>(null);
   const { on, subscribeDevice } = useSocket();
   const queryClient = useQueryClient();
 
@@ -211,12 +213,15 @@ export function DeviceDetailPage() {
     refetchInterval: 15_000,
   });
 
-  const { data: tableData } = useQuery({
-    queryKey: ['telemetry-table', id, chartRange],
-    queryFn: () => telemetryApi.query({ deviceId: id!, from, to, limit: 200 }),
+  const { data: tableData, isFetching: tableLoading } = useQuery({
+    queryKey: ['telemetry-table', id, chartRange, tableLimit],
+    queryFn: () => telemetryApi.query({ deviceId: id!, from, to, limit: tableLimit }),
     enabled: !!id && telemView === 'table',
     refetchInterval: 15_000,
   });
+
+  // Reset table pagination when range changes
+  useEffect(() => { setTableLimit(30); }, [chartRange, from, to]); // eslint-disable-line
 
   useEffect(() => {
     if (!showSharePanel) return;
@@ -274,7 +279,8 @@ export function DeviceDetailPage() {
 
   const fieldLabel = (key: string) => {
     const fm = schemaFields.find((f: any) => f.key === key);
-    return (fm?.label && fm.label.trim()) ? fm.label : prettyKey(key);
+    const lbl = fm?.label?.trim();
+    return (lbl && lbl !== key) ? lbl : prettyKey(key);
   };
 
   const chartFieldLabel = fieldLabel(chartField);
@@ -678,8 +684,8 @@ export function DeviceDetailPage() {
       {/* ── Section I: Telemetry chart + device info ── */}
       <div className="detail-grid" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 32, marginBottom: 0 }}>
         {/* Chart */}
-        {ss('chart', <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12, gap: 12, flexWrap: 'wrap', position: 'sticky', top: 0, zIndex: 10, background: 'hsl(var(--bg))', paddingTop: 4, paddingBottom: 12 }}>
+        {ss('chart', <div style={{ minWidth: 0 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12, gap: 12, flexWrap: 'wrap', position: 'sticky', top: 58, zIndex: 10, background: 'hsl(var(--bg))', paddingTop: 4, paddingBottom: 12 }}>
             <div>
               <div className="eyebrow">Live telemetry</div>
               <div style={{ fontFamily: 'var(--font-display)', fontSize: 28, lineHeight: 1, marginTop: 4, textTransform: 'capitalize' }}>
@@ -738,7 +744,17 @@ export function DeviceDetailPage() {
                 );
               }
               return (
-                <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 320 }}>
+                <div
+                  ref={tableScrollRef}
+                  style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 380 }}
+                  onScroll={e => {
+                    const el = e.currentTarget;
+                    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+                    if (nearBottom && rows.length >= tableLimit && !tableLoading) {
+                      setTableLimit(prev => prev + 30);
+                    }
+                  }}
+                >
                   <table style={{ width: 'max-content', minWidth: '100%', borderCollapse: 'collapse', fontFamily: 'var(--font-mono)', fontSize: 11 }}>
                     <thead style={{ position: 'sticky', top: 0, background: 'hsl(var(--surface-raised))', zIndex: 1 }}>
                       <tr>
@@ -774,6 +790,20 @@ export function DeviceDetailPage() {
                           })}
                         </tr>
                       ))}
+                      {tableLoading && (
+                        <tr>
+                          <td colSpan={allFields.length + 1} style={{ textAlign: 'center', padding: '10px 0', color: 'hsl(var(--muted-fg))', fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.08em' }}>
+                            LOADING…
+                          </td>
+                        </tr>
+                      )}
+                      {rows.length < tableLimit && rows.length > 0 && !tableLoading && (
+                        <tr>
+                          <td colSpan={allFields.length + 1} style={{ textAlign: 'center', padding: '10px 0', color: 'hsl(var(--muted-fg))', fontSize: 10, fontFamily: 'var(--font-mono)', letterSpacing: '0.08em' }}>
+                            — {rows.length} rows total —
+                          </td>
+                        </tr>
+                      )}
                     </tbody>
                   </table>
                 </div>
