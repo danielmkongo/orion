@@ -53,6 +53,9 @@ export function TelemetryPage() {
     .filter(([, v]) => typeof v === 'number')
     .map(([k, v]) => ({ key: k, value: v as number }));
 
+  // Must be declared before any hooks that reference it in their dependency arrays
+  const schemaFields: any[] = selectedDevice?.meta?.dataSchema?.fields ?? [];
+
   useEffect(() => { setSelectedFields([]); setFeaturedField(''); }, [deviceId]);
   useEffect(() => {
     if (selectedFields.length === 0 && numericFields.length > 0)
@@ -90,8 +93,6 @@ export function TelemetryPage() {
     const t = ic && ct ? new Date(ct + 'T23:59:59').toISOString() : new Date(now).toISOString();
     return { from: f, to: t };
   }, []);
-
-  const schemaFields: any[] = selectedDevice?.meta?.dataSchema?.fields ?? [];
 
   const fieldLabel = useCallback((key: string) => {
     const fm = schemaFields.find((f: any) => f.key === key)
