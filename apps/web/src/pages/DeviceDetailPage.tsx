@@ -200,22 +200,21 @@ export function DeviceDetailPage() {
 
   const hoursMap: Record<string, number> = { '1h': 1, '6h': 6, '24h': 24, '7d': 168, '30d': 720 };
 
-  // Compute range bounds — called fresh inside each queryFn so `to` is always "now"
+  // Ref keeps range state fresh inside queryFns regardless of closure age
+  const rangeRef = useRef({ chartRange, customFrom, customTo });
+  useEffect(() => { rangeRef.current = { chartRange, customFrom, customTo }; }, [chartRange, customFrom, customTo]);
+
   const getRangeBounds = () => {
+    const { chartRange: cr, customFrom: cf, customTo: ct } = rangeRef.current;
     const now = Date.now();
-    const f = chartRange === 'custom' && customFrom
-      ? new Date(customFrom).toISOString()
-      : new Date(now - (hoursMap[chartRange] ?? 24) * 3600_000).toISOString();
-    const t = chartRange === 'custom' && customTo
-      ? new Date(customTo).toISOString()
+    const f = cr === 'custom' && cf
+      ? new Date(cf).toISOString()
+      : new Date(now - (hoursMap[cr] ?? 24) * 3600_000).toISOString();
+    const t = cr === 'custom' && ct
+      ? new Date(ct).toISOString()
       : new Date(now).toISOString();
     return { from: f, to: t };
   };
-
-  // Stable `from` used only for the table reset effect and query keys
-  const from = chartRange === 'custom' && customFrom
-    ? new Date(customFrom).toISOString()
-    : new Date(Date.now() - (hoursMap[chartRange] ?? 24) * 3600_000).toISOString();
 
   const { data: seriesData } = useQuery({
     queryKey: ['series', id, chartField, chartRange, customFrom, customTo],

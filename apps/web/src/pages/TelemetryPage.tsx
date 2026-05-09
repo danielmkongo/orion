@@ -5,7 +5,7 @@ import { telemetryApi } from '@/api/telemetry';
 import { getCategoryIconInfo, downloadCSV, formatDate } from '@/lib/utils';
 import { LineChart } from '@/components/charts/Charts';
 import { Download, TrendingUp, TrendingDown, Minus } from 'lucide-react';
-import { io } from 'socket.io-client';
+import { useSocket } from '@/hooks/useSocket';
 
 const COLORS = ['hsl(var(--primary))', 'hsl(var(--fg))', 'hsl(var(--info))', 'hsl(var(--good))', 'hsl(var(--warn))', '#A06CD5'];
 const RANGES = [{ label: '24h', h: 24 }, { label: '7d', h: 168 }, { label: '30d', h: 720 }];
@@ -18,6 +18,7 @@ const normalizeKey = (k: string) => k.toLowerCase().replace(/[_\-\s]/g, '');
 
 export function TelemetryPage() {
   const queryClient = useQueryClient();
+  const { on, subscribeDevice } = useSocket();
   const [selectedDeviceId, setSelectedDeviceId] = useState('');
   const [selectedFields, setSelectedFields] = useState<string[]>([]);
   const [featuredField, setFeaturedField] = useState('');
@@ -67,14 +68,6 @@ export function TelemetryPage() {
     return { from: f, to: t };
   }, []);
 
-  // Stable from/to for queryKeys (triggers re-fetch when range changes)
-  const from = isCustom && customFrom
-    ? new Date(customFrom).toISOString()
-    : new Date(Date.now() - range.h * 3600_000).toISOString();
-  const to = isCustom && customTo
-    ? new Date(customTo + 'T23:59:59').toISOString()
-    : new Date().toISOString();
-
   const schemaFields: any[] = selectedDevice?.meta?.dataSchema?.fields ?? [];
 
   const fieldLabel = useCallback((key: string) => {
@@ -84,8 +77,9 @@ export function TelemetryPage() {
     return (lbl && lbl !== fm?.key) ? lbl : prettyKey(key);
   }, [schemaFields]);
 
+  // queryKey uses stable values only — Date.now() must NOT appear here
   const { data: seriesData, isLoading } = useQuery({
-    queryKey: ['series-multi', deviceId, selectedFields.join(','), range.label, from],
+    queryKey: ['series-multi', deviceId, selectedFields.join(','), range.label, customFrom, customTo],
     queryFn: async () => {
       if (!deviceId || selectedFields.length === 0) return [];
       const { from: f, to: t } = getRangeBounds();
@@ -100,7 +94,7 @@ export function TelemetryPage() {
   });
 
   const { data: featuredSeriesData } = useQuery({
-    queryKey: ['series-featured', deviceId, featuredField, range.label, from],
+    queryKey: ['series-featured', deviceId, featuredField, range.label, customFrom, customTo],
     queryFn: () => {
       const { from: f, to: t } = getRangeBounds();
       return telemetryApi.series(deviceId, featuredField, f, t, 500).catch(() => null);
@@ -112,20 +106,15 @@ export function TelemetryPage() {
   // Socket: invalidate series on live telemetry events
   useEffect(() => {
     if (!deviceId) return;
-    const token = localStorage.getItem('token') ?? sessionStorage.getItem('token') ?? '';
-    const sock = io(import.meta.env.VITE_API_URL ?? '', {
-      auth: { token },
-      transports: ['websocket'],
-    });
-    sock.on('connect', () => { sock.emit('subscribeDevice', deviceId); });
-    sock.on('telemetry', (msg: any) => {
-      if (msg.deviceId !== deviceId) return;
+    const unsub  = subscribeDevice(deviceId);
+    const unsubT = on('telemetry.update', (event: any) => {
+      if (event.deviceId !== deviceId) return;
       queryClient.invalidateQueries({ queryKey: ['series-multi', deviceId] });
       queryClient.invalidateQueries({ queryKey: ['series-featured', deviceId] });
       queryClient.invalidateQueries({ queryKey: ['telemetry', 'latest', deviceId] });
     });
-    return () => { sock.disconnect(); };
-  }, [deviceId, queryClient]);
+    return () => { unsub(); unsubT(); };
+  }, [deviceId, queryClient, on, subscribeDevice]);
 
   const chartSeries = selectedFields.map((field, i) => {
     const fMeta = schemaFields.find((f: any) => f.key === field);

@@ -20,8 +20,12 @@ export async function telemetryRoutes(app: FastifyInstance) {
     if (!device) return reply.code(401).send({ error: 'Invalid API key' });
 
     const rawTs = body.timestamp as string | undefined;
-    const timestamp = (rawTs && !isNaN(new Date(rawTs).getTime()))
-      ? new Date(rawTs).toISOString()
+    // Normalise: if the timestamp has no timezone info, treat it as UTC (append Z)
+    const normTs = rawTs && !rawTs.endsWith('Z') && !/[+\-]\d{2}:\d{2}$/.test(rawTs)
+      ? rawTs + 'Z'
+      : rawTs;
+    const timestamp = (normTs && !isNaN(new Date(normTs).getTime()))
+      ? new Date(normTs).toISOString()
       : new Date().toISOString();
     const fields: Record<string, number | string | boolean | null> = {};
 
