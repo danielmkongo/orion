@@ -49,12 +49,18 @@ export function TelemetryPage() {
   });
 
   const latest = latestData?.fields ?? {};
-  const numericFields = Object.entries(latest)
-    .filter(([, v]) => typeof v === 'number')
-    .map(([k, v]) => ({ key: k, value: v as number }));
 
   // Must be declared before any hooks that reference it in their dependency arrays
   const schemaFields: any[] = selectedDevice?.meta?.dataSchema?.fields ?? [];
+
+  const telemetryNumerics = Object.entries(latest)
+    .filter(([, v]) => typeof v === 'number')
+    .map(([k, v]) => ({ key: k, value: v as number }));
+  const schemaNumerics = schemaFields
+    .filter((f: any) => !f.type || f.type === 'number')
+    .filter((f: any) => f.key && !telemetryNumerics.some(t => t.key === f.key))
+    .map((f: any) => ({ key: f.key, value: 0 as number }));
+  const numericFields = [...telemetryNumerics, ...schemaNumerics];
 
   useEffect(() => { setSelectedFields([]); setFeaturedField(''); }, [deviceId]);
   useEffect(() => {

@@ -650,8 +650,14 @@ function WidgetDrawer({ open, editing, devices, onSave, onClose }: {
     staleTime: 300_000,
   });
   const drawerFieldLabel = makeFieldLabel(drawerDevice?.meta?.dataSchema?.fields ?? []);
-  const availableFields = Object.entries(latestData?.fields ?? {})
-    .filter(([, v]) => typeof v === 'number').map(([k]) => k);
+  const drawerSchemaNumerics = (drawerDevice?.meta?.dataSchema?.fields ?? [])
+    .filter((f: any) => !f.type || f.type === 'number')
+    .map((f: any) => f.key as string)
+    .filter(Boolean);
+  const availableFields = [...new Set([
+    ...Object.entries(latestData?.fields ?? {}).filter(([, v]) => typeof v === 'number').map(([k]) => k),
+    ...drawerSchemaNumerics,
+  ])];
 
   const needsDevice    = !['status_grid', 'text', 'separator', 'multi_line_chart'].includes(type);
   const needsField     = ['line_chart', 'bar_chart', 'gauge', 'kpi_card', 'level', 'progress_bar', 'stat_card'].includes(type);

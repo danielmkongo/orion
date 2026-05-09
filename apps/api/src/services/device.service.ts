@@ -4,11 +4,19 @@ import { Device, IDevice } from '../models/Device.js';
 import { Telemetry } from '../models/Telemetry.js';
 import type { DeviceCreateInput, DeviceUpdateInput } from '@orion/shared';
 
+const ONLINE_WINDOW_MS = 60 * 60 * 1000; // 1 hour
+
+function applyEffectiveStatus(device: any): any {
+  if (!device) return device;
+  const lastSeen = device.lastSeenAt ? new Date(device.lastSeenAt).getTime() : 0;
+  const isRecent = lastSeen > 0 && Date.now() - lastSeen < ONLINE_WINDOW_MS;
+  return { ...device, status: isRecent ? 'online' : 'offline' };
+}
+
 export class DeviceService {
   async list(orgId: string, filters: { status?: string; category?: string; tags?: string[]; search?: string; limit?: number; offset?: number }) {
     const query: Record<string, unknown> = { orgId };
 
-    if (filters.status) query.status = filters.status;
     if (filters.category) query.category = filters.category;
     if (filters.tags?.length) query.tags = { $in: filters.tags };
     if (filters.search) {
@@ -28,11 +36,14 @@ export class DeviceService {
       Device.countDocuments(query),
     ]);
 
-    return { devices, total };
+    const mapped = devices.map(applyEffectiveStatus);
+    const filtered = filters.status ? mapped.filter((d: any) => d.status === filters.status) : mapped;
+    return { devices: filtered, total: filters.status ? filtered.length : total };
   }
 
   async getById(id: string, orgId: string): Promise<IDevice | null> {
-    return Device.findOne({ _id: id, orgId }).lean() as any;
+    const doc = await Device.findOne({ _id: id, orgId }).lean() as any;
+    return applyEffectiveStatus(doc);
   }
 
   async getByApiKey(apiKey: string): Promise<IDevice | null> {
@@ -85,17 +96,17 @@ export class DeviceService {
   }
 
   async getStats(orgId: string) {
-    const [total, online, offline, byCategory] = await Promise.all([
+    const onlineThreshold = new Date(Date.now() - ONLINE_WINDOW_MS);
+    const [total, online, byCategory] = await Promise.all([
       Device.countDocuments({ orgId }),
-      Device.countDocuments({ orgId, status: 'online' }),
-      Device.countDocuments({ orgId, status: 'offline' }),
+      Device.countDocuments({ orgId, lastSeenAt: { $gte: onlineThreshold } }),
       Device.aggregate([
         { $match: { orgId: new Types.ObjectId(orgId) } },
         { $group: { _id: '$category', count: { $sum: 1 } } },
       ]),
     ]);
 
-    return { total, online, offline, byCategory };
+    return { total, online, offline: total - online, byCategory };
   }
 
   async regenerateApiKey(deviceId: string, orgId: string): Promise<string> {

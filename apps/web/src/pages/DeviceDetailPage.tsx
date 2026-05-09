@@ -267,7 +267,13 @@ export function DeviceDetailPage() {
 
   const d = device as any;
   const fields = liveFields && Object.keys(liveFields).length > 0 ? liveFields : latestTelemetry?.fields ?? {};
-  const numericFields = Object.entries(fields).filter(([, v]) => typeof v === 'number') as [string, number][];
+  const schemaFields: any[] = d?.meta?.dataSchema?.fields ?? [];
+  const telemetryNumerics = Object.entries(fields).filter(([, v]) => typeof v === 'number') as [string, number][];
+  const schemaNumerics = schemaFields
+    .filter((f: any) => !f.type || f.type === 'number')
+    .filter((f: any) => f.key && !telemetryNumerics.some(([k]) => k === f.key))
+    .map((f: any) => [f.key, 0] as [string, number]);
+  const numericFields = [...telemetryNumerics, ...schemaNumerics];
 
   useEffect(() => {
     if (!chartField && numericFields.length > 0) setChartField(numericFields[0][0]);
@@ -281,7 +287,6 @@ export function DeviceDetailPage() {
   }));
 
   // Get field metadata from schema for chart color/type
-  const schemaFields: any[] = d?.meta?.dataSchema?.fields ?? [];
   const chartFieldMeta = schemaFields.find((f: any) => f.key === chartField);
   const chartColor = chartFieldMeta?.chartColor ?? 'hsl(var(--primary))';
 
@@ -1296,7 +1301,7 @@ export function DeviceDetailPage() {
             const fmt    = d.payloadFormat ?? 'json';
             const dataObj: Record<string, unknown> = {};
             (schemaFields.length > 0 ? schemaFields : [{ key: 'temperature', type: 'number' }])
-              .forEach((f: any) => { dataObj[f.key] = f.type === 'number' ? 24.3 : false; });
+              .forEach((f: any) => { dataObj[f.key] = f.type === 'boolean' ? false : f.type === 'timestamp' ? new Date().toISOString() : f.type === 'string' ? 'value' : 24.3; });
             const dataPayload = formatPayloadStr({ type: 'telemetry', ...dataObj }, fmt);
             const cmdPayload  = JSON.stringify({ type: 'command', commandId: '<id>', name: '<cmd>', payload: {} }, null, 2);
             const ackPayload  = JSON.stringify({ type: 'ack', commandId: '<id>', status: 'executed' }, null, 2);
@@ -1382,7 +1387,7 @@ export function DeviceDetailPage() {
             const maskedKey = apiKeyVisible ? currentKey : `${currentKey?.slice(0, 8) ?? ''}••••`;
             const dataObj: Record<string, unknown> = {};
             (schemaFields.length > 0 ? schemaFields : [{ key: 'temperature', type: 'number' }])
-              .forEach((f: any) => { dataObj[f.key] = f.type === 'number' ? 24.3 : false; });
+              .forEach((f: any) => { dataObj[f.key] = f.type === 'boolean' ? false : f.type === 'timestamp' ? new Date().toISOString() : f.type === 'string' ? 'value' : 24.3; });
             const dataPayload = formatPayloadStr(dataObj, fmt);
             const base = `coap://${API_HOST}:${COAP_PORT}`;
             const rows = [
@@ -1420,7 +1425,7 @@ export function DeviceDetailPage() {
             const fmt = d.payloadFormat ?? 'json';
             const dataObj: Record<string, unknown> = {};
             (schemaFields.length > 0 ? schemaFields : [{ key: 'temperature', type: 'number' }])
-              .forEach((f: any) => { dataObj[f.key] = f.type === 'number' ? 24.3 : false; });
+              .forEach((f: any) => { dataObj[f.key] = f.type === 'boolean' ? false : f.type === 'timestamp' ? new Date().toISOString() : f.type === 'string' ? 'value' : 24.3; });
             const dataPayload = formatPayloadStr(dataObj, fmt);
             const host = `${API_HOST}:${TCP_PORT}`;
             const session = `# 1. Connect\nnc ${API_HOST} ${TCP_PORT}\n\n# 2. Authenticate (send apiKey then newline)\n${apiKeyVisible ? currentKey : (currentKey?.slice(0,8) ?? '') + '••••'}\n# Server replies: OK\n\n# 3. Send telemetry (one payload per line)\n${dataPayload.replace(/\n/g, ' ')}\n\n# 4. Server pushes commands:\n# CMD:{commandId}:{name and payload JSON}\n\n# 5. Acknowledge\nACK:{commandId}:executed`;
@@ -1447,7 +1452,7 @@ export function DeviceDetailPage() {
             const fmt = d.payloadFormat ?? 'json';
             const dataObj: Record<string, unknown> = {};
             (schemaFields.length > 0 ? schemaFields : [{ key: 'temperature', type: 'number' }])
-              .forEach((f: any) => { dataObj[f.key] = f.type === 'number' ? 24.3 : false; });
+              .forEach((f: any) => { dataObj[f.key] = f.type === 'boolean' ? false : f.type === 'timestamp' ? new Date().toISOString() : f.type === 'string' ? 'value' : 24.3; });
             const bodyStr = formatPayloadStr(dataObj, fmt).replace(/\n/g, ' ');
             const maskedKey = apiKeyVisible ? currentKey : `${currentKey?.slice(0, 8) ?? ''}••••`;
             const example = `${maskedKey}|${bodyStr}`;
