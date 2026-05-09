@@ -440,7 +440,7 @@ export function DeviceDetailPage() {
 
   const saveSchema = async () => {
     if (!d) return;
-    await patchDevice.mutateAsync({ meta: { ...d.meta, dataSchema: { fields: schemaEdits } } });
+    await patchDevice.mutateAsync({ meta: { ...d.meta, dataSchema: { fields: schemaEdits.filter(f => f.key?.trim()) } } });
     setShowEditSchema(false);
     toast.success('Schema saved');
   };
@@ -1727,15 +1727,25 @@ export function DeviceDetailPage() {
               </div>
 
               {/* Field schema table */}
-              {schemaEdits.length > 0 && (
-                <div>
-                  <label className="eyebrow" style={{ fontSize: 9, display: 'block', marginBottom: 8 }}>Field schema</label>
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <label className="eyebrow" style={{ fontSize: 9 }}>Field schema</label>
+                  <button className="btn btn-sm btn-ghost" style={{ gap: 5, fontSize: 11 }}
+                    onClick={() => setSchemaEdits(prev => [...prev, { key: '', label: '', unit: '', chartType: 'line', chartColor: COLORS[prev.length % COLORS.length] }])}>
+                    <Plus size={11} /> Add field
+                  </button>
+                </div>
+                {schemaEdits.length === 0 ? (
+                  <div style={{ padding: '20px 0', textAlign: 'center', color: 'hsl(var(--muted-fg))', fontFamily: 'var(--font-mono)', fontSize: 11, border: '1px dashed hsl(var(--border))' }}>
+                    No fields yet — click <strong>Add field</strong> to define the data schema.
+                  </div>
+                ) : (
                   <div style={{ border: '1px solid hsl(var(--rule-ghost))', overflow: 'hidden' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--font-mono)', fontSize: 11 }}>
                       <thead>
                         <tr style={{ background: 'hsl(var(--surface-raised))' }}>
-                          {['Key', 'Display label', 'Unit', 'Chart', 'Color'].map(h => (
-                            <th key={h} style={{ padding: '8px 10px', textAlign: 'left', fontSize: 9, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'hsl(var(--muted-fg))', borderBottom: '1px solid hsl(var(--rule-ghost))' }}>{h}</th>
+                          {['Key', 'Display label', 'Unit', 'Chart', 'Color', ''].map((h, hi) => (
+                            <th key={hi} style={{ padding: '8px 10px', textAlign: 'left', fontSize: 9, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'hsl(var(--muted-fg))', borderBottom: '1px solid hsl(var(--rule-ghost))' }}>{h}</th>
                           ))}
                         </tr>
                       </thead>
@@ -1743,11 +1753,17 @@ export function DeviceDetailPage() {
                         {schemaEdits.map((f, i) => {
                           const colorVal = /^#[0-9a-f]{3,6}$/i.test(f.chartColor ?? '') ? f.chartColor : COLORS[i % COLORS.length].startsWith('#') ? COLORS[i % COLORS.length] : '#ff5b1f';
                           return (
-                          <tr key={f.key} style={{ borderBottom: '1px solid hsl(var(--rule-ghost))' }}>
-                            <td style={{ padding: '6px 10px', color: 'hsl(var(--muted-fg))', fontFamily: 'var(--font-mono)', fontSize: 11 }}>{f.key}</td>
+                          <tr key={i} style={{ borderBottom: '1px solid hsl(var(--rule-ghost))' }}>
+                            <td style={{ padding: '4px 6px', width: 120 }}>
+                              <input className="input" style={{ fontSize: 11, height: 28, fontFamily: 'var(--font-mono)' }}
+                                value={f.key ?? ''}
+                                placeholder="field_key"
+                                onChange={e => setSchemaEdits(prev => prev.map((x, j) => j === i ? { ...x, key: e.target.value } : x))} />
+                            </td>
                             <td style={{ padding: '4px 6px' }}>
                               <input className="input" style={{ fontSize: 11, height: 28, fontFamily: 'var(--font-sans)' }}
                                 value={f.label ?? ''}
+                                placeholder="Display label"
                                 onChange={e => setSchemaEdits(prev => prev.map((x, j) => j === i ? { ...x, label: e.target.value } : x))} />
                             </td>
                             <td style={{ padding: '4px 6px', width: 80 }}>
@@ -1775,14 +1791,21 @@ export function DeviceDetailPage() {
                                   onChange={e => setSchemaEdits(prev => prev.map((x, j) => j === i ? { ...x, chartColor: e.target.value } : x))} />
                               </label>
                             </td>
+                            <td style={{ padding: '4px 6px', width: 36 }}>
+                              <button className="btn btn-ghost btn-sm btn-icon" style={{ color: 'hsl(var(--muted-fg))', width: 28, height: 28 }}
+                                title="Remove field"
+                                onClick={() => setSchemaEdits(prev => prev.filter((_, j) => j !== i))}>
+                                <Trash2 size={11} />
+                              </button>
+                            </td>
                           </tr>
                           );
                         })}
                       </tbody>
                     </table>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
             </div>
             <div style={{ padding: '14px 24px', borderTop: '1px solid hsl(var(--rule-ghost))', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
               <button className="btn btn-secondary btn-sm" onClick={() => setShowEditSchema(false)}>Cancel</button>
@@ -1796,7 +1819,8 @@ export function DeviceDetailPage() {
                   const newTags = tagsDraft.split(',').map((t: string) => t.trim()).filter(Boolean);
                   if (JSON.stringify(newTags) !== JSON.stringify(d.tags ?? [])) patch.tags = newTags;
                   if (firmwareDraft !== (d.firmwareVersion ?? '')) patch.firmwareVersion = firmwareDraft;
-                  if (schemaEdits.length > 0) patch.meta = { ...d.meta, dataSchema: { fields: schemaEdits } };
+                  const cleanedFields = schemaEdits.filter(f => f.key?.trim());
+                  patch.meta = { ...d.meta, dataSchema: { fields: cleanedFields } };
                   const lat = parseFloat(latDraft);
                   const lng = parseFloat(lngDraft);
                   if (!isNaN(lat) && !isNaN(lng)) {
