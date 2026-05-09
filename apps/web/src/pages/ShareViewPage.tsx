@@ -466,7 +466,7 @@ function DeviceShareView({ token, data }: { token: string; data: any }) {
                 </div>
                 <div style={{ background: T.surface, border: `1px solid ${T.border}`, overflow: 'hidden' }}>
                   {telemView === 'chart'
-                    ? <DeviceChart token={token} field={chartField} color={chartColor} from={fromTs} to={customToTs} T={T} fieldLabel={fieldLabel} />
+                    ? <DeviceChart token={token} field={chartField} color={chartColor} from={fromTs} to={customToTs} T={T} fieldLabel={fieldLabel} chartType={fm?.chartType} />
                     : <DeviceTable token={token} field={chartField} schemaFields={schemaFields} from={fromTs} to={customToTs} T={T} fieldLabel={fieldLabel} />}
                 </div>
               </div>
@@ -1162,7 +1162,8 @@ function ExportBtn({ onClick, T }: { onClick: () => void; T: Tokens }) {
 }
 
 /* ── Device share chart ──────────────────────────────────────────────── */
-function DeviceChart({ token, field, color, from, to, T, fieldLabel }: { token: string; field: string; color: string; from: string; to?: string; T: Tokens; fieldLabel?: (k: string) => string }) {
+function DeviceChart({ token, field, color, from, to, T, fieldLabel, chartType }: { token: string; field: string; color: string; from: string; to?: string; T: Tokens; fieldLabel?: (k: string) => string; chartType?: string }) {
+  const { resolved } = useT();
   const { data, isLoading } = useQuery({
     queryKey: ['share-series', token, field, from, to ?? 'live'],
     queryFn: () => {
@@ -1189,7 +1190,7 @@ function DeviceChart({ token, field, color, from, to, T, fieldLabel }: { token: 
       <div style={{ position: 'absolute', top: 10, right: 10, zIndex: 5 }}>
         <ExportBtn onClick={exportCsv} T={T} />
       </div>
-      <LineChart series={[{ name: displayName, data: pts, color }]} height={280} showArea />
+      <LineChart series={[{ name: displayName, data: pts, color }]} height={280} showArea={chartType === 'area'} theme={resolved} />
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState, useCallback, type RefObject } from 'react';
+import React, { useRef, useEffect, useState, useCallback, type RefObject } from 'react';
 
 function useWidth(ref: RefObject<HTMLDivElement | null>): number {
   const [width, setWidth] = useState(0);
@@ -32,22 +32,37 @@ function decimate(data: { ts: number; value: number }[], maxPts = 200): { ts: nu
   return out;
 }
 
-/** Catmull-Rom → cubic Bézier smooth path */
-function smoothCurve(pts: { x: number; y: number }[], tension = 0.35): string {
+/** Fritsch-Carlson monotone cubic — no Y overshoots, no X backtracking */
+function smoothCurve(pts: { x: number; y: number }[]): string {
   if (pts.length === 0) return '';
   if (pts.length === 1) return `M ${pts[0].x.toFixed(1)} ${pts[0].y.toFixed(1)}`;
   if (pts.length === 2) return `M ${pts[0].x.toFixed(1)} ${pts[0].y.toFixed(1)} L ${pts[1].x.toFixed(1)} ${pts[1].y.toFixed(1)}`;
+  const n = pts.length;
+  const dx: number[] = [], dy: number[] = [], m: number[] = [];
+  for (let i = 0; i < n - 1; i++) {
+    dx[i] = pts[i + 1].x - pts[i].x;
+    dy[i] = pts[i + 1].y - pts[i].y;
+    m[i] = dy[i] / (dx[i] || 1);
+  }
+  const t: number[] = new Array(n);
+  t[0] = m[0];
+  t[n - 1] = m[n - 2];
+  for (let i = 1; i < n - 1; i++) {
+    if (m[i - 1] === 0 || m[i] === 0 || (m[i - 1] > 0) !== (m[i] > 0)) {
+      t[i] = 0;
+    } else {
+      const common = dx[i - 1] + dx[i];
+      t[i] = 3 * common / ((2 * dx[i] + dx[i - 1]) / m[i - 1] + (dx[i] + 2 * dx[i - 1]) / m[i]);
+    }
+  }
   let d = `M ${pts[0].x.toFixed(1)} ${pts[0].y.toFixed(1)}`;
-  for (let i = 1; i < pts.length; i++) {
-    const p0 = pts[Math.max(0, i - 2)];
-    const p1 = pts[i - 1];
-    const p2 = pts[i];
-    const p3 = pts[Math.min(pts.length - 1, i + 1)];
-    const cp1x = p1.x + (p2.x - p0.x) * tension;
-    const cp1y = p1.y + (p2.y - p0.y) * tension;
-    const cp2x = p2.x - (p3.x - p1.x) * tension;
-    const cp2y = p2.y - (p3.y - p1.y) * tension;
-    d += ` C ${cp1x.toFixed(1)},${cp1y.toFixed(1)} ${cp2x.toFixed(1)},${cp2y.toFixed(1)} ${p2.x.toFixed(1)},${p2.y.toFixed(1)}`;
+  for (let i = 0; i < n - 1; i++) {
+    const h = dx[i];
+    const cp1x = pts[i].x + h / 3;
+    const cp1y = pts[i].y + t[i] * h / 3;
+    const cp2x = pts[i + 1].x - h / 3;
+    const cp2y = pts[i + 1].y - t[i + 1] * h / 3;
+    d += ` C ${cp1x.toFixed(1)},${cp1y.toFixed(1)} ${cp2x.toFixed(1)},${cp2y.toFixed(1)} ${pts[i + 1].x.toFixed(1)},${pts[i + 1].y.toFixed(1)}`;
   }
   return d;
 }
@@ -62,13 +77,15 @@ export interface ChartSeries {
 export function LineChart({
   series,
   height = 260,
-  showArea = true,
+  showArea = false,
   normalize = false,
+  theme,
 }: {
   series: ChartSeries[];
   height?: number;
   showArea?: boolean;
   normalize?: boolean;
+  theme?: 'light' | 'dark';
 }) {
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const w = useWidth(wrapRef);
@@ -196,8 +213,18 @@ export function LineChart({
     setHover({ x: xScale(pt.ts), items, tsLabel: fmtTs(pt.ts) });
   }, [series, pivotData, w, normalize]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const isDark = theme !== 'light';
+  const themeVars = theme != null ? {
+    '--tt-bg': isDark ? 'rgba(12,12,11,0.96)' : 'rgba(252,251,249,0.97)',
+    '--tt-border': isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.09)',
+    '--tt-ts': isDark ? 'rgba(200,200,190,0.45)' : 'rgba(60,55,45,0.45)',
+    '--tt-label': isDark ? 'rgba(200,200,190,0.55)' : 'rgba(60,55,45,0.60)',
+    '--chart-dot-bg': isDark ? '#fff' : '#0B0B0A',
+    '--tt-shadow': isDark ? '0 8px 32px rgba(0,0,0,0.5)' : '0 4px 20px rgba(0,0,0,0.10), 0 1px 4px rgba(0,0,0,0.06)',
+  } : {};
+
   return (
-    <div ref={wrapRef} style={{ position: 'relative', height }}>
+    <div ref={wrapRef} style={{ position: 'relative', height, ...themeVars } as React.CSSProperties}>
       {isEmpty ? (
         <div style={{ height, display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0.3 }}>
           <span style={{ fontSize: 12, fontFamily: 'var(--font-mono, monospace)', letterSpacing: '0.05em' }}>No data</span>
@@ -342,7 +369,7 @@ export function LineChart({
             backdropFilter: 'blur(16px)',
             padding: '8px 12px',
             minWidth: tooltipW,
-            boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+            boxShadow: 'var(--tt-shadow, 0 8px 32px rgba(0,0,0,0.5))',
           }}>
             <div style={{ fontSize: 9.5, fontFamily: 'var(--font-mono, monospace)', color: 'var(--tt-ts, rgba(200,200,190,0.45))', marginBottom: 7, letterSpacing: '0.06em', whiteSpace: 'nowrap' }}>
               {hover.tsLabel}

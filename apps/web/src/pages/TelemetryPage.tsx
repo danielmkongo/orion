@@ -2,7 +2,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { devicesApi } from '@/api/devices';
 import { telemetryApi } from '@/api/telemetry';
-import { getCategoryIconInfo, downloadCSV, formatDate } from '@/lib/utils';
+import apiClient from '@/api/client';
+import { getCategoryIconInfo, downloadCSV, formatDate, timeAgo } from '@/lib/utils';
 import { LineChart } from '@/components/charts/Charts';
 import { Download, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { useSocket } from '@/hooks/useSocket';
@@ -24,7 +25,7 @@ export function TelemetryPage() {
   const [featuredField, setFeaturedField] = useState('');
   const [range, setRange] = useState(RANGES[2]);
   const [normalize, setNormalize] = useState(false);
-  const [showArea, setShowArea] = useState(true);
+  const [showArea, setShowArea] = useState(false);
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo]   = useState('');
   const isCustom = range.label === 'custom';
@@ -59,6 +60,28 @@ export function TelemetryPage() {
     if (!featuredField && numericFields.length > 0)
       setFeaturedField(numericFields[0].key);
   }, [numericFields.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Sync showArea from schema whenever the primary selected field changes
+  useEffect(() => {
+    if (!selectedFields[0] || schemaFields.length === 0) return;
+    const fm = schemaFields.find((f: any) => f.key === selectedFields[0]);
+    if (fm?.chartType) setShowArea(fm.chartType === 'area');
+  }, [selectedFields[0], schemaFields.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const saveChartType = useCallback(async (isArea: boolean) => {
+    setShowArea(isArea);
+    if (!deviceId || schemaFields.length === 0) return;
+    const newType = isArea ? 'area' : 'line';
+    const newFields = schemaFields.map((f: any) =>
+      selectedFields.includes(f.key) ? { ...f, chartType: newType } : f
+    );
+    try {
+      await apiClient.patch(`/devices/${deviceId}`, {
+        meta: { ...selectedDevice?.meta, dataSchema: { fields: newFields } },
+      });
+      queryClient.invalidateQueries({ queryKey: ['devices', 'telemetry-page'] });
+    } catch { /* silent */ }
+  }, [deviceId, selectedDevice, schemaFields, selectedFields, queryClient]);
 
   const getRangeBounds = useCallback(() => {
     const { range: r, isCustom: ic, customFrom: cf, customTo: ct } = rangeRef.current;
@@ -205,7 +228,12 @@ export function TelemetryPage() {
                   <span style={{ fontSize: 12.5, fontWeight: isSelected ? 500 : 400 }}>{d.name}</span>
                   <Icon size={11} style={{ color, marginLeft: 2, opacity: 0.7 }} />
                 </div>
-                <div className="mono faint" style={{ fontSize: 10.5, marginTop: 4 }}>{d.category?.toUpperCase()}</div>
+                <div className="mono faint" style={{ fontSize: 10.5, marginTop: 4 }}>
+                  {d.category?.toUpperCase()}
+                  {d.lastSeenAt && (
+                    <span style={{ marginLeft: 8, opacity: 0.6 }}>· {timeAgo(d.lastSeenAt)}</span>
+                  )}
+                </div>
               </button>
             );
           })
@@ -339,8 +367,8 @@ export function TelemetryPage() {
             </div>
           )}
           <div className="seg">
-            <button className={showArea ? 'on' : ''} onClick={() => setShowArea(true)}>Area</button>
-            <button className={!showArea ? 'on' : ''} onClick={() => setShowArea(false)}>Line</button>
+            <button className={showArea ? 'on' : ''} onClick={() => saveChartType(true)}>Area</button>
+            <button className={!showArea ? 'on' : ''} onClick={() => saveChartType(false)}>Line</button>
           </div>
           <div className="seg">
             <button className={!normalize ? 'on' : ''} onClick={() => setNormalize(false)}>Raw</button>
