@@ -48,8 +48,28 @@ export function SettingsPage() {
     sidebarCollapsed, setSidebarCollapsed,
     relativeTimestamps, setRelativeTimestamps,
     animationsEnabled, setAnimationsEnabled,
+    timezone, setTimezone,
     notifPrefs, setNotifPref,
   } = useUIStore();
+
+  const TIMEZONES = [
+    { label: 'Auto (browser)',                    value: '' },
+    { label: 'UTC',                               value: 'UTC' },
+    { label: 'EAT — Africa/Nairobi (UTC+3)',      value: 'Africa/Nairobi' },
+    { label: 'EAT — Africa/Addis Ababa (UTC+3)',  value: 'Africa/Addis_Ababa' },
+    { label: 'SAST — Africa/Johannesburg (UTC+2)',value: 'Africa/Johannesburg' },
+    { label: 'EET — Africa/Cairo (UTC+2/3)',      value: 'Africa/Cairo' },
+    { label: 'WAT — Africa/Lagos (UTC+1)',        value: 'Africa/Lagos' },
+    { label: 'WET — Europe/London (UTC+0/1)',     value: 'Europe/London' },
+    { label: 'CET — Europe/Berlin (UTC+1/2)',     value: 'Europe/Berlin' },
+    { label: 'GST — Asia/Dubai (UTC+4)',          value: 'Asia/Dubai' },
+    { label: 'IST — Asia/Kolkata (UTC+5:30)',     value: 'Asia/Kolkata' },
+    { label: 'SGT — Asia/Singapore (UTC+8)',      value: 'Asia/Singapore' },
+    { label: 'JST — Asia/Tokyo (UTC+9)',          value: 'Asia/Tokyo' },
+    { label: 'EST — America/New_York (UTC-5/4)',  value: 'America/New_York' },
+    { label: 'PST — America/Los_Angeles (UTC-8/7)',value:'America/Los_Angeles' },
+    { label: 'AEDT — Australia/Sydney (UTC+10/11)',value:'Australia/Sydney' },
+  ];
 
   const [activeSection, setActiveSection] = useState('appearance');
   const [deleteConfirmName, setDeleteConfirmName] = useState('');
@@ -260,6 +280,27 @@ export function SettingsPage() {
                   <Toggle enabled={value} onChange={onChange} />
                 </div>
               ))}
+
+              <div className="eyebrow" style={{ marginTop: 28, marginBottom: 12 }}>Time &amp; Date</div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 0', borderBottom: '1px solid hsl(var(--border) / 0.5)' }}>
+                <div>
+                  <p style={{ fontSize: 13 }}>Timezone</p>
+                  <p className="dim" style={{ fontSize: 12, marginTop: 2 }}>
+                    Used for data timestamps throughout the platform.{' '}
+                    {!timezone && <span>Currently: <b>{Intl.DateTimeFormat().resolvedOptions().timeZone}</b> (browser)</span>}
+                  </p>
+                </div>
+                <select
+                  className="select"
+                  value={timezone}
+                  onChange={e => setTimezone(e.target.value)}
+                  style={{ fontSize: 12, minWidth: 260 }}
+                >
+                  {TIMEZONES.map(tz => (
+                    <option key={tz.value} value={tz.value}>{tz.label}</option>
+                  ))}
+                </select>
+              </div>
             </div>
           )}
 

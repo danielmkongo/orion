@@ -27,6 +27,7 @@ export interface IDevice extends Document {
   firmwareVersion?: string;
   hardwareVersion?: string;
   lastSeenAt?: Date;
+  lastDataAt?: Date;
   firstSeenAt?: Date;
   meta: Record<string, unknown>;
   createdAt: Date;
@@ -79,6 +80,7 @@ const DeviceSchema = new Schema<IDevice>(
     firmwareVersion: String,
     hardwareVersion: String,
     lastSeenAt: Date,
+    lastDataAt: Date,
     firstSeenAt: Date,
     meta: { type: Schema.Types.Mixed, default: {} },
   },

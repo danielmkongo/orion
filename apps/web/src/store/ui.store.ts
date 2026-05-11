@@ -14,6 +14,7 @@ interface UIState {
   theme: 'dark' | 'light';
   relativeTimestamps: boolean;
   animationsEnabled: boolean;
+  timezone: string; // IANA timezone name, '' = browser auto
   notifPrefs: NotifPrefs;
   setSidebarCollapsed: (v: boolean) => void;
   toggleSidebar: () => void;
@@ -21,6 +22,7 @@ interface UIState {
   toggleTheme: () => void;
   setRelativeTimestamps: (v: boolean) => void;
   setAnimationsEnabled: (v: boolean) => void;
+  setTimezone: (v: string) => void;
   setNotifPref: (key: keyof NotifPrefs, v: boolean) => void;
 }
 
@@ -31,6 +33,7 @@ export const useUIStore = create<UIState>()(
       theme: 'light',
       relativeTimestamps: true,
       animationsEnabled: true,
+      timezone: '',
       notifPrefs: {
         critical: true,
         offline: true,
@@ -53,6 +56,7 @@ export const useUIStore = create<UIState>()(
 
       setRelativeTimestamps: (v) => set({ relativeTimestamps: v }),
       setAnimationsEnabled: (v) => set({ animationsEnabled: v }),
+      setTimezone: (v) => set({ timezone: v }),
       setNotifPref: (key, v) => set(s => ({ notifPrefs: { ...s.notifPrefs, [key]: v } })),
     }),
     {

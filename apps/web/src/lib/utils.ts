@@ -29,6 +29,21 @@ export function timeAgo(date: string | Date) {
   }
 }
 
+export function formatTs(date: Date | string | number, timezone?: string): string {
+  if (!date) return '—';
+  const d = new Date(date as any);
+  if (isNaN(d.getTime())) return '—';
+  const tz = timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: tz,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+    hour12: false,
+  }).formatToParts(d);
+  const g = (t: string) => parts.find(p => p.type === t)?.value ?? '00';
+  return `${g('year')}-${g('month')}-${g('day')} ${g('hour')}:${g('minute')}:${g('second')}`;
+}
+
 export function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 B';
   const k = 1024;

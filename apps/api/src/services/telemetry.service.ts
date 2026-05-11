@@ -38,13 +38,23 @@ export function extractLocation(fields: Record<string, unknown>): {
 
 export class TelemetryService {
   async ingest(deviceId: string, orgId: string, point: TelemetryPoint): Promise<void> {
-    const location = point.location ?? extractLocation(point.fields);
+    // Coerce numeric strings to numbers so charts work regardless of device serialization
+    const coercedFields: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(point.fields)) {
+      if (typeof v === 'string' && v.trim() !== '' && isFinite(Number(v))) {
+        coercedFields[k] = Number(v);
+      } else {
+        coercedFields[k] = v;
+      }
+    }
+
+    const location = point.location ?? extractLocation(coercedFields as Record<string, unknown>);
 
     const doc = {
       deviceId,
       orgId,
       timestamp: new Date(point.timestamp),
-      fields: point.fields,
+      fields: coercedFields,
       location,
       meta: point.meta ?? {},
     };
@@ -53,6 +63,7 @@ export class TelemetryService {
 
     const updatePayload: Record<string, unknown> = {
       lastSeenAt: new Date(),
+      lastDataAt: new Date(point.timestamp),
       status: 'online',
     };
     if (location) {

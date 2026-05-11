@@ -4,7 +4,8 @@ import { useState, useEffect, useRef, useMemo, type ReactNode } from 'react';
 import { devicesApi } from '@/api/devices';
 import { telemetryApi } from '@/api/telemetry';
 import apiClient from '@/api/client';
-import { timeAgo, formatDate as fmtDate, getCategoryIconInfo, copyText, formatPayloadStr, formatCommandStr } from '@/lib/utils';
+import { timeAgo, formatDate as fmtDate, formatTs, getCategoryIconInfo, copyText, formatPayloadStr, formatCommandStr } from '@/lib/utils';
+import { useUIStore } from '@/store/ui.store';
 import { useSocket } from '@/hooks/useSocket';
 import { LineChart, BarChart } from '@/components/charts/Charts';
 import { ArrowLeft, Eye, EyeOff, Copy, RefreshCw, Terminal, Plus, Trash2, Check, ChevronDown, ChevronRight, Pencil, X, Share2, BarChart2, TableProperties, Globe, ExternalLink, LinkIcon, Cpu, FileCode, Save } from 'lucide-react';
@@ -107,6 +108,7 @@ function SatelliteMap({ lat, lng }: { lat: number; lng: number }) {
 }
 
 export function DeviceDetailPage() {
+  const { timezone } = useUIStore();
   const { id } = useParams<{ id: string }>();
   const [liveFields, setLiveFields] = useState<Record<string, any>>({});
   const [chartField, setChartField] = useState('');
@@ -523,8 +525,8 @@ export function DeviceDetailPage() {
               <span className={`dot dot-${d.status === 'idle' ? 'warn' : d.status}`} />
               {d.status}
             </span>
-            {latestTelemetry?.timestamp && (
-              <span className="mono faint" style={{ fontSize: 11 }}>Last seen {timeAgo(latestTelemetry.timestamp)}</span>
+            {d.lastSeenAt && (
+              <span className="mono faint" style={{ fontSize: 11 }}>Last seen {timeAgo(d.lastSeenAt)}</span>
             )}
           </div>
           <h1>
@@ -797,7 +799,7 @@ export function DeviceDetailPage() {
                       {rows.map((row: any, i: number) => (
                         <tr key={row._id ?? i} style={{ background: i % 2 === 0 ? 'transparent' : 'hsl(var(--surface-raised) / 0.4)' }}>
                           <td style={{ padding: '7px 12px', color: 'hsl(var(--muted-fg))', whiteSpace: 'nowrap', borderBottom: '1px solid hsl(var(--rule-ghost))' }}>
-                            {(() => { const raw = row.timestamp ?? row.ts ?? row.createdAt; if (!raw) return '—'; const d = new Date(new Date(raw).getTime() + 3 * 3600_000); return isNaN(d.getTime()) ? '—' : d.toISOString().slice(0, 19); })()}
+                            {formatTs(row.timestamp ?? row.ts ?? row.createdAt, timezone || undefined)}
                           </td>
                           {allFields.map((fk: string) => {
                             const val = row.fields?.[fk];
@@ -1243,7 +1245,7 @@ export function DeviceDetailPage() {
             const fmt       = d.payloadFormat ?? 'json';
             const dataObj: Record<string, unknown> = {};
             (schemaFields.length > 0 ? schemaFields : [{ key: 'temperature', type: 'number' }, { key: 'humidity', type: 'number' }])
-              .forEach((f: any) => { dataObj[f.key] = f.type === 'boolean' ? false : f.type === 'timestamp' ? new Date().toISOString() : f.type === 'string' ? 'value' : 24.3; });
+              .forEach((f: any) => { dataObj[f.key] = f.type === 'boolean' ? false : f.type === 'number' || !f.type ? 0 : ''; });
             const dataPayload = formatPayloadStr(dataObj, fmt);
             const brokerUrl = `mqtt://${MQTT_BROKER}:${MQTT_PORT}`;
             const rows = [
@@ -1301,7 +1303,7 @@ export function DeviceDetailPage() {
             const fmt    = d.payloadFormat ?? 'json';
             const dataObj: Record<string, unknown> = {};
             (schemaFields.length > 0 ? schemaFields : [{ key: 'temperature', type: 'number' }])
-              .forEach((f: any) => { dataObj[f.key] = f.type === 'boolean' ? false : f.type === 'timestamp' ? new Date().toISOString() : f.type === 'string' ? 'value' : 24.3; });
+              .forEach((f: any) => { dataObj[f.key] = f.type === 'boolean' ? false : f.type === 'number' || !f.type ? 0 : ''; });
             const dataPayload = formatPayloadStr({ type: 'telemetry', ...dataObj }, fmt);
             const cmdPayload  = JSON.stringify({ type: 'command', commandId: '<id>', name: '<cmd>', payload: {} }, null, 2);
             const ackPayload  = JSON.stringify({ type: 'ack', commandId: '<id>', status: 'executed' }, null, 2);
@@ -1339,7 +1341,7 @@ export function DeviceDetailPage() {
             const maskedKey = apiKeyVisible ? currentKey : `${currentKey?.slice(0, 8) ?? ''}••••••••`;
             const dataObj: Record<string, unknown> = { api_key: maskedKey };
             (schemaFields.length > 0 ? schemaFields : [{ key: 'temperature', type: 'number' }, { key: 'humidity', type: 'number' }])
-              .forEach((f: any) => { dataObj[f.key] = f.type === 'boolean' ? false : f.type === 'timestamp' ? new Date().toISOString() : f.type === 'string' ? 'value' : 24.3; });
+              .forEach((f: any) => { dataObj[f.key] = f.type === 'boolean' ? false : f.type === 'number' || !f.type ? 0 : ''; });
             const dataPayload = formatPayloadStr(dataObj, fmt);
             const ingestUrl  = `${API_BASE}/telemetry/ingest`;
             const pendingUrl = `${API_BASE}/commands/pending?apiKey=${maskedKey}`;
@@ -1387,7 +1389,7 @@ export function DeviceDetailPage() {
             const maskedKey = apiKeyVisible ? currentKey : `${currentKey?.slice(0, 8) ?? ''}••••`;
             const dataObj: Record<string, unknown> = {};
             (schemaFields.length > 0 ? schemaFields : [{ key: 'temperature', type: 'number' }])
-              .forEach((f: any) => { dataObj[f.key] = f.type === 'boolean' ? false : f.type === 'timestamp' ? new Date().toISOString() : f.type === 'string' ? 'value' : 24.3; });
+              .forEach((f: any) => { dataObj[f.key] = f.type === 'boolean' ? false : f.type === 'number' || !f.type ? 0 : ''; });
             const dataPayload = formatPayloadStr(dataObj, fmt);
             const base = `coap://${API_HOST}:${COAP_PORT}`;
             const rows = [
@@ -1425,7 +1427,7 @@ export function DeviceDetailPage() {
             const fmt = d.payloadFormat ?? 'json';
             const dataObj: Record<string, unknown> = {};
             (schemaFields.length > 0 ? schemaFields : [{ key: 'temperature', type: 'number' }])
-              .forEach((f: any) => { dataObj[f.key] = f.type === 'boolean' ? false : f.type === 'timestamp' ? new Date().toISOString() : f.type === 'string' ? 'value' : 24.3; });
+              .forEach((f: any) => { dataObj[f.key] = f.type === 'boolean' ? false : f.type === 'number' || !f.type ? 0 : ''; });
             const dataPayload = formatPayloadStr(dataObj, fmt);
             const host = `${API_HOST}:${TCP_PORT}`;
             const session = `# 1. Connect\nnc ${API_HOST} ${TCP_PORT}\n\n# 2. Authenticate (send apiKey then newline)\n${apiKeyVisible ? currentKey : (currentKey?.slice(0,8) ?? '') + '••••'}\n# Server replies: OK\n\n# 3. Send telemetry (one payload per line)\n${dataPayload.replace(/\n/g, ' ')}\n\n# 4. Server pushes commands:\n# CMD:{commandId}:{name and payload JSON}\n\n# 5. Acknowledge\nACK:{commandId}:executed`;
@@ -1452,7 +1454,7 @@ export function DeviceDetailPage() {
             const fmt = d.payloadFormat ?? 'json';
             const dataObj: Record<string, unknown> = {};
             (schemaFields.length > 0 ? schemaFields : [{ key: 'temperature', type: 'number' }])
-              .forEach((f: any) => { dataObj[f.key] = f.type === 'boolean' ? false : f.type === 'timestamp' ? new Date().toISOString() : f.type === 'string' ? 'value' : 24.3; });
+              .forEach((f: any) => { dataObj[f.key] = f.type === 'boolean' ? false : f.type === 'number' || !f.type ? 0 : ''; });
             const bodyStr = formatPayloadStr(dataObj, fmt).replace(/\n/g, ' ');
             const maskedKey = apiKeyVisible ? currentKey : `${currentKey?.slice(0, 8) ?? ''}••••`;
             const example = `${maskedKey}|${bodyStr}`;
