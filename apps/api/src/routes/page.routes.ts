@@ -173,10 +173,22 @@ export async function pageRoutes(app: FastifyInstance) {
       })
     );
 
+    // Collect schema fields per unique device so the frontend can show display labels
+    const uniqueDeviceIds = [...new Set(
+      page.widgets.filter((w: any) => w.deviceId).map((w: any) => String(w.deviceId))
+    )];
+    const deviceSchemas: Record<string, any[]> = {};
+    await Promise.all(uniqueDeviceIds.map(async (devId: string) => {
+      const dev = await deviceService.getById(devId, orgId);
+      const fields = (dev as any)?.meta?.dataSchema?.fields ?? [];
+      if (fields.length) deviceSchemas[devId] = fields;
+    }));
+
     return reply.send({
       page,
       widgetData,
       org: org ? { name: org.name, logoUrl: org.logoUrl } : null,
+      deviceSchemas,
     });
   });
 

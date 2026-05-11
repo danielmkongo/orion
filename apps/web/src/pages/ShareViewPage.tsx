@@ -569,7 +569,7 @@ function DeviceShareView({ token, data }: { token: string; data: any }) {
    ═══════════════════════════════════════════════════════════════════════ */
 function PageShareView({ pageData }: { pageData: any }) {
   const { T, resolved } = useT();
-  const { page, widgetData = {}, org } = pageData;
+  const { page, widgetData = {}, org, deviceSchemas = {} } = pageData;
   const allowExports: boolean = page.allowExports ?? false;
   const visibleWidgets = (page.widgets ?? []).filter((w: any) => w.type !== 'control_panel');
   const displayTitle = page.brandTitle?.trim() || page.name;
@@ -637,7 +637,7 @@ function PageShareView({ pageData }: { pageData: any }) {
                 const contentH = Math.max(80, pos.h * 82 - 55);
                 return (
                   <div key={w.id} style={{ gridColumn: `${pos.x + 1} / span ${pos.w}`, gridRow: `${pos.y + 1} / span ${pos.h}`, minWidth: 0, minHeight: 0 }}>
-                    <PageWidgetCard widget={w} data={widgetData[w.id]} T={T} allowExports={allowExports} contentH={contentH} />
+                    <PageWidgetCard widget={w} data={widgetData[w.id]} T={T} allowExports={allowExports} contentH={contentH} deviceSchemas={deviceSchemas} />
                   </div>
                 );
               })}
@@ -662,15 +662,23 @@ const WIDGET_ACCENT: Record<string, string> = {
 };
 const EXPORTABLE_TYPES = new Set(['line_chart', 'bar_chart', 'data_table']);
 
-function PageWidgetCard({ widget, data, T, allowExports, contentH }: {
-  widget: any; data: any; T: Tokens; allowExports?: boolean; contentH?: number;
+function PageWidgetCard({ widget, data, T, allowExports, contentH, deviceSchemas = {} }: {
+  widget: any; data: any; T: Tokens; allowExports?: boolean; contentH?: number; deviceSchemas?: Record<string, any[]>;
 }) {
   const [hovered, setHovered] = useState(false);
   const accent = WIDGET_ACCENT[widget.type] ?? T.primary;
   const canExport = allowExports && EXPORTABLE_TYPES.has(widget.type);
 
+  const prettyKey = (k: string) =>
+    k.replace(/([A-Z])/g, ' $1').replace(/[_\-]/g, ' ').replace(/\b\w/g, c => c.toUpperCase()).trim();
+  const schemaFields: any[] = deviceSchemas[widget.deviceId] ?? [];
+  const fieldLabel = (key: string) => {
+    const fm = schemaFields.find((f: any) => f.key === key);
+    return fm?.label?.trim() || prettyKey(key);
+  };
+
   if (widget.type === 'separator' || widget.type === 'text') {
-    return <PageWidgetContent widget={widget} data={data} T={T} contentH={contentH} />;
+    return <PageWidgetContent widget={widget} data={data} T={T} contentH={contentH} fieldLabel={fieldLabel} />;
   }
 
   const handleExport = () => {
@@ -716,14 +724,17 @@ function PageWidgetCard({ widget, data, T, allowExports, contentH }: {
 
       {/* Content */}
       <div style={{ flex: 1, overflow: 'hidden', minHeight: 0, position: 'relative' }}>
-        <PageWidgetContent widget={widget} data={data} T={T} contentH={contentH} />
+        <PageWidgetContent widget={widget} data={data} T={T} contentH={contentH} fieldLabel={fieldLabel} />
       </div>
     </div>
   );
 }
 
 /* ── Widget content by type ──────────────────────────────────────────── */
-function PageWidgetContent({ widget, data, T, contentH = 200 }: { widget: any; data: any; T: Tokens; contentH?: number }) {
+function PageWidgetContent({ widget, data, T, contentH = 200, fieldLabel: fl }: { widget: any; data: any; T: Tokens; contentH?: number; fieldLabel?: (k: string) => string }) {
+  const prettyKey = (k: string) =>
+    k.replace(/([A-Z])/g, ' $1').replace(/[_\-]/g, ' ').replace(/\b\w/g, c => c.toUpperCase()).trim();
+  const fieldLabel = fl ?? prettyKey;
   const chartH = Math.max(80, contentH - 16);
   const empty = (msg = 'No data') => (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', fontSize: 12, fontFamily: T.fontMono, color: T.fgMuted }}>{msg}</div>
@@ -733,7 +744,7 @@ function PageWidgetContent({ widget, data, T, contentH = 200 }: { widget: any; d
     const val = data?.fields?.[widget.field];
     return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 8, padding: 16 }}>
-        <div style={{ fontSize: 9.5, fontFamily: T.fontMono, letterSpacing: '0.12em', textTransform: 'uppercase', color: T.fgMuted }}>{(widget.field ?? 'value').replace(/_/g, ' ')}</div>
+        <div style={{ fontSize: 9.5, fontFamily: T.fontMono, letterSpacing: '0.12em', textTransform: 'uppercase', color: T.fgMuted }}>{fieldLabel(widget.field ?? 'value')}</div>
         <div style={{ fontFamily: T.fontDisplay, fontSize: `clamp(24px,${Math.max(3, contentH / 8)}px,60px)`, lineHeight: 1, color: T.primary, letterSpacing: '-0.02em' }}>
           {val !== undefined ? Number(val).toFixed(2) : <span style={{ fontSize: 22, color: T.fgFaint }}>—</span>}
         </div>
@@ -750,7 +761,7 @@ function PageWidgetContent({ widget, data, T, contentH = 200 }: { widget: any; d
       <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: '100%', padding: '10px 14px' }}>
         <div>
           <div style={{ fontSize: 9.5, fontFamily: T.fontMono, letterSpacing: '0.12em', textTransform: 'uppercase', color: T.fgMuted, marginBottom: 6 }}>
-            {(widget.field ?? 'value').replace(/_/g, ' ')}
+            {fieldLabel(widget.field ?? 'value')}
           </div>
           <div style={{ fontFamily: T.fontDisplay, fontSize: `clamp(20px,${Math.max(3, contentH / 7)}px,52px)`, lineHeight: 1, color: T.primary, letterSpacing: '-0.02em' }}>
             {val !== undefined ? Number(val).toFixed(2) : <span style={{ fontSize: 20, color: T.fgFaint }}>—</span>}
@@ -783,7 +794,7 @@ function PageWidgetContent({ widget, data, T, contentH = 200 }: { widget: any; d
           <path d={`M ${s.x} ${s.y} A ${r} ${r} 0 1 1 ${e.x} ${e.y}`} fill="none" stroke={T.border} strokeWidth={10} strokeLinecap="round" />
           {pct > 0 && <path d={`M ${s.x} ${s.y} A ${r} ${r} 0 ${large} 1 ${a.x} ${a.y}`} fill="none" stroke={T.primary} strokeWidth={10} strokeLinecap="round" />}
           <text x={cx} y={cy} textAnchor="middle" fill={T.fg} style={{ fontFamily: T.fontDisplay, fontSize: 22 }}>{val?.toFixed(1) ?? '—'}</text>
-          <text x={cx} y={cy + 16} textAnchor="middle" fill={T.fgMuted} style={{ fontFamily: T.fontMono, fontSize: 8.5, textTransform: 'uppercase' }}>{widget.field ?? ''}</text>
+          <text x={cx} y={cy + 16} textAnchor="middle" fill={T.fgMuted} style={{ fontFamily: T.fontMono, fontSize: 8.5, textTransform: 'uppercase' }}>{fieldLabel(widget.field ?? '')}</text>
         </svg>
       </div>
     );
@@ -804,7 +815,7 @@ function PageWidgetContent({ widget, data, T, contentH = 200 }: { widget: any; d
           </div>
         </div>
         <div style={{ fontSize: 9.5, fontFamily: T.fontMono, color: T.fgMuted, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-          {(widget.field ?? '').replace(/_/g, ' ')}
+          {fieldLabel(widget.field ?? '')}
         </div>
         {val !== undefined && <div style={{ fontSize: 11, fontFamily: T.fontMono, color: accent }}>{Number(val).toFixed(2)}</div>}
       </div>
@@ -820,7 +831,7 @@ function PageWidgetContent({ widget, data, T, contentH = 200 }: { widget: any; d
     return (
       <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', height: '100%', padding: '0 16px', gap: 10 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-          <span style={{ fontSize: 9.5, fontFamily: T.fontMono, color: T.fgMuted, textTransform: 'uppercase', letterSpacing: '0.1em' }}>{(widget.field ?? '').replace(/_/g, ' ')}</span>
+          <span style={{ fontSize: 9.5, fontFamily: T.fontMono, color: T.fgMuted, textTransform: 'uppercase', letterSpacing: '0.1em' }}>{fieldLabel(widget.field ?? '')}</span>
           <span style={{ fontFamily: T.fontDisplay, fontSize: 22, color: T.primary }}>{val !== undefined ? Number(val).toFixed(1) : '—'}</span>
         </div>
         <div style={{ height: 14, background: T.border, overflow: 'hidden', borderRadius: 3, position: 'relative' }}>
@@ -901,7 +912,7 @@ function PageWidgetContent({ widget, data, T, contentH = 200 }: { widget: any; d
           <tbody>
             {entries.map(([k, v], i) => (
               <tr key={k} style={{ background: i % 2 === 0 ? 'transparent' : T.surfaceHover }}>
-                <td style={{ padding: '7px 14px', color: T.fgMuted, borderBottom: `1px solid ${T.border}` }}>{k.replace(/_/g, ' ')}</td>
+                <td style={{ padding: '7px 14px', color: T.fgMuted, borderBottom: `1px solid ${T.border}` }}>{fieldLabel(k)}</td>
                 <td style={{ padding: '7px 14px', textAlign: 'right', color: T.fg, borderBottom: `1px solid ${T.border}`, fontVariantNumeric: 'tabular-nums' }}>{(v as number).toFixed(3)}</td>
               </tr>
             ))}
