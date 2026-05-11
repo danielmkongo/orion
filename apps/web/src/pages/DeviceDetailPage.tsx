@@ -1836,6 +1836,93 @@ export function DeviceDetailPage() {
                   </div>
                 )}
               </div>
+
+              {/* ── Danger zone ── */}
+              <div style={{ marginTop: 24, borderRadius: 8, border: '1px solid hsl(0 60% 40% / 0.35)', background: 'hsl(0 60% 10% / 0.18)', overflow: 'hidden' }}>
+                <div style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                  <div>
+                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.1em', color: 'hsl(0 70% 55%)', textTransform: 'uppercase', marginBottom: 2 }}>Danger zone</div>
+                    <div style={{ fontSize: 12, color: 'hsl(var(--fg-muted))' }}>Permanently erase all telemetry history for this device.</div>
+                  </div>
+                  <button
+                    className="btn btn-sm"
+                    style={{ flexShrink: 0, background: 'none', border: '1px solid hsl(0 60% 45%)', color: 'hsl(0 70% 60%)', fontSize: 11, fontFamily: 'var(--font-mono)', letterSpacing: '0.05em' }}
+                    onClick={() => { setShowDeleteData(v => !v); setDeleteConfirmText(''); setDeleteCountdown(0); }}
+                  >
+                    {showDeleteData ? 'Cancel' : 'Erase all data…'}
+                  </button>
+                </div>
+
+                {showDeleteData && (() => {
+                  const deviceName = d.name ?? '';
+                  const nameMatches = deleteConfirmText.trim() === deviceName;
+                  const isReady = nameMatches && deleteCountdown === 0 && !deletingData;
+                  return (
+                    <div style={{ borderTop: '1px solid hsl(0 60% 40% / 0.35)', padding: '16px 16px 20px' }}>
+                      <div style={{ fontSize: 12, color: 'hsl(var(--fg-muted))', lineHeight: 1.6, marginBottom: 14 }}>
+                        This will permanently delete <strong style={{ color: 'hsl(var(--fg))' }}>every telemetry record</strong> ever sent by this device.
+                        The device itself, its API key, and its schema will not be affected — only the historical data.<br />
+                        <span style={{ color: 'hsl(0 70% 60%)', fontFamily: 'var(--font-mono)', fontSize: 11 }}>This action cannot be undone.</span>
+                      </div>
+                      <label style={{ display: 'block', fontSize: 11, fontFamily: 'var(--font-mono)', color: 'hsl(var(--fg-muted))', marginBottom: 6 }}>
+                        Type <strong style={{ color: 'hsl(var(--fg))' }}>{deviceName}</strong> to confirm
+                      </label>
+                      <input
+                        className="input"
+                        style={{ width: '100%', marginBottom: 12, fontFamily: 'var(--font-mono)', fontSize: 12,
+                          borderColor: deleteConfirmText.length > 0 && !nameMatches ? 'hsl(0 70% 50%)' : undefined }}
+                        placeholder={deviceName}
+                        value={deleteConfirmText}
+                        onChange={e => {
+                          setDeleteConfirmText(e.target.value);
+                          if (e.target.value.trim() === deviceName && deleteCountdown === 0) {
+                            setDeleteCountdown(5);
+                            const tick = setInterval(() => {
+                              setDeleteCountdown(n => {
+                                if (n <= 1) { clearInterval(tick); return 0; }
+                                return n - 1;
+                              });
+                            }, 1000);
+                          }
+                        }}
+                      />
+                      <button
+                        className="btn btn-sm"
+                        disabled={!isReady}
+                        style={{
+                          width: '100%', fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: '0.06em',
+                          background: isReady ? 'hsl(0 65% 45%)' : 'hsl(0 30% 25%)',
+                          color: isReady ? '#fff' : 'hsl(0 30% 50%)',
+                          border: 'none', cursor: isReady ? 'pointer' : 'not-allowed',
+                          transition: 'background 0.2s',
+                        }}
+                        onClick={async () => {
+                          if (!isReady) return;
+                          setDeletingData(true);
+                          try {
+                            await apiClient.delete(`/devices/${id}/telemetry`);
+                            toast.success('All telemetry data erased');
+                            setShowDeleteData(false);
+                            setDeleteConfirmText('');
+                          } catch {
+                            toast.error('Failed to erase data');
+                          } finally {
+                            setDeletingData(false);
+                          }
+                        }}
+                      >
+                        {deletingData
+                          ? 'Erasing…'
+                          : !nameMatches
+                            ? 'I understand, delete all data forever'
+                            : deleteCountdown > 0
+                              ? `Wait ${deleteCountdown}s…`
+                              : '⚠ Delete all data forever'}
+                      </button>
+                    </div>
+                  );
+                })()}
+              </div>
             </div>
             <div style={{ padding: '14px 24px', borderTop: '1px solid hsl(var(--rule-ghost))', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
               <button className="btn btn-secondary btn-sm" onClick={() => setShowEditSchema(false)}>Cancel</button>
@@ -1880,94 +1967,6 @@ export function DeviceDetailPage() {
               </button>
             </div>
 
-            {/* ── Danger zone ── */}
-            <div style={{ margin: '0 24px 24px', borderRadius: 8, border: '1px solid hsl(0 60% 40% / 0.35)', background: 'hsl(0 60% 10% / 0.18)', overflow: 'hidden' }}>
-              <div style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-                <div>
-                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.1em', color: 'hsl(0 70% 55%)', textTransform: 'uppercase', marginBottom: 2 }}>Danger zone</div>
-                  <div style={{ fontSize: 12, color: 'hsl(var(--fg-muted))' }}>Permanently erase all telemetry history for this device.</div>
-                </div>
-                <button
-                  className="btn btn-sm"
-                  style={{ flexShrink: 0, background: 'none', border: '1px solid hsl(0 60% 45%)', color: 'hsl(0 70% 60%)', fontSize: 11, fontFamily: 'var(--font-mono)', letterSpacing: '0.05em' }}
-                  onClick={() => { setShowDeleteData(v => !v); setDeleteConfirmText(''); setDeleteCountdown(0); }}
-                >
-                  {showDeleteData ? 'Cancel' : 'Erase all data…'}
-                </button>
-              </div>
-
-              {showDeleteData && (() => {
-                const deviceName = d.name ?? '';
-                const nameMatches = deleteConfirmText.trim() === deviceName;
-                const isReady = nameMatches && deleteCountdown === 0 && !deletingData;
-                return (
-                  <div style={{ borderTop: '1px solid hsl(0 60% 40% / 0.35)', padding: '16px 16px 20px' }}>
-                    <div style={{ fontSize: 12, color: 'hsl(var(--fg-muted))', lineHeight: 1.6, marginBottom: 14 }}>
-                      This will permanently delete <strong style={{ color: 'hsl(var(--fg))' }}>every telemetry record</strong> ever sent by this device.
-                      The device itself, its API key, and its schema will not be affected — only the historical data.<br />
-                      <span style={{ color: 'hsl(0 70% 60%)', fontFamily: 'var(--font-mono)', fontSize: 11 }}>This action cannot be undone.</span>
-                    </div>
-
-                    <label style={{ display: 'block', fontSize: 11, fontFamily: 'var(--font-mono)', color: 'hsl(var(--fg-muted))', marginBottom: 6 }}>
-                      Type <strong style={{ color: 'hsl(var(--fg))' }}>{deviceName}</strong> to confirm
-                    </label>
-                    <input
-                      className="input"
-                      style={{ width: '100%', marginBottom: 12, fontFamily: 'var(--font-mono)', fontSize: 12,
-                        borderColor: deleteConfirmText.length > 0 && !nameMatches ? 'hsl(0 70% 50%)' : undefined }}
-                      placeholder={deviceName}
-                      value={deleteConfirmText}
-                      onChange={e => {
-                        setDeleteConfirmText(e.target.value);
-                        if (e.target.value.trim() === deviceName && deleteCountdown === 0) {
-                          setDeleteCountdown(5);
-                          const tick = setInterval(() => {
-                            setDeleteCountdown(n => {
-                              if (n <= 1) { clearInterval(tick); return 0; }
-                              return n - 1;
-                            });
-                          }, 1000);
-                        }
-                      }}
-                    />
-
-                    <button
-                      className="btn btn-sm"
-                      disabled={!isReady}
-                      style={{
-                        width: '100%', fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: '0.06em',
-                        background: isReady ? 'hsl(0 65% 45%)' : 'hsl(0 30% 25%)',
-                        color: isReady ? '#fff' : 'hsl(0 30% 50%)',
-                        border: 'none', cursor: isReady ? 'pointer' : 'not-allowed',
-                        transition: 'background 0.2s',
-                      }}
-                      onClick={async () => {
-                        if (!isReady) return;
-                        setDeletingData(true);
-                        try {
-                          await apiClient.delete(`/devices/${id}/telemetry`);
-                          toast.success('All telemetry data erased');
-                          setShowDeleteData(false);
-                          setDeleteConfirmText('');
-                        } catch {
-                          toast.error('Failed to erase data');
-                        } finally {
-                          setDeletingData(false);
-                        }
-                      }}
-                    >
-                      {deletingData
-                        ? 'Erasing…'
-                        : !nameMatches
-                          ? 'I understand, delete all data forever'
-                          : deleteCountdown > 0
-                            ? `Wait ${deleteCountdown}s…`
-                            : '⚠ Delete all data forever'}
-                    </button>
-                  </div>
-                );
-              })()}
-            </div>
           </div>
         </>
       )}
