@@ -278,8 +278,15 @@ export function DeviceDetailPage() {
   const numericFields = [...telemetryNumerics, ...schemaNumerics];
 
   useEffect(() => {
-    if (!chartField && numericFields.length > 0) setChartField(numericFields[0][0]);
-  }, [numericFields.length]); // eslint-disable-line
+    if (!chartField && numericFields.length > 0) {
+      // Prefer a field with real data over a schema-only placeholder
+      const firstReal = telemetryNumerics[0]?.[0] ?? numericFields[0][0];
+      setChartField(firstReal);
+    } else if (chartField && telemetryNumerics.length > 0 && !telemetryNumerics.some(([k]) => k === chartField)) {
+      // chartField is a schema-only key but device is sending different keys — switch to real data
+      setChartField(telemetryNumerics[0][0]);
+    }
+  }, [numericFields.length, telemetryNumerics.length]); // eslint-disable-line
 
   useEffect(() => { if (d?.apiKey) setCurrentKey(d.apiKey); }, [d?.apiKey]);
 
@@ -1339,9 +1346,10 @@ export function DeviceDetailPage() {
             const fmt     = d.payloadFormat ?? 'json';
             const cmdMode = (d as any).meta?.channelConfig?.cmdMode ?? 'poll';
             const maskedKey = apiKeyVisible ? currentKey : `${currentKey?.slice(0, 8) ?? ''}••••••••`;
-            const dataObj: Record<string, unknown> = { api_key: maskedKey };
+            const dataObj: Record<string, unknown> = {};
             (schemaFields.length > 0 ? schemaFields : [{ key: 'temperature', type: 'number' }, { key: 'humidity', type: 'number' }])
-              .forEach((f: any) => { dataObj[f.key] = f.type === 'boolean' ? false : f.type === 'number' || !f.type ? 0 : ''; });
+              .forEach((f: any) => { if (f.key !== 'api_key') dataObj[f.key] = f.type === 'boolean' ? false : f.type === 'number' || !f.type ? 0 : ''; });
+            dataObj.api_key = maskedKey;
             const dataPayload = formatPayloadStr(dataObj, fmt);
             const ingestUrl  = `${API_BASE}/telemetry/ingest`;
             const pendingUrl = `${API_BASE}/commands/pending?apiKey=${maskedKey}`;

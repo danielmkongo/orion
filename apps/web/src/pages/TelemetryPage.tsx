@@ -66,11 +66,22 @@ export function TelemetryPage() {
 
   useEffect(() => { setSelectedFields([]); setFeaturedField(''); }, [deviceId]);
   useEffect(() => {
-    if (selectedFields.length === 0 && numericFields.length > 0)
-      setSelectedFields(numericFields.slice(0, 2).map(f => f.key));
-    if (!featuredField && numericFields.length > 0)
-      setFeaturedField(numericFields[0].key);
-  }, [numericFields.length]); // eslint-disable-line react-hooks/exhaustive-deps
+    const realKeys = telemetryNumerics.map(f => f.key);
+    const allSchemaOnly = selectedFields.length > 0 && !selectedFields.some(k => realKeys.includes(k));
+
+    if (selectedFields.length === 0 && numericFields.length > 0) {
+      // Prefer real telemetry keys over schema-only placeholders on first init
+      const preferred = (realKeys.length > 0 ? realKeys : numericFields.map(f => f.key)).slice(0, 2);
+      setSelectedFields(preferred);
+      if (!featuredField) setFeaturedField(preferred[0] ?? '');
+    } else if (allSchemaOnly && realKeys.length > 0) {
+      // All selections are schema-only but device is sending different keys — follow the real data
+      setSelectedFields(realKeys.slice(0, 2));
+      setFeaturedField(realKeys[0]);
+    } else if (!featuredField && numericFields.length > 0) {
+      setFeaturedField(realKeys[0] ?? numericFields[0].key);
+    }
+  }, [numericFields.length, telemetryNumerics.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Sync showArea from schema whenever the primary selected field changes
   useEffect(() => {
