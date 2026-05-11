@@ -63,4 +63,13 @@ export async function deviceRoutes(app: FastifyInstance) {
     const modified = await telemetryService.renameField(id, req.user.orgId, oldKey, newKey);
     return reply.send({ ok: true, modified });
   });
+
+  app.delete('/devices/:id/telemetry', { preHandler: requirePermission('devices:delete') }, async (req, reply) => {
+    const { id } = req.params as any;
+    const device = await deviceService.getById(id, req.user.orgId);
+    if (!device) return reply.code(404).send({ error: 'Device not found' });
+    const { Telemetry } = await import('../models/Telemetry.js');
+    const result = await Telemetry.deleteMany({ deviceId: id, orgId: req.user.orgId });
+    return reply.send({ ok: true, deleted: result.deletedCount });
+  });
 }
