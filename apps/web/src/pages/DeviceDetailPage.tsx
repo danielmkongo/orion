@@ -112,7 +112,7 @@ export function DeviceDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [liveFields, setLiveFields] = useState<Record<string, any>>({});
   const [chartField, setChartField] = useState('');
-  const [chartRange, setChartRange] = useState('24h');
+  const [chartRange, setChartRange] = useState('7d');
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo]     = useState('');
   const [apiKeyVisible, setApiKeyVisible] = useState(false);
