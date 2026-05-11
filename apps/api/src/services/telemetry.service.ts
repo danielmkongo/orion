@@ -36,14 +36,6 @@ export function extractLocation(fields: Record<string, unknown>): {
   return undefined;
 }
 
-function coerceNumericStrings(fields: Record<string, unknown>): Record<string, unknown> {
-  const out: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(fields)) {
-    out[k] = (typeof v === 'string' && v.trim() !== '' && isFinite(Number(v))) ? Number(v) : v;
-  }
-  return out;
-}
-
 export class TelemetryService {
   async ingest(deviceId: string, orgId: string, point: TelemetryPoint): Promise<void> {
     // Coerce numeric strings to numbers so charts work regardless of device serialization
@@ -111,11 +103,9 @@ export class TelemetryService {
   }
 
   async getLatest(deviceId: string, orgId: string) {
-    const doc = await Telemetry.findOne({ deviceId, orgId })
+    return Telemetry.findOne({ deviceId, orgId })
       .sort({ timestamp: -1 })
-      .lean() as any;
-    if (doc?.fields) doc.fields = coerceNumericStrings(doc.fields);
-    return doc;
+      .lean();
   }
 
   async getLocationHistory(deviceId: string, orgId: string, from?: string, to?: string, limit = 1000) {
@@ -150,13 +140,10 @@ export class TelemetryService {
       .select(`fields.${field} timestamp -_id`)
       .lean();
 
-    return docs.map(d => {
-      const v = (d as any).fields[field];
-      return {
-        ts: (d as any).timestamp,
-        value: (typeof v === 'string' && v.trim() !== '' && isFinite(Number(v))) ? Number(v) : v,
-      };
-    });
+    return docs.map(d => ({
+      ts: (d as any).timestamp,
+      value: (d as any).fields[field],
+    }));
   }
 
   async getMultiDeviceSeries(deviceIds: string[], orgId: string, field: string, from: string, to: string, limit = 500) {
