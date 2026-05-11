@@ -109,7 +109,7 @@ export function TelemetryPage() {
     const { range: r, isCustom: ic, customFrom: cf, customTo: ct } = rangeRef.current;
     const now = Date.now();
     const f = ic && cf ? new Date(cf).toISOString() : new Date(now - r.h * 3600_000).toISOString();
-    const t = ic && ct ? new Date(ct + 'T23:59:59').toISOString() : new Date(now).toISOString();
+    const t = ic && ct ? new Date(ct + 'T23:59:59').toISOString() : new Date(now + 24 * 3600_000).toISOString();
     return { from: f, to: t };
   }, []);
 

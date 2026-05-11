@@ -214,7 +214,7 @@ export function DeviceDetailPage() {
       : new Date(now - (hoursMap[cr] ?? 24) * 3600_000).toISOString();
     const t = cr === 'custom' && ct
       ? new Date(ct).toISOString()
-      : new Date(now).toISOString();
+      : new Date(now + 24 * 3600_000).toISOString();
     return { from: f, to: t };
   };
 
