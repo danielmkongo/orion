@@ -671,13 +671,13 @@ export function AnalyticsPage() {
 
   // Build raw series
   const series: Series[] = useMemo(()=>selFields.map((k,i)=>{
-    const meta = schemaFields.find((f:any)=>f.key===k);
+    const meta = numericFields.find((f:any)=>f.key===k);
     const color = meta?.chartColor ?? COLORS[i%COLORS.length];
     const pts: Point[] = (fieldQueries[i]?.data?.data??[])
       .map((p:any)=>({ ts:new Date(p.ts).getTime(), value:p.value??0 }))
       .sort((a:Point,b:Point)=>a.ts-b.ts);
-    return { name: meta?.label||k.replace(/_/g,' '), data:pts, color, fieldKey:k };
-  }), [selFields, fieldQueries, schemaFields]);
+    return { name: meta?.label ?? k.replace(/_/g,' '), data:pts, color, fieldKey:k };
+  }), [selFields, fieldQueries, numericFields]);
 
   const activeOp = opField || selFields[0] || '';
   const activeFft = fftField || selFields[0] || '';
@@ -918,7 +918,7 @@ export function AnalyticsPage() {
 
                 {selFields.length>1&&<div><label style={lbl}>Apply to</label>
                   <select value={activeOp} onChange={e=>setOpField(e.target.value)} style={inp}>
-                    {selFields.map(k=>{const m=schemaFields.find((f:any)=>f.key===k); return <option key={k} value={k}>{m?.label||k}</option>;})}
+                    {selFields.map(k=>{const m=numericFields.find((f:any)=>f.key===k); return <option key={k} value={k}>{m?.label||k.replace(/_/g,' ')}</option>;})}
                   </select>
                 </div>}
 
@@ -981,7 +981,7 @@ export function AnalyticsPage() {
             <span style={{fontSize:9.5,fontFamily:'var(--font-mono)',color:'hsl(var(--muted-fg))',letterSpacing:'0.1em',textTransform:'uppercase'}}>FFT · PSD (Hann) · sr={fmtFreq(sr)} · Nyq={fmtFreq(nyquist)}</span>
             {selFields.length>1&&(
               <select value={activeFft} onChange={e=>setFftField(e.target.value)} style={{...inp,width:150}}>
-                {selFields.map(k=>{const m=schemaFields.find((f:any)=>f.key===k); return <option key={k} value={k}>{m?.label||k}</option>;})}
+                {selFields.map(k=>{const m=numericFields.find((f:any)=>f.key===k); return <option key={k} value={k}>{m?.label||k.replace(/_/g,' ')}</option>;})}
               </select>
             )}
             {!windowTs&&<span style={{fontSize:9,fontFamily:'var(--font-mono)',color:'hsl(var(--primary))',opacity:0.7}}>Tip: select a window on the Signal tab for windowed FFT</span>}
