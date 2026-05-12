@@ -179,11 +179,10 @@ export function LineChart({
 
   const fmtTs = (ts: number): string => {
     const d = new Date(ts);
-    const tz = 'UTC';
-    if (totalHrs > 7 * 24) return d.toLocaleDateString('en', { month: 'short', day: 'numeric', timeZone: tz });
-    if (totalHrs > 24)     return d.toLocaleDateString('en', { month: 'short', day: 'numeric', timeZone: tz }) + ' ' + d.toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz });
-    if (totalHrs > 1)      return d.toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz });
-    return d.toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false, timeZone: tz });
+    if (totalHrs > 7 * 24) return d.toLocaleDateString('en', { month: 'short', day: 'numeric' });
+    if (totalHrs > 24)     return d.toLocaleDateString('en', { month: 'short', day: 'numeric' }) + ' ' + d.toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit', hour12: false });
+    if (totalHrs > 1)      return d.toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit', hour12: false });
+    return d.toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
   };
 
   const toXY = (data: { ts: number; value: number }[], yFn: (v: number) => number) =>

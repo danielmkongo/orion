@@ -879,7 +879,7 @@ export function DeviceDetailPage() {
                 const maxV = chartFieldMeta?.max ?? 100;
                 if (ct === 'bar') {
                   const barData = seriesPoints.slice(-40).map(p => ({
-                    label: new Date(p.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' }),
+                    label: new Date(p.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
                     value: p.value,
                   }));
                   return <BarChart data={barData} color={chartColor} height={280} />;

@@ -44,7 +44,7 @@ function PreviewWidgetContent({ widget, data, contentH = 200 }: { widget: any; d
         <div style={{ fontFamily: 'var(--font-display)', fontSize: `clamp(22px,${Math.max(22, contentH / 5)}px,64px)`, lineHeight: 1, color: 'hsl(var(--primary))' }}>
           {val !== undefined ? Number(val).toFixed(2) : <span className="dim">—</span>}
         </div>
-        {data?.timestamp && <div className="mono faint" style={{ fontSize: 9 }}>{new Date(data.timestamp).toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false, timeZone: 'UTC' })}</div>}
+        {data?.timestamp && <div className="mono faint" style={{ fontSize: 9 }}>{new Date(data.timestamp).toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}</div>}
       </div>
     );
   }
@@ -151,7 +151,7 @@ function PreviewWidgetContent({ widget, data, contentH = 200 }: { widget: any; d
 
   if (widget.type === 'bar_chart') {
     const pts = (Array.isArray(data) ? data : []).slice(-24).map((p: any) => ({
-      label: new Date(p.ts).toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'UTC' }),
+      label: new Date(p.ts).toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit', hour12: false }),
       value: p.value,
     }));
     return pts.length > 0
