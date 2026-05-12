@@ -205,9 +205,12 @@ export function LineChart({
   const Y_TICKS = 4;
   const tickVals = Array.from({ length: Y_TICKS + 1 }, (_, i) => globalMin + (i / Y_TICKS) * globalRange);
 
-  // X axis ticks — pixel-distance deduplication to prevent overlap/doubling
+  // X axis ticks — pixel-distance deduplication based on actual label width
   const pivotData = prep(series[0] ?? { name: '', data: [] });
-  const MIN_X_PX = 68;
+  const midTs = pivotData[Math.floor(pivotData.length / 2)]?.ts ?? Date.now();
+  const sampleLabel = fmtTs(midTs);
+  // ~6px per char at 10px mono + 20px padding on each side
+  const MIN_X_PX = Math.max(sampleLabel.length * 6.5 + 20, 55);
   const targetCount = Math.max(2, Math.floor(innerW / MIN_X_PX));
   const rawStep = Math.max(1, Math.floor(pivotData.length / targetCount));
   const candidates = pivotData.filter((_, i) => i % rawStep === 0);
@@ -313,16 +316,20 @@ export function LineChart({
           ))}
 
           {/* X labels */}
-          {xTicks.map((p, i) => (
-            <text key={i}
-              x={Math.min(Math.max(xScale(p.ts), PAD.left + 4), PAD.left + innerW - 4)}
-              y={height - 8}
-              textAnchor="middle"
-              fill="currentColor" fillOpacity={0.38} fontSize={10}
-              fontFamily="var(--font-mono, monospace)">
-              {fmtTs(p.ts)}
-            </text>
-          ))}
+          {xTicks.map((p, i) => {
+            const x = xScale(p.ts);
+            const half = MIN_X_PX / 2;
+            const anchor = x < PAD.left + half ? 'start' : x > PAD.left + innerW - half ? 'end' : 'middle';
+            return (
+              <text key={i}
+                x={x} y={height - 8}
+                textAnchor={anchor}
+                fill="currentColor" fillOpacity={0.38} fontSize={10}
+                fontFamily="var(--font-mono, monospace)">
+                {fmtTs(p.ts)}
+              </text>
+            );
+          })}
 
           {/* Area fills + lines + gap connectors — gap-aware per series */}
           {series.map((s, si) => {
