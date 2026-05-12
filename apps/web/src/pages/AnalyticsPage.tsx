@@ -4,15 +4,16 @@ import React, {
 import { useQuery, useQueries } from '@tanstack/react-query';
 import {
   Activity, X, Download, ChevronDown, Waves, RefreshCw,
-  BarChart2, Box, Layers,
+  BarChart2, Box, Layers, Maximize2, Minimize2,
 } from 'lucide-react';
+import { useUIStore } from '@/store/ui.store';
 import { devicesApi } from '@/api/devices';
 import { telemetryApi } from '@/api/telemetry';
 import {
   computeStats, movingAverage, exponentialMA, differentiate, integrate,
   computePSD, applyLowPass, applyHighPass, applyBandPass, applyNotch,
   detectSampleRate, niceTicks, fmtFreq, fmtPeriod,
-  computeHistogram, correlationMatrix, computeSpectrogram, runPCA,
+  computeHistogram, correlationMatrix, computeSpectrogram,
   type Stats, type FFTBin,
 } from '@/lib/dsp';
 
@@ -412,6 +413,8 @@ function CorrelationHeatmap({ series }: { series:Series[] }) {
 
 // ── 3D Scatter (Canvas, PCA or direct) ──────────────────────────────────────
 
+type Cloud = { name: string; color: string; pts: [number,number,number][]; };
+
 function Scatter3D({ series, windowTs, height=440 }: { series:Series[]; windowTs:[number,number]|null; height?:number }) {
   const wRef = useRef<HTMLDivElement>(null);
   const cRef = useRef<HTMLCanvasElement>(null);
@@ -422,7 +425,7 @@ function Scatter3D({ series, windowTs, height=440 }: { series:Series[]; windowTs
 
   useEffect(()=>{ if(!wRef.current) return; const ro=new ResizeObserver(([e])=>setW(Math.floor(e.contentRect.width))); ro.observe(wRef.current); return ()=>ro.disconnect(); },[]);
 
-  const { points3D, labels, explainedVar, isPCA, c0, c1 } = useMemo(() => {
+  const { points3D, labels, c0, c1, clouds } = useMemo(() => {
     const filtered = series.map(s => ({
       ...s,
       data: windowTs ? s.data.filter(p=>p.ts>=windowTs[0]&&p.ts<=windowTs[1]) : s.data,
@@ -430,47 +433,32 @@ function Scatter3D({ series, windowTs, height=440 }: { series:Series[]; windowTs
 
     const primaryColor = filtered[0]?.color ?? COLORS[0];
     const darkenedPrimary = lerpColor(0.15, '#111111', primaryColor);
+    const emptyReturn = { points3D:[] as [number,number,number][], labels:['x(t)','x(t-1)','x(t-2)'], c0:darkenedPrimary, c1:primaryColor, clouds:null as Cloud[]|null };
 
-    if (filtered.length === 0 || filtered.every(s=>s.data.length===0)) {
-      return { points3D:[], labels:['','',''], explainedVar:[], isPCA:false, c0:darkenedPrimary, c1:primaryColor };
-    }
+    if (filtered.length === 0 || filtered.every(s=>s.data.length===0)) return emptyReturn;
 
     if (filtered.length === 1) {
-      // Phase space: x[t], x[t-1], x[t-2] — gradient from dark→full field color
+      // Single parameter: phase space reconstruction x(t), x(t-1), x(t-2)
       const vals = filtered[0].data.map(p=>p.value);
       const pts = vals.slice(2).map((v,i)=>[vals[i+2],vals[i+1],vals[i]] as [number,number,number]);
-      return { points3D: pts, labels:['x(t)','x(t-1)','x(t-2)'], explainedVar:[], isPCA:false, c0:darkenedPrimary, c1:primaryColor };
+      return { points3D: pts, labels:['x(t)','x(t-1)','x(t-2)'], c0:darkenedPrimary, c1:primaryColor, clouds:null };
     }
 
-    // Align timestamps (use primary series timestamps)
-    const primary = filtered[0].data;
-    const aligned = primary.map(p => {
-      const row = filtered.map(s => {
-        const nearest = s.data.reduce((a,b) => Math.abs(b.ts-p.ts)<Math.abs(a.ts-p.ts)?b:a, s.data[0] ?? {ts:0,value:0});
-        return nearest?.value ?? 0;
-      });
-      return row;
-    }).filter(r => r.every(isFinite));
+    // 2+ parameters: each gets its own phase-space cloud normalized to [-1,1] independently.
+    // Overlaying them shows how each parameter's dynamics cluster — correlated parameters
+    // overlap, uncorrelated ones separate cleanly (Edge Impulse-style feature view).
+    const paramClouds: Cloud[] = filtered
+      .filter(s => s.data.length >= 3)
+      .map(s => {
+        const raw = s.data.map(p=>p.value);
+        const mn = Math.min(...raw), mx = Math.max(...raw), r = mx-mn||1;
+        const n = raw.map(v => 2*(v-mn)/r-1);
+        const pts = n.slice(2).map((v,i)=>[n[i+2],n[i+1],n[i]] as [number,number,number]);
+        return { name: s.name, color: s.color, pts };
+      })
+      .filter(c => c.pts.length > 0);
 
-    if (filtered.length === 2) {
-      // Gradient between the two field colors so each contributes visually
-      const v1=aligned.map(r=>r[0]), v2=aligned.map(r=>r[1]);
-      const dv1=v1.slice(1).map((v,i)=>v-v1[i]);
-      const pts = dv1.map((d,i)=>[v1[i+1],v2[i+1],d] as [number,number,number]);
-      return { points3D:pts, labels:[filtered[0].name, filtered[1].name, `d(${filtered[0].name})/dt`], explainedVar:[], isPCA:false, c0:filtered[0].color, c1:filtered[1].color };
-    }
-
-    // PCA for 3+ fields — gradient from dark→full primary color
-    const pca = runPCA(aligned, 3);
-    const pts = pca.scores.map(s=>[s[0]??0,s[1]??0,s[2]??0] as [number,number,number]);
-    return {
-      points3D: pts,
-      labels: pca.explainedVar.map((v,i)=>`PC${i+1} (${(v*100).toFixed(0)}%)`),
-      explainedVar: pca.explainedVar,
-      isPCA: true,
-      c0: darkenedPrimary,
-      c1: primaryColor,
-    };
+    return { points3D:[], labels:['x(t)','x(t-1)','x(t-2)'], c0:primaryColor, c1:primaryColor, clouds:paramClouds };
   }, [series, windowTs]);
 
   useEffect(() => {
@@ -478,38 +466,30 @@ function Scatter3D({ series, windowTs, height=440 }: { series:Series[]; windowTs
     canvas.width = W; canvas.height = height;
     const ctx = canvas.getContext('2d')!;
     ctx.clearRect(0,0,W,height);
-    if (!points3D.length) {
-      ctx.fillStyle = '#6b6960'; ctx.font = '11px JetBrains Mono, monospace';
-      ctx.textAlign = 'center'; ctx.fillText('Select a device and ≥ 1 parameter', W/2, height/2);
+
+    const isEmpty = clouds ? clouds.every(c=>c.pts.length===0) : points3D.length===0;
+    if (isEmpty) {
+      ctx.fillStyle='#6b6960'; ctx.font='11px JetBrains Mono, monospace';
+      ctx.textAlign='center'; ctx.fillText('Select a device and ≥ 1 parameter', W/2, height/2);
       return;
     }
-    // c0 = earlier / c1 = recent (both derived from field colors)
 
     const cx=W/2, cy=height/2, scale=Math.min(W,height)*0.38;
     const cosAz=Math.cos(az),sinAz=Math.sin(az),cosEl=Math.cos(el),sinEl=Math.sin(el);
-
-    function proj([x,y,z]:[number,number,number]): {sx:number;sy:number;depth:number} {
+    function proj([x,y,z]:[number,number,number]):{sx:number;sy:number;depth:number} {
       const x2=x*cosAz+z*sinAz, z2=-x*sinAz+z*cosAz;
       const y3=y*cosEl-z2*sinEl, z3=y*sinEl+z2*cosEl;
       return {sx:cx+x2*scale, sy:cy-y3*scale, depth:z3};
     }
 
-    // Normalize to [-1,1]
-    const coords = [0,1,2].map(d=>{
-      const vs=points3D.map(p=>p[d]);
-      const mn=Math.min(...vs),mx=Math.max(...vs),r=mx-mn||1;
-      return {min:mn,range:r};
-    });
-    const norm = points3D.map(p=>[
-      2*(p[0]-coords[0].min)/coords[0].range-1,
-      2*(p[1]-coords[1].min)/coords[1].range-1,
-      2*(p[2]-coords[2].min)/coords[2].range-1,
-    ] as [number,number,number]);
+    // Grid
+    ctx.strokeStyle='rgba(100,100,90,0.12)'; ctx.lineWidth=0.5;
+    for (let g=-1;g<=1;g+=0.5) {
+      const a=proj([g,-1,0]),b=proj([g,1,0]); ctx.beginPath(); ctx.moveTo(a.sx,a.sy); ctx.lineTo(b.sx,b.sy); ctx.stroke();
+      const c=proj([-1,g,0]),d2=proj([1,g,0]); ctx.beginPath(); ctx.moveTo(c.sx,c.sy); ctx.lineTo(d2.sx,d2.sy); ctx.stroke();
+    }
 
-    // Sort by depth
-    const indexed = norm.map((pt,i)=>({pt,i,proj:proj(pt)})).sort((a,b)=>a.proj.depth-b.proj.depth);
-
-    // Draw axes
+    // Axes
     const axLen=0.95;
     const axes:[[number,number,number],[number,number,number],string][] = [
       [[axLen,0,0],[-axLen,0,0],labels[0]??'X'],
@@ -517,8 +497,8 @@ function Scatter3D({ series, windowTs, height=440 }: { series:Series[]; windowTs
       [[0,0,axLen],[0,0,-axLen],labels[2]??'Z'],
     ];
     ctx.lineWidth=1; ctx.setLineDash([4,4]);
-    axes.forEach(([pos,,label],ai) => {
-      const p0=proj([0,0,0]), p1=proj(pos as [number,number,number]);
+    axes.forEach(([pos,,label],ai)=>{
+      const p0=proj([0,0,0]),p1=proj(pos as [number,number,number]);
       ctx.strokeStyle=COLORS[ai]+'55';
       ctx.beginPath(); ctx.moveTo(p0.sx,p0.sy); ctx.lineTo(p1.sx,p1.sy); ctx.stroke();
       ctx.setLineDash([]);
@@ -528,54 +508,52 @@ function Scatter3D({ series, windowTs, height=440 }: { series:Series[]; windowTs
     });
     ctx.setLineDash([]);
 
-    // Draw grid on XY plane
-    ctx.strokeStyle='rgba(100,100,90,0.12)'; ctx.lineWidth=0.5;
-    for (let g=-1;g<=1;g+=0.5) {
-      const a=proj([g,-1,0]),b=proj([g,1,0]); ctx.beginPath(); ctx.moveTo(a.sx,a.sy); ctx.lineTo(b.sx,b.sy); ctx.stroke();
-      const c=proj([-1,g,0]),d2=proj([1,g,0]); ctx.beginPath(); ctx.moveTo(c.sx,c.sy); ctx.lineTo(d2.sx,d2.sy); ctx.stroke();
-    }
-
-    // Draw points
-    const n=indexed.length;
-    indexed.forEach(({pt:_,i,proj:p},order) => {
-      const t=order/Math.max(1,n-1);
-      const col=lerpColor(t,c0,c1);
-      const r=Math.max(1.5,3.5*(1-(p.depth+1)/3));
-      ctx.beginPath(); ctx.arc(p.sx,p.sy,r,0,Math.PI*2);
-      ctx.fillStyle=col+'cc'; ctx.fill();
-    });
-
-    // Legend: time gradient using field colors
-    const grd=ctx.createLinearGradient(W-90,height-24,W-10,height-24);
-    grd.addColorStop(0,c0); grd.addColorStop(1,c1);
-    ctx.fillStyle=grd; ctx.fillRect(W-90,height-18,80,6);
-    ctx.fillStyle='#6b6960'; ctx.font='9px JetBrains Mono, monospace';
-    ctx.textAlign='left'; ctx.fillText('Earlier',W-90,height-22);
-    ctx.textAlign='right'; ctx.fillText('Recent',W-6,height-22);
-
-    // Info
-    ctx.fillStyle='#6b6960'; ctx.font='10px JetBrains Mono, monospace';
-    ctx.textAlign='left';
-    ctx.fillText(isPCA?`PCA · ${n} samples`:`Phase space · ${n} pts`, 12, 20);
-    ctx.fillText('drag to rotate', 12, height-10);
-
-    if (explainedVar.length) {
-      explainedVar.forEach((v,i)=>{
-        const y=height-20-i*16;
-        ctx.fillStyle=COLORS[i];
-        ctx.fillRect(12,y-8,v*(W<400?80:120),8);
-        ctx.fillStyle='#6b6960'; ctx.textAlign='left';
-        ctx.fillText(`PC${i+1} ${(v*100).toFixed(1)}%`,12+(v*(W<400?80:120))+6,y);
+    if (clouds && clouds.length > 0) {
+      // Multi-parameter: depth-sort across all clouds, draw each point in its parameter color
+      const allPts = clouds.flatMap(cloud=>cloud.pts.map(pt=>({pt,color:cloud.color})));
+      allPts.map(item=>({...item,p:proj(item.pt)})).sort((a,b)=>a.p.depth-b.p.depth)
+        .forEach(({p,color})=>{
+          const r=Math.max(1.5,3*(1-(p.depth+1)/3));
+          ctx.beginPath(); ctx.arc(p.sx,p.sy,r,0,Math.PI*2);
+          ctx.fillStyle=color+'aa'; ctx.fill();
+        });
+      // Per-parameter legend
+      ctx.font='10px JetBrains Mono, monospace';
+      clouds.forEach((cloud,i)=>{
+        const ly=18+i*18;
+        ctx.fillStyle=cloud.color+'dd'; ctx.beginPath(); ctx.arc(16,ly-4,5,0,Math.PI*2); ctx.fill();
+        ctx.fillStyle=cloud.color; ctx.textAlign='left'; ctx.fillText(cloud.name,26,ly);
       });
+      ctx.fillStyle='#6b6960'; ctx.font='9px JetBrains Mono, monospace'; ctx.textAlign='left';
+      ctx.fillText(`${allPts.length} pts · overlapping = correlated · drag to rotate`, 12, height-10);
+    } else {
+      // Single parameter: time gradient in field color
+      const coords=[0,1,2].map(d=>{const vs=points3D.map(p=>p[d]);const mn=Math.min(...vs),mx=Math.max(...vs),r=mx-mn||1;return{min:mn,range:r};});
+      const norm=points3D.map(p=>[2*(p[0]-coords[0].min)/coords[0].range-1,2*(p[1]-coords[1].min)/coords[1].range-1,2*(p[2]-coords[2].min)/coords[2].range-1] as [number,number,number]);
+      const indexed=norm.map((pt,i)=>({pt,i,proj:proj(pt)})).sort((a,b)=>a.proj.depth-b.proj.depth);
+      const n=indexed.length;
+      indexed.forEach(({proj:p},order)=>{
+        const t=order/Math.max(1,n-1);
+        const col=lerpColor(t,c0,c1);
+        const r=Math.max(1.5,3.5*(1-(p.depth+1)/3));
+        ctx.beginPath(); ctx.arc(p.sx,p.sy,r,0,Math.PI*2); ctx.fillStyle=col+'cc'; ctx.fill();
+      });
+      const grd=ctx.createLinearGradient(W-90,height-24,W-10,height-24);
+      grd.addColorStop(0,c0); grd.addColorStop(1,c1);
+      ctx.fillStyle=grd; ctx.fillRect(W-90,height-18,80,6);
+      ctx.fillStyle='#6b6960'; ctx.font='9px JetBrains Mono, monospace';
+      ctx.textAlign='left'; ctx.fillText('Earlier',W-90,height-22);
+      ctx.textAlign='right'; ctx.fillText('Recent',W-6,height-22);
+      ctx.fillStyle='#6b6960'; ctx.font='10px JetBrains Mono, monospace'; ctx.textAlign='left';
+      ctx.fillText(`Phase space · ${n} pts · drag to rotate`,12,height-10);
     }
-  }, [points3D, labels, explainedVar, isPCA, az, el, W, height, c0, c1]);
+  }, [points3D, labels, az, el, W, height, c0, c1, clouds]);
 
-  const onMD = (e:React.MouseEvent) => setDragging({x:e.clientX,y:e.clientY,az,el});
-  const onMM = (e:React.MouseEvent) => {
-    if (!dragging) return;
-    const dx=e.clientX-dragging.x, dy=e.clientY-dragging.y;
-    setAz(dragging.az+dx*0.008);
-    setEl(Math.max(-1.4,Math.min(1.4,dragging.el-dy*0.008)));
+  const onMD=(e:React.MouseEvent)=>setDragging({x:e.clientX,y:e.clientY,az,el});
+  const onMM=(e:React.MouseEvent)=>{
+    if(!dragging) return;
+    setAz(dragging.az+(e.clientX-dragging.x)*0.008);
+    setEl(Math.max(-1.4,Math.min(1.4,dragging.el-(e.clientY-dragging.y)*0.008)));
   };
 
   return (
@@ -634,7 +612,15 @@ export function AnalyticsPage() {
   const [fBW,         setFBW]         = useState(1);
   const [fftField,    setFftField]    = useState('');
   const [showPipeline,setShowPipeline]= useState(true);
+  const [splitView,   setSplitView]   = useState(false);
+  const [focusMode,   setFocusMode]   = useState(false);
   const svgRef = useRef<SVGSVGElement>(null);
+
+  // Focus mode: collapse the app sidebar for full-width analytics
+  useEffect(() => {
+    if (focusMode) useUIStore.getState().setSidebarCollapsed(true);
+    return () => { useUIStore.getState().setSidebarCollapsed(false); };
+  }, [focusMode]);
 
   // Devices
   const { data: devData } = useQuery({ queryKey:['devices-analytics'], queryFn:()=>devicesApi.list({limit:200}) });
@@ -777,6 +763,10 @@ export function AnalyticsPage() {
         <div style={{display:'flex',gap:8,marginTop:8}}>
           <button className="btn btn-sm btn-outline" onClick={()=>exportCSV(series,overlaySeries,windowTs)} style={{gap:5}}><Download size={12}/>CSV</button>
           <button className="btn btn-sm btn-outline" onClick={()=>{ const c=document.createElement('canvas');c.width=svgRef.current?.clientWidth??800;c.height=svgRef.current?.clientHeight??360;const s=new XMLSerializer();const blob=new Blob([s.serializeToString(svgRef.current!)],{type:'image/svg+xml'});const a=Object.assign(document.createElement('a'),{href:URL.createObjectURL(blob),download:'signal.svg'});a.click(); }} style={{gap:5}}><Download size={12}/>SVG</button>
+          <button className="btn btn-sm btn-outline" onClick={()=>setFocusMode(v=>!v)} title={focusMode?'Exit focus mode':'Focus mode — hide sidebar'} style={{gap:5}}>
+            {focusMode ? <Minimize2 size={12}/> : <Maximize2 size={12}/>}
+            {focusMode ? 'Exit focus' : 'Focus'}
+          </button>
         </div>
       </div>
 
@@ -874,11 +864,30 @@ export function AnalyticsPage() {
                       {s.name}
                     </div>
                   ))}
-                  <button onClick={()=>setShowPipeline(v=>!v)} style={{marginLeft:'auto',fontSize:9,fontFamily:'var(--font-mono)',background:'none',border:0,cursor:'pointer',color:'hsl(var(--muted-fg))',display:'flex',alignItems:'center',gap:4}}>
-                    <Layers size={10}/>{showPipeline?'Hide':'Show'} pipeline
-                  </button>
+                  <div style={{marginLeft:'auto',display:'flex',gap:10}}>
+                    {overlaySeries.length>0&&<button onClick={()=>setSplitView(v=>!v)} style={{fontSize:9,fontFamily:'var(--font-mono)',background:'none',border:0,cursor:'pointer',color:splitView?'hsl(var(--primary))':'hsl(var(--muted-fg))',display:'flex',alignItems:'center',gap:4}}>
+                      <svg width={10} height={10} viewBox="0 0 10 10"><rect x={0} y={0} width={10} height={4} rx={1} fill="currentColor" opacity={0.7}/><rect x={0} y={6} width={10} height={4} rx={1} fill="currentColor" opacity={0.4}/></svg>
+                      {splitView?'Merged':'Split view'}
+                    </button>}
+                    <button onClick={()=>setShowPipeline(v=>!v)} style={{fontSize:9,fontFamily:'var(--font-mono)',background:'none',border:0,cursor:'pointer',color:'hsl(var(--muted-fg))',display:'flex',alignItems:'center',gap:4}}>
+                      <Layers size={10}/>{showPipeline?'Hide':'Show'} pipeline
+                    </button>
+                  </div>
                 </div>
-                <SignalChart series={series} overlays={overlaySeries} windowTs={windowTs} onWindow={setWindowTs} height={340} svgRef={svgRef}/>
+                {splitView && overlaySeries.length > 0 ? (
+                  <>
+                    <div style={{borderBottom:'2px dashed hsl(var(--border))',position:'relative'}}>
+                      <span style={{position:'absolute',top:6,left:14,fontSize:8,fontFamily:'var(--font-mono)',letterSpacing:'0.1em',textTransform:'uppercase',color:'hsl(var(--muted-fg))'}}>Original signal</span>
+                      <SignalChart series={series} overlays={[]} windowTs={windowTs} onWindow={setWindowTs} height={200} svgRef={svgRef}/>
+                    </div>
+                    <div style={{position:'relative'}}>
+                      <span style={{position:'absolute',top:6,left:14,fontSize:8,fontFamily:'var(--font-mono)',letterSpacing:'0.1em',textTransform:'uppercase',color:'hsl(var(--primary))',opacity:0.8}}>DSP output</span>
+                      <SignalChart series={overlaySeries} overlays={[]} windowTs={windowTs} onWindow={()=>{}} height={200}/>
+                    </div>
+                  </>
+                ) : (
+                  <SignalChart series={series} overlays={overlaySeries} windowTs={windowTs} onWindow={setWindowTs} height={340} svgRef={svgRef}/>
+                )}
                 <StatsRow series={series} windowTs={windowTs}/>
               </>
             )}
@@ -901,7 +910,7 @@ export function AnalyticsPage() {
                     <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'6px 10px',background:'hsl(var(--surface-raised))',borderLeft:`3px solid ${ov.color}`}}>
                       <div>
                         <div style={{fontSize:9.5,fontFamily:'var(--font-mono)',color:ov.color}}>{ov.label}</div>
-                        <div style={{fontSize:8,fontFamily:'var(--font-mono)',color:'hsl(var(--muted-fg))',marginTop:1}}>{ov.fieldKey}</div>
+                        <div style={{fontSize:8,fontFamily:'var(--font-mono)',color:'hsl(var(--muted-fg))',marginTop:1}}>{numericFields.find((f:any)=>f.key===ov.fieldKey)?.label ?? ov.fieldKey.replace(/_/g,' ')}</div>
                       </div>
                       <button onClick={()=>setOverlays(p=>p.filter(o=>o.id!==ov.id))} style={{background:'none',border:0,cursor:'pointer',color:'hsl(var(--muted-fg))',padding:0}}><X size={11}/></button>
                     </div>
@@ -1023,12 +1032,12 @@ export function AnalyticsPage() {
         <div style={{border:'1px solid hsl(var(--border))',borderTop:'none'}}>
           <div style={{padding:'10px 16px',borderBottom:'1px solid hsl(var(--border))'}}>
             <span style={{fontSize:9.5,fontFamily:'var(--font-mono)',color:'hsl(var(--muted-fg))',letterSpacing:'0.1em',textTransform:'uppercase'}}>
-              {selFields.length>=3?'PCA 3D Scatter':selFields.length===2?'Feature Space (field1 vs field2 vs d/dt)':'Phase Space Reconstruction · x(t), x(t-1), x(t-2)'}
+              {selFields.length>=2?`Phase space · ${selFields.length} parameters · overlapping clouds = correlated dynamics`:'Phase space reconstruction · x(t), x(t-1), x(t-2)'}
             </span>
           </div>
           <Scatter3D series={series} windowTs={windowTs} height={460}/>
           <div style={{padding:'8px 16px',fontSize:8.5,fontFamily:'var(--font-mono)',color:'hsl(var(--muted-fg))',borderTop:'1px solid hsl(var(--border))'}}>
-            {selFields.length<2?'Add more parameters to see multi-dimensional feature space · Drag to rotate · Color = time':'Drag to rotate · Color = time gradient (blue=earliest, orange=most recent)'}
+            {selFields.length<2?'Add more parameters to see overlaid phase-space clouds · drag to rotate':'Each parameter gets its own colored cloud · overlapping regions = similar dynamics · drag to rotate'}
           </div>
         </div>
       )}
