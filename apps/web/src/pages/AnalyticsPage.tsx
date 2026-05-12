@@ -218,7 +218,7 @@ function SignalChart({ series, overlays: ovSeries, windowTs, onWindow, height=36
 
 // ── PSD Chart ─────────────────────────────────────────────────────────────────
 
-function PSDChart({ bins, sampleRateHz, height=220 }: { bins:FFTBin[]; sampleRateHz:number; height?:number }) {
+function PSDChart({ bins, sampleRateHz, height=220, color='#ff5b1f' }: { bins:FFTBin[]; sampleRateHz:number; height?:number; color?:string }) {
   const uid = useId();
   const cRef = useRef<HTMLDivElement>(null);
   const [W, setW] = useState(800);
@@ -242,15 +242,15 @@ function PSDChart({ bins, sampleRateHz, height=220 }: { bins:FFTBin[]; sampleRat
         <defs>
           <clipPath id={clip}><rect x={P.left} y={P.top} width={iW} height={iH}/></clipPath>
           <linearGradient id={`${uid}-bg`} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#ff5b1f" stopOpacity={0.9}/>
-            <stop offset="100%" stopColor="#ff5b1f" stopOpacity={0.1}/>
+            <stop offset="0%" stopColor={color} stopOpacity={0.9}/>
+            <stop offset="100%" stopColor={color} stopOpacity={0.1}/>
           </linearGradient>
         </defs>
         {yT.map((v,i)=><line key={i} x1={P.left} y1={pY(v)} x2={P.left+iW} y2={pY(v)} stroke="hsl(var(--border))" strokeWidth={0.5}/>)}
-        {bins.map((b,i)=>{const x=fX(b.freq),y=pY(b.powerDb),bh=Math.max(0,iH-(y-P.top)); return <rect key={i} x={x} y={y} width={bW} height={bh} fill={i===hi?'#ff9f6b':`url(#${uid}-bg)`} clipPath={`url(#${clip})`}/>; })}
+        {bins.map((b,i)=>{const x=fX(b.freq),y=pY(b.powerDb),bh=Math.max(0,iH-(y-P.top)); return <rect key={i} x={x} y={y} width={bW} height={bh} fill={i===hi?color:`url(#${uid}-bg)`} clipPath={`url(#${clip})`}/>; })}
         {peak&&<>
-          <line x1={fX(peak.freq)} y1={P.top} x2={fX(peak.freq)} y2={pY(peak.powerDb)} stroke="#ff5b1f" strokeWidth={1} strokeDasharray="3 4" strokeOpacity={0.5}/>
-          <text x={fX(peak.freq)+4} y={P.top+13} fontSize={8} fontFamily="var(--font-mono)" fill="#ff5b1f" fillOpacity={0.85}>{fmtFreq(peak.freq)} · T={fmtPeriod(peak.freq)}</text>
+          <line x1={fX(peak.freq)} y1={P.top} x2={fX(peak.freq)} y2={pY(peak.powerDb)} stroke={color} strokeWidth={1} strokeDasharray="3 4" strokeOpacity={0.5}/>
+          <text x={fX(peak.freq)+4} y={P.top+13} fontSize={8} fontFamily="var(--font-mono)" fill={color} fillOpacity={0.85}>{fmtFreq(peak.freq)} · T={fmtPeriod(peak.freq)}</text>
         </>}
         {hi!==null&&bins[hi]&&(()=>{const b=bins[hi],x=fX(b.freq),tx=x>W-140?x-128:x+8; return <g>
           <rect x={tx} y={P.top+4} width={124} height={38} rx={3} fill="hsl(var(--surface))" stroke="hsl(var(--border))"/>
@@ -422,18 +422,24 @@ function Scatter3D({ series, windowTs, height=440 }: { series:Series[]; windowTs
 
   useEffect(()=>{ if(!wRef.current) return; const ro=new ResizeObserver(([e])=>setW(Math.floor(e.contentRect.width))); ro.observe(wRef.current); return ()=>ro.disconnect(); },[]);
 
-  const { points3D, labels, explainedVar, isPCA } = useMemo(() => {
+  const { points3D, labels, explainedVar, isPCA, c0, c1 } = useMemo(() => {
     const filtered = series.map(s => ({
       ...s,
       data: windowTs ? s.data.filter(p=>p.ts>=windowTs[0]&&p.ts<=windowTs[1]) : s.data,
     }));
-    if (filtered.length === 0 || filtered.every(s=>s.data.length===0)) return { points3D:[], labels:['','',''], explainedVar:[], isPCA:false };
+
+    const primaryColor = filtered[0]?.color ?? COLORS[0];
+    const darkenedPrimary = lerpColor(0.15, '#111111', primaryColor);
+
+    if (filtered.length === 0 || filtered.every(s=>s.data.length===0)) {
+      return { points3D:[], labels:['','',''], explainedVar:[], isPCA:false, c0:darkenedPrimary, c1:primaryColor };
+    }
 
     if (filtered.length === 1) {
-      // Phase space: x[t], x[t-1], x[t-2]
+      // Phase space: x[t], x[t-1], x[t-2] — gradient from dark→full field color
       const vals = filtered[0].data.map(p=>p.value);
       const pts = vals.slice(2).map((v,i)=>[vals[i+2],vals[i+1],vals[i]] as [number,number,number]);
-      return { points3D: pts, labels:['x(t)','x(t-1)','x(t-2)'], explainedVar:[], isPCA:false };
+      return { points3D: pts, labels:['x(t)','x(t-1)','x(t-2)'], explainedVar:[], isPCA:false, c0:darkenedPrimary, c1:primaryColor };
     }
 
     // Align timestamps (use primary series timestamps)
@@ -447,13 +453,14 @@ function Scatter3D({ series, windowTs, height=440 }: { series:Series[]; windowTs
     }).filter(r => r.every(isFinite));
 
     if (filtered.length === 2) {
+      // Gradient between the two field colors so each contributes visually
       const v1=aligned.map(r=>r[0]), v2=aligned.map(r=>r[1]);
       const dv1=v1.slice(1).map((v,i)=>v-v1[i]);
       const pts = dv1.map((d,i)=>[v1[i+1],v2[i+1],d] as [number,number,number]);
-      return { points3D:pts, labels:[filtered[0].name, filtered[1].name, `d(${filtered[0].name})/dt`], explainedVar:[], isPCA:false };
+      return { points3D:pts, labels:[filtered[0].name, filtered[1].name, `d(${filtered[0].name})/dt`], explainedVar:[], isPCA:false, c0:filtered[0].color, c1:filtered[1].color };
     }
 
-    // PCA for 3+ fields
+    // PCA for 3+ fields — gradient from dark→full primary color
     const pca = runPCA(aligned, 3);
     const pts = pca.scores.map(s=>[s[0]??0,s[1]??0,s[2]??0] as [number,number,number]);
     return {
@@ -461,6 +468,8 @@ function Scatter3D({ series, windowTs, height=440 }: { series:Series[]; windowTs
       labels: pca.explainedVar.map((v,i)=>`PC${i+1} (${(v*100).toFixed(0)}%)`),
       explainedVar: pca.explainedVar,
       isPCA: true,
+      c0: darkenedPrimary,
+      c1: primaryColor,
     };
   }, [series, windowTs]);
 
@@ -474,6 +483,7 @@ function Scatter3D({ series, windowTs, height=440 }: { series:Series[]; windowTs
       ctx.textAlign = 'center'; ctx.fillText('Select a device and ≥ 1 parameter', W/2, height/2);
       return;
     }
+    // c0 = earlier / c1 = recent (both derived from field colors)
 
     const cx=W/2, cy=height/2, scale=Math.min(W,height)*0.38;
     const cosAz=Math.cos(az),sinAz=Math.sin(az),cosEl=Math.cos(el),sinEl=Math.sin(el);
@@ -529,15 +539,15 @@ function Scatter3D({ series, windowTs, height=440 }: { series:Series[]; windowTs
     const n=indexed.length;
     indexed.forEach(({pt:_,i,proj:p},order) => {
       const t=order/Math.max(1,n-1);
-      const color=lerpColor(t,'#3b82f6','#ff5b1f');
+      const col=lerpColor(t,c0,c1);
       const r=Math.max(1.5,3.5*(1-(p.depth+1)/3));
       ctx.beginPath(); ctx.arc(p.sx,p.sy,r,0,Math.PI*2);
-      ctx.fillStyle=color+'cc'; ctx.fill();
+      ctx.fillStyle=col+'cc'; ctx.fill();
     });
 
-    // Legend: time gradient
+    // Legend: time gradient using field colors
     const grd=ctx.createLinearGradient(W-90,height-24,W-10,height-24);
-    grd.addColorStop(0,'#3b82f6'); grd.addColorStop(1,'#ff5b1f');
+    grd.addColorStop(0,c0); grd.addColorStop(1,c1);
     ctx.fillStyle=grd; ctx.fillRect(W-90,height-18,80,6);
     ctx.fillStyle='#6b6960'; ctx.font='9px JetBrains Mono, monospace';
     ctx.textAlign='left'; ctx.fillText('Earlier',W-90,height-22);
@@ -558,7 +568,7 @@ function Scatter3D({ series, windowTs, height=440 }: { series:Series[]; windowTs
         ctx.fillText(`PC${i+1} ${(v*100).toFixed(1)}%`,12+(v*(W<400?80:120))+6,y);
       });
     }
-  }, [points3D, labels, explainedVar, isPCA, az, el, W, height]);
+  }, [points3D, labels, explainedVar, isPCA, az, el, W, height, c0, c1]);
 
   const onMD = (e:React.MouseEvent) => setDragging({x:e.clientX,y:e.clientY,az,el});
   const onMM = (e:React.MouseEvent) => {
@@ -978,7 +988,7 @@ export function AnalyticsPage() {
           </div>
           <div style={{padding:'0 0 4px'}}>
             <div style={{padding:'8px 16px 0',fontSize:9,fontFamily:'var(--font-mono)',color:'hsl(var(--muted-fg))',textTransform:'uppercase',letterSpacing:'0.1em'}}>Power Spectral Density</div>
-            <PSDChart bins={psdBins} sampleRateHz={sr} height={220}/>
+            <PSDChart bins={psdBins} sampleRateHz={sr} height={220} color={(series.find(s=>s.fieldKey===activeFft)??series[0])?.color}/>
           </div>
           <div style={{borderTop:'1px solid hsl(var(--border))',padding:'8px 16px 0'}}>
             <div style={{fontSize:9,fontFamily:'var(--font-mono)',color:'hsl(var(--muted-fg))',textTransform:'uppercase',letterSpacing:'0.1em',marginBottom:4}}>Spectrogram (time × frequency)</div>
