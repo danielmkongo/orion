@@ -73,15 +73,12 @@ export interface ChartSeries {
   color?: string;
 }
 
-function splitByGaps(data: { ts: number; value: number }[], totalRangeMs = 0) {
+function splitByGaps(data: { ts: number; value: number }[]) {
   type P = { ts: number; value: number };
   if (data.length < 2) return { segments: [data], gaps: [] as { a: P; b: P }[] };
   const deltas = data.slice(1).map((p, i) => p.ts - data[i].ts).filter(d => d > 0).sort((a, b) => a - b);
   const median = deltas[Math.floor(deltas.length / 2)] ?? 0;
-  // Scale with visible range so long views don't show trivial gaps.
-  // totalRangeMs / 12 caps visible gaps at ~12; floor at max(1h, 4× cadence).
-  const rangeFloor = totalRangeMs > 0 ? totalRangeMs / 12 : 0;
-  const threshold = Math.max(3_600_000, median * 4, rangeFloor);
+  const threshold = Math.max(3_600_000, median * 4);
   const segments: P[][] = [];
   const gaps: { a: P; b: P }[] = [];
   let cur: P[] = [data[0]];
@@ -230,6 +227,9 @@ export function LineChart({
 
   const baselineY = PAD.top + innerH;
 
+  // Global gaps — computed once from the primary series (all fields share the same device clock)
+  const { gaps: globalGaps } = splitByGaps(pivotData);
+
   const handleMouseMove = useCallback((e: React.MouseEvent<SVGSVGElement>) => {
     if (!pivotData.length || !w) return;
     const rect = e.currentTarget.getBoundingClientRect();
@@ -339,7 +339,7 @@ export function LineChart({
             const color = s.color ?? PALETTE[si % PALETTE.length];
             const mapped = prep(s);
             const yFn = normalize ? makeLocalY(mapped) : globalY;
-            const { segments, gaps } = splitByGaps(mapped, maxTs - minTs);
+            const { segments, gaps } = splitByGaps(mapped);
             return (
               <g key={si}>
                 {showArea && segments.map((seg, gi) => seg.length > 1 && (
@@ -360,32 +360,45 @@ export function LineChart({
                 {gaps.map((gap, gi) => {
                   const ax = xScale(gap.a.ts), ay = yFn(gap.a.value);
                   const bx = xScale(gap.b.ts), by = yFn(gap.b.value);
-                  const mx = (ax + bx) / 2;
-                  // Clamp pill strictly inside data rectangle — never enters axis zones
-                  const pillY = Math.min(
-                    Math.max(Math.min(ay, by) - 14, PAD.top + 12),
-                    baselineY - 20
-                  );
-                  const label = fmtGapDur(gap.b.ts - gap.a.ts);
-                  const pillW = label.length * 6 + 14;
                   return (
-                    <g key={`g${gi}`} clipPath={`url(#${uid}-clip)`}>
-                      <line x1={ax} y1={ay} x2={bx} y2={by}
-                        stroke={color} strokeWidth={1}
-                        strokeDasharray="3 5" strokeOpacity={0.22} />
-                      <rect x={mx - pillW / 2} y={pillY - 9} width={pillW} height={15}
-                        rx={2} fill="none" stroke={color} strokeOpacity={0.3} />
-                      <text x={mx} y={pillY + 3.5} textAnchor="middle"
-                        fontSize={8} fontFamily="var(--font-mono,monospace)"
-                        fill={color} fillOpacity={0.5} letterSpacing="0.06em">
-                        {label}
-                      </text>
-                    </g>
+                    <line key={`gc${gi}`}
+                      x1={ax} y1={ay} x2={bx} y2={by}
+                      stroke={color} strokeWidth={1}
+                      strokeDasharray="3 5" strokeOpacity={0.22}
+                      clipPath={`url(#${uid}-clip)`} />
                   );
                 })}
               </g>
             );
           })}
+
+          {/* Gap pills — one per gap regardless of series count */}
+          {(() => {
+            let lastPillRight = -Infinity;
+            return globalGaps.map((gap, gi) => {
+              const ax = xScale(gap.a.ts);
+              const bx = xScale(gap.b.ts);
+              const mx = (ax + bx) / 2;
+              const label = fmtGapDur(gap.b.ts - gap.a.ts);
+              const pillW = label.length * 6 + 14;
+              const pillLeft = mx - pillW / 2;
+              const pillRight = mx + pillW / 2;
+              if (bx - ax < pillW + 16 || pillLeft < lastPillRight + 8) return null;
+              lastPillRight = pillRight;
+              const pillY = PAD.top + 14;
+              return (
+                <g key={`pill${gi}`} clipPath={`url(#${uid}-clip)`}>
+                  <rect x={pillLeft} y={pillY - 9} width={pillW} height={15}
+                    rx={2} fill="none" stroke="currentColor" strokeOpacity={0.2} />
+                  <text x={mx} y={pillY + 3.5} textAnchor="middle"
+                    fontSize={8} fontFamily="var(--font-mono,monospace)"
+                    fill="currentColor" fillOpacity={0.35} letterSpacing="0.06em">
+                    {label}
+                  </text>
+                </g>
+              );
+            });
+          })()}
 
           {/* Data dots — shown when dataset is sparse */}
           {showDots && series.map((s, si) => {
