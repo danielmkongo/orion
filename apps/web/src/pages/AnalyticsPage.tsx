@@ -614,13 +614,13 @@ export function AnalyticsPage() {
   const lbl:React.CSSProperties={display:'block',fontSize:8.5,fontFamily:'var(--font-mono)',letterSpacing:'0.12em',textTransform:'uppercase',color:'hsl(var(--muted-fg))',marginBottom:3};
 
   return (
-    <div style={{padding:'28px 32px 80px',maxWidth:1600,margin:'0 auto'}}>
+    <div className="page">
 
       {/* ── Header ── */}
-      <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:24}}>
+      <div className="ph" style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}>
         <div>
-          <div className="eyebrow" style={{marginBottom:6,fontSize:9.5}}>Signal Intelligence</div>
-          <h1 style={{fontFamily:'var(--font-display)',fontSize:40,lineHeight:1,margin:0,letterSpacing:'-0.03em'}}>Analytics</h1>
+          <span className="eyebrow">Signal Intelligence</span>
+          <h1><em>Analytics</em>.</h1>
         </div>
         <div style={{display:'flex',gap:8,marginTop:8,alignItems:'center'}}>
           {loading&&<RefreshCw size={13} style={{animation:'spin 1s linear infinite',color:'hsl(var(--muted-fg))'}}/>}
