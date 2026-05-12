@@ -1178,7 +1178,7 @@ function DeviceChart({ token, field, color, from, to, T, fieldLabel, chartType }
   const { data, isLoading } = useQuery({
     queryKey: ['share-series', token, field, from, to ?? 'live'],
     queryFn: () => {
-      const effectiveTo = to ?? new Date().toISOString();
+      const effectiveTo = to ?? new Date(Date.now() + 24 * 3600_000).toISOString();
       return publicClient.get(`/public/device/${token}/series`, { params: { field, from, to: effectiveTo, limit: 1000 } }).then(r => r.data);
     },
     enabled: !!field,
@@ -1213,7 +1213,7 @@ function DeviceTable({ token, field, schemaFields, from, to, T, fieldLabel }: { 
   const { data, isLoading } = useQuery({
     queryKey: ['share-table', token, field, from, to ?? 'live'],
     queryFn: () => {
-      const effectiveTo = to ?? new Date().toISOString();
+      const effectiveTo = to ?? new Date(Date.now() + 24 * 3600_000).toISOString();
       return publicClient.get(`/public/device/${token}/series`, { params: { field, from, to: effectiveTo, limit: 500 } }).then(r => r.data);
     },
     enabled: !!field,
