@@ -73,6 +73,37 @@ export interface ChartSeries {
   color?: string;
 }
 
+function splitByGaps(data: { ts: number; value: number }[]) {
+  type P = { ts: number; value: number };
+  if (data.length < 2) return { segments: [data], gaps: [] as { a: P; b: P }[] };
+  const deltas = data.slice(1).map((p, i) => p.ts - data[i].ts).filter(d => d > 0).sort((a, b) => a - b);
+  const median = deltas[Math.floor(deltas.length / 2)] ?? 0;
+  const threshold = Math.max(3_600_000, median * 4);
+  const segments: P[][] = [];
+  const gaps: { a: P; b: P }[] = [];
+  let cur: P[] = [data[0]];
+  for (let i = 1; i < data.length; i++) {
+    if (data[i].ts - data[i - 1].ts > threshold) {
+      segments.push(cur);
+      gaps.push({ a: data[i - 1], b: data[i] });
+      cur = [data[i]];
+    } else {
+      cur.push(data[i]);
+    }
+  }
+  segments.push(cur);
+  return { segments, gaps };
+}
+
+function fmtGapDur(ms: number): string {
+  const d = Math.floor(ms / 86_400_000);
+  const h = Math.floor((ms % 86_400_000) / 3_600_000);
+  const m = Math.floor((ms % 3_600_000) / 60_000);
+  if (d > 0) return `∅ ${d}d ${h}h`;
+  if (h > 0) return `∅ ${h}h ${m}m`;
+  return `∅ ${m}m`;
+}
+
 // ─── LineChart ──────────────────────────────────────────────────────────────
 export function LineChart({
   series,
@@ -293,32 +324,53 @@ export function LineChart({
             </text>
           ))}
 
-          {/* Area fills */}
-          {showArea && series.map((s, si) => {
-            const color = s.color ?? PALETTE[si % PALETTE.length];
-            const mapped = prep(s);
-            const yFn = normalize ? makeLocalY(mapped) : globalY;
-            return (
-              <path key={si}
-                d={buildArea(mapped, yFn)}
-                fill={`url(#${uid}-g${si})`}
-                clipPath={`url(#${uid}-clip)`}
-              />
-            );
-          })}
-
-          {/* Lines */}
+          {/* Area fills + lines + gap connectors — gap-aware per series */}
           {series.map((s, si) => {
             const color = s.color ?? PALETTE[si % PALETTE.length];
             const mapped = prep(s);
             const yFn = normalize ? makeLocalY(mapped) : globalY;
+            const { segments, gaps } = splitByGaps(mapped);
             return (
-              <path key={si}
-                d={buildPath(mapped, yFn)}
-                fill="none" stroke={color}
-                strokeWidth={1.75} strokeLinejoin="round" strokeLinecap="round"
-                clipPath={`url(#${uid}-clip)`}
-              />
+              <g key={si}>
+                {showArea && segments.map((seg, gi) => seg.length > 1 && (
+                  <path key={`a${gi}`}
+                    d={buildArea(seg, yFn)}
+                    fill={`url(#${uid}-g${si})`}
+                    clipPath={`url(#${uid}-clip)`}
+                  />
+                ))}
+                {segments.map((seg, gi) => (
+                  <path key={`s${gi}`}
+                    d={buildPath(seg, yFn)}
+                    fill="none" stroke={color}
+                    strokeWidth={1.75} strokeLinejoin="round" strokeLinecap="round"
+                    clipPath={`url(#${uid}-clip)`}
+                  />
+                ))}
+                {gaps.map((gap, gi) => {
+                  const ax = xScale(gap.a.ts), ay = yFn(gap.a.value);
+                  const bx = xScale(gap.b.ts), by = yFn(gap.b.value);
+                  const mx = (ax + bx) / 2;
+                  const topY = Math.min(ay, by);
+                  const pillY = topY - 14 < PAD.top + 8 ? Math.max(ay, by) + 22 : topY - 14;
+                  const label = fmtGapDur(gap.b.ts - gap.a.ts);
+                  const pillW = label.length * 6 + 14;
+                  return (
+                    <g key={`g${gi}`} clipPath={`url(#${uid}-clip)`}>
+                      <line x1={ax} y1={ay} x2={bx} y2={by}
+                        stroke={color} strokeWidth={1}
+                        strokeDasharray="3 5" strokeOpacity={0.22} />
+                      <rect x={mx - pillW / 2} y={pillY - 9} width={pillW} height={15}
+                        rx={2} fill="none" stroke={color} strokeOpacity={0.3} />
+                      <text x={mx} y={pillY + 3.5} textAnchor="middle"
+                        fontSize={8} fontFamily="var(--font-mono,monospace)"
+                        fill={color} fillOpacity={0.5} letterSpacing="0.06em">
+                        {label}
+                      </text>
+                    </g>
+                  );
+                })}
+              </g>
             );
           })}
 

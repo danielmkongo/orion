@@ -93,7 +93,7 @@ export function DashboardPage() {
   }, [effectiveDeviceId, numericFieldsKey]);
 
   const from = new Date(Date.now() - 24 * 3600_000).toISOString();
-  const to = new Date().toISOString();
+  const to = new Date(Date.now() + 24 * 3600_000).toISOString();
 
   const { data: featuredSeries } = useQuery({
     queryKey: ['series', effectiveDeviceId, featuredField, '24h'],
