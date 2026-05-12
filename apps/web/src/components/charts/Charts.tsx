@@ -73,12 +73,15 @@ export interface ChartSeries {
   color?: string;
 }
 
-function splitByGaps(data: { ts: number; value: number }[]) {
+function splitByGaps(data: { ts: number; value: number }[], totalRangeMs = 0) {
   type P = { ts: number; value: number };
   if (data.length < 2) return { segments: [data], gaps: [] as { a: P; b: P }[] };
   const deltas = data.slice(1).map((p, i) => p.ts - data[i].ts).filter(d => d > 0).sort((a, b) => a - b);
   const median = deltas[Math.floor(deltas.length / 2)] ?? 0;
-  const threshold = Math.max(3_600_000, median * 4);
+  // Scale with visible range so long views don't show trivial gaps.
+  // totalRangeMs / 12 caps visible gaps at ~12; floor at max(1h, 4× cadence).
+  const rangeFloor = totalRangeMs > 0 ? totalRangeMs / 12 : 0;
+  const threshold = Math.max(3_600_000, median * 4, rangeFloor);
   const segments: P[][] = [];
   const gaps: { a: P; b: P }[] = [];
   let cur: P[] = [data[0]];
@@ -336,7 +339,7 @@ export function LineChart({
             const color = s.color ?? PALETTE[si % PALETTE.length];
             const mapped = prep(s);
             const yFn = normalize ? makeLocalY(mapped) : globalY;
-            const { segments, gaps } = splitByGaps(mapped);
+            const { segments, gaps } = splitByGaps(mapped, maxTs - minTs);
             return (
               <g key={si}>
                 {showArea && segments.map((seg, gi) => seg.length > 1 && (
@@ -358,8 +361,11 @@ export function LineChart({
                   const ax = xScale(gap.a.ts), ay = yFn(gap.a.value);
                   const bx = xScale(gap.b.ts), by = yFn(gap.b.value);
                   const mx = (ax + bx) / 2;
-                  const topY = Math.min(ay, by);
-                  const pillY = topY - 14 < PAD.top + 8 ? Math.max(ay, by) + 22 : topY - 14;
+                  // Clamp pill strictly inside data rectangle — never enters axis zones
+                  const pillY = Math.min(
+                    Math.max(Math.min(ay, by) - 14, PAD.top + 12),
+                    baselineY - 20
+                  );
                   const label = fmtGapDur(gap.b.ts - gap.a.ts);
                   const pillW = label.length * 6 + 14;
                   return (
