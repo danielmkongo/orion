@@ -17,6 +17,7 @@ import { OtaPage } from '@/pages/OtaPage';
 import { UsersPage } from '@/pages/UsersPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { ReportsPage } from '@/pages/ReportsPage';
+import { AnalyticsPage } from '@/pages/AnalyticsPage';
 import { ShareViewPage } from '@/pages/ShareViewPage';
 import { PagesPage } from '@/pages/PagesPage';
 import { PageBuilderPage } from '@/pages/PageBuilderPage';
@@ -54,6 +55,7 @@ export default function App() {
         <Route path="rules"       element={<RulesPage />} />
         <Route path="ota"         element={<OtaPage />} />
         <Route path="reports"     element={<ReportsPage />} />
+        <Route path="analytics"   element={<AnalyticsPage />} />
         <Route path="users"       element={<UsersPage />} />
         <Route path="settings"    element={<SettingsPage />} />
         <Route path="pages"              element={<PagesPage />} />
