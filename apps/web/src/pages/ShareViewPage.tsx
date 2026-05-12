@@ -6,7 +6,7 @@
 
 import React, { useState, useEffect, useRef, createContext, useContext } from 'react';
 import { useParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueries } from '@tanstack/react-query';
 import { publicClient } from '@/api/publicClient';
 import { LineChart, BarChart } from '@/components/charts/Charts';
 import { APIProvider, Map, AdvancedMarker, useMap } from '@vis.gl/react-google-maps';
@@ -320,8 +320,12 @@ function DeviceShareView({ token, data }: { token: string; data: any }) {
   };
 
   const [telemView, setTelemView] = useState<'chart' | 'table'>('chart');
-  const [chartField, setChartField] = useState(numericFields[0]?.[0] ?? '');
+  const [chartFields, setChartFields] = useState<string[]>([numericFields[0]?.[0] ?? ''].filter(Boolean));
   const [chartRange, setChartRange] = useState('24h');
+
+  function toggleField(k: string) {
+    setChartFields(prev => prev.includes(k) ? (prev.length > 1 ? prev.filter(f => f !== k) : prev) : [...prev, k]);
+  }
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo]     = useState('');
 
@@ -332,7 +336,9 @@ function DeviceShareView({ token, data }: { token: string; data: any }) {
     : new Date(Date.now() - (hoursMap[chartRange] ?? 24) * 3600_000).toISOString();
   const customToTs = chartRange === 'custom' && customTo ? new Date(customTo).toISOString() : undefined;
 
-  const fm = schemaFields.find((f: any) => f.key === chartField);
+  const primaryField = chartFields[0] ?? '';
+  const multiMode = chartFields.length > 1;
+  const fm = schemaFields.find((f: any) => f.key === primaryField);
   const chartColor = fm?.chartColor ?? T.primary;
 
   const fieldColors = Object.fromEntries(
@@ -401,11 +407,11 @@ function DeviceShareView({ token, data }: { token: string; data: any }) {
                 {numericFields.map(([k, v]) => {
                   const fmeta = schemaFields.find((f: any) => f.key === k);
                   const color = fieldColors[k];
-                  const selected = k === chartField && sections.includes('chart');
+                  const selected = chartFields.includes(k) && sections.includes('chart');
                   return (
                     <button
                       key={k}
-                      onClick={() => sections.includes('chart') && setChartField(k)}
+                      onClick={() => sections.includes('chart') && toggleField(k)}
                       style={{
                         padding: '20px 22px', textAlign: 'left', background: selected ? T.primaryMuted : 'transparent',
                         border: 'none', borderBottom: `1px solid ${T.border}`, borderRight: `1px solid ${T.border}`,
@@ -430,17 +436,13 @@ function DeviceShareView({ token, data }: { token: string; data: any }) {
                   <div>
                     <div style={{ fontSize: 9.5, fontFamily: T.fontMono, letterSpacing: '0.12em', textTransform: 'uppercase', color: T.fgMuted, marginBottom: 6 }}>Telemetry</div>
                     <div style={{ fontFamily: T.fontDisplay, fontSize: 30, lineHeight: 1, color: T.fg, letterSpacing: '-0.02em', textTransform: 'capitalize' }}>
-                      {telemView === 'chart' ? fieldLabel(chartField) : 'All fields'}{' '}
+                      {telemView === 'chart'
+                        ? (multiMode ? chartFields.map(k => fieldLabel(k)).join(' · ') : fieldLabel(primaryField))
+                        : 'All fields'}{' '}
                       <span style={{ fontStyle: 'italic', color: T.primary }}>· {chartRange}</span>
                     </div>
                   </div>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                    {telemView === 'chart' && numericFields.length > 1 && (
-                      <select value={chartField} onChange={e => setChartField(e.target.value)}
-                        style={{ padding: '5px 10px', background: T.surface, border: `1px solid ${T.border}`, color: T.fg, fontSize: 11, fontFamily: T.fontMono, outline: 'none', cursor: 'pointer' }}>
-                        {numericFields.map(([k]) => <option key={k} value={k}>{fieldLabel(k)}</option>)}
-                      </select>
-                    )}
                     <div style={seg}>
                       <button style={segBtn(telemView === 'chart')} onClick={() => setTelemView('chart')}>
                         <BarChart2 size={11} style={{ verticalAlign: 'middle', marginRight: 4 }} />Chart
@@ -466,8 +468,8 @@ function DeviceShareView({ token, data }: { token: string; data: any }) {
                 </div>
                 <div style={{ background: T.surface, border: `1px solid ${T.border}`, overflow: 'hidden' }}>
                   {telemView === 'chart'
-                    ? <DeviceChart token={token} field={chartField} color={chartColor} from={fromTs} to={customToTs} T={T} fieldLabel={fieldLabel} chartType={fm?.chartType} />
-                    : <DeviceTable token={token} field={chartField} schemaFields={schemaFields} from={fromTs} to={customToTs} T={T} fieldLabel={fieldLabel} />}
+                    ? <DeviceChart token={token} fields={chartFields} colors={chartFields.map(k => fieldColors[k] ?? T.primary)} from={fromTs} to={customToTs} T={T} fieldLabel={fieldLabel} chartType={multiMode ? 'line' : fm?.chartType} />
+                    : <DeviceTable token={token} field={primaryField} schemaFields={schemaFields} from={fromTs} to={customToTs} T={T} fieldLabel={fieldLabel} />}
                 </div>
               </div>
             )}
@@ -1173,35 +1175,47 @@ function ExportBtn({ onClick, T }: { onClick: () => void; T: Tokens }) {
 }
 
 /* ── Device share chart ──────────────────────────────────────────────── */
-function DeviceChart({ token, field, color, from, to, T, fieldLabel, chartType }: { token: string; field: string; color: string; from: string; to?: string; T: Tokens; fieldLabel?: (k: string) => string; chartType?: string }) {
+function DeviceChart({ token, fields, colors, from, to, T, fieldLabel, chartType }: { token: string; fields: string[]; colors: string[]; from: string; to?: string; T: Tokens; fieldLabel?: (k: string) => string; chartType?: string }) {
   const { resolved } = useT();
-  const { data, isLoading } = useQuery({
-    queryKey: ['share-series', token, field, from, to ?? 'live'],
-    queryFn: () => {
-      const effectiveTo = to ?? new Date(Date.now() + 24 * 3600_000).toISOString();
-      return publicClient.get(`/public/device/${token}/series`, { params: { field, from, to: effectiveTo, limit: 1000 } }).then(r => r.data);
-    },
-    enabled: !!field,
-    refetchInterval: 10_000,
+  const queries = useQueries({
+    queries: fields.map(field => ({
+      queryKey: ['share-series', token, field, from, to ?? 'live'],
+      queryFn: () => {
+        const effectiveTo = to ?? new Date(Date.now() + 24 * 3600_000).toISOString();
+        return publicClient.get(`/public/device/${token}/series`, { params: { field, from, to: effectiveTo, limit: 1000 } }).then(r => r.data);
+      },
+      enabled: !!field,
+      refetchInterval: 10_000,
+    })),
   });
-  const raw: any[] = data?.data ?? [];
-  const pts = raw.map((p: any) => ({ ts: new Date(p.ts).getTime(), value: typeof p.value === 'number' ? p.value : 0 }));
+
+  const isLoading = queries.some(q => q.isLoading);
+  const series = fields.map((field, i) => {
+    const raw: any[] = queries[i]?.data?.data ?? [];
+    return {
+      name: fieldLabel ? fieldLabel(field) : field.replace(/_/g, ' '),
+      data: raw.map((p: any) => ({ ts: new Date(p.ts).getTime(), value: typeof p.value === 'number' ? p.value : 0 })),
+      color: colors[i] ?? T.primary,
+    };
+  });
 
   const exportCsv = () => {
-    const rows = raw.map(p => `"${new Date(p.ts).toISOString()}","${p.value}"`);
-    downloadCsv(`${field}-${new Date().toISOString().slice(0,10)}.csv`, ['timestamp', field], rows);
+    const primaryRaw: any[] = queries[0]?.data?.data ?? [];
+    const rows = primaryRaw.map(p => `"${new Date(p.ts).toISOString()}","${p.value}"`);
+    downloadCsv(`${fields[0]}-${new Date().toISOString().slice(0,10)}.csv`, ['timestamp', fields[0]], rows);
   };
 
-  const displayName = fieldLabel ? fieldLabel(field) : field.replace(/_/g, ' ');
+  const multiMode = fields.length > 1;
+  const hasData = series.some(s => s.data.length > 0);
 
   if (isLoading) return <div style={{ height: 280, background: T.surfaceActive, animation: 'pulse 2s infinite' }} />;
-  if (pts.length === 0) return <div style={{ height: 280, display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.fgMuted, fontFamily: T.fontMono, fontSize: 12 }}>No data</div>;
+  if (!hasData) return <div style={{ height: 280, display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.fgMuted, fontFamily: T.fontMono, fontSize: 12 }}>No data</div>;
   return (
     <div style={{ position: 'relative' }}>
       <div style={{ position: 'absolute', top: 10, right: 10, zIndex: 5 }}>
         <ExportBtn onClick={exportCsv} T={T} />
       </div>
-      <LineChart series={[{ name: displayName, data: pts, color }]} height={280} showArea={chartType === 'area'} theme={resolved} />
+      <LineChart series={series} height={280} showArea={!multiMode && chartType === 'area'} normalize={multiMode} theme={resolved} />
     </div>
   );
 }

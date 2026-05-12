@@ -111,7 +111,7 @@ export function DeviceDetailPage() {
   const { timezone } = useUIStore();
   const { id } = useParams<{ id: string }>();
   const [liveFields, setLiveFields] = useState<Record<string, any>>({});
-  const [chartField, setChartField] = useState('');
+  const [chartFields, setChartFields] = useState<string[]>([]);
   const [chartRange, setChartRange] = useState('7d');
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo]     = useState('');
@@ -222,14 +222,6 @@ export function DeviceDetailPage() {
     return { from: f, to: t };
   };
 
-  const isAllMode = chartField === '__all__';
-
-  const { data: seriesData } = useQuery({
-    queryKey: ['series', id, chartField, chartRange, customFrom, customTo],
-    queryFn: () => { const { from: f, to: t } = getRangeBounds(); return telemetryApi.series(id!, chartField, f, t, 1000); },
-    enabled: !!id && !!chartField && !isAllMode,
-    refetchInterval: 10_000,
-  });
 
   const { data: tableData, isFetching: tableLoading } = useQuery({
     queryKey: ['telemetry-table', id, chartRange, tableLimit, customFrom, customTo],
@@ -283,60 +275,63 @@ export function DeviceDetailPage() {
     .map((f: any) => [f.key, 0] as [string, number]);
   const numericFields = [...telemetryNumerics, ...schemaNumerics];
 
-  const allFieldsQueries = useQueries({
-    queries: numericFields.map(([k]) => ({
+  const fieldQueries = useQueries({
+    queries: chartFields.map(k => ({
       queryKey: ['series', id, k, chartRange, customFrom, customTo],
       queryFn: () => { const { from: f, to: t } = getRangeBounds(); return telemetryApi.series(id!, k, f, t, 1000); },
-      enabled: isAllMode && !!id,
+      enabled: !!id,
       refetchInterval: 10_000,
     })),
   });
 
   useEffect(() => {
-    if (!chartField && numericFields.length > 0) {
+    if (chartFields.length === 0 && numericFields.length > 0) {
       const firstReal = telemetryNumerics[0]?.[0] ?? numericFields[0][0];
-      setChartField(firstReal);
-    } else if (chartField && chartField !== '__all__' && telemetryNumerics.length > 0 && !telemetryNumerics.some(([k]) => k === chartField)) {
-      setChartField(telemetryNumerics[0][0]);
+      setChartFields([firstReal]);
+    } else if (chartFields.length > 0 && telemetryNumerics.length > 0 && !telemetryNumerics.some(([k]) => chartFields.includes(k))) {
+      setChartFields([telemetryNumerics[0][0]]);
     }
   }, [numericFields.length, telemetryNumerics.length]); // eslint-disable-line
 
   useEffect(() => { if (d?.apiKey) setCurrentKey(d.apiKey); }, [d?.apiKey]);
 
-  const seriesPoints = (seriesData?.data ?? []).map((p: any) => ({
-    ts: typeof p.ts === 'string' ? new Date(p.ts).getTime() : p.ts,
-    value: typeof p.value === 'number' ? p.value : 0,
-  }));
-
-  // Get field metadata from schema for chart color/type
-  const chartFieldMeta = schemaFields.find((f: any) => f.key === chartField);
-  const chartColor = chartFieldMeta?.chartColor ?? 'hsl(var(--primary))';
-
   const prettyKey = (k: string) =>
     k.replace(/([A-Z])/g, ' $1').replace(/[_-]/g, ' ').replace(/\b\w/g, c => c.toUpperCase()).trim();
 
-  // Normalize a key for fuzzy matching (lowercase, no separators)
   const normalizeKey = (k: string) => k.toLowerCase().replace(/[_\-\s]/g, '');
 
   const fieldLabel = (key: string) => {
-    // Exact match first, then case-insensitive / separator-insensitive match
     const fm = schemaFields.find((f: any) => f.key === key)
       ?? schemaFields.find((f: any) => normalizeKey(f.key) === normalizeKey(key));
     const lbl = fm?.label?.trim();
     return (lbl && lbl !== fm?.key) ? lbl : prettyKey(key);
   };
 
-  const chartFieldLabel = fieldLabel(chartField === '__all__' ? '' : chartField);
+  const primaryField = chartFields[0] ?? '';
+  const multiMode = chartFields.length > 1;
+  const chartFieldMeta = schemaFields.find((f: any) => f.key === primaryField);
+  const chartColor = chartFieldMeta?.chartColor ?? 'hsl(var(--primary))';
+  const chartFieldLabel = fieldLabel(primaryField);
 
-  const allSeries = numericFields.map(([k], i) => {
+  const seriesPoints = (fieldQueries[0]?.data?.data ?? []).map((p: any) => ({
+    ts: typeof p.ts === 'string' ? new Date(p.ts).getTime() : p.ts,
+    value: typeof p.value === 'number' ? p.value : 0,
+  }));
+
+  const chartSeries = chartFields.map((k, i) => {
     const meta = schemaFields.find((f: any) => f.key === k);
     const color = meta?.chartColor ?? COLORS[i % COLORS.length];
-    const pts = (allFieldsQueries[i]?.data?.data ?? []).map((p: any) => ({
+    const pts = (fieldQueries[i]?.data?.data ?? []).map((p: any) => ({
       ts: typeof p.ts === 'string' ? new Date(p.ts).getTime() : p.ts,
       value: typeof p.value === 'number' ? p.value : 0,
     }));
     return { name: fieldLabel(k), data: pts, color };
   });
+
+  function toggleField(k: string) {
+    setChartFields(prev => prev.includes(k) ? (prev.length > 1 ? prev.filter(f => f !== k) : prev) : [...prev, k]);
+    setTelemView('chart');
+  }
 
   const { Icon: CatIcon } = d ? getCategoryIconInfo(d.category) : { Icon: () => null };
 
@@ -704,53 +699,28 @@ export function DeviceDetailPage() {
           borderTop: '1px solid hsl(var(--fg))',
           marginBottom: 32,
         }}>
-          {/* All-fields toggle */}
-          {numericFields.length > 1 && (
-            <div style={{ borderBottom: '1px solid hsl(var(--border))' }}>
-              <button
-                onClick={() => { setChartField('__all__'); setTelemView('chart'); }}
-                style={{
-                  width: '100%', padding: '10px 20px', textAlign: 'left', cursor: 'pointer',
-                  background: isAllMode ? 'hsl(var(--surface-raised))' : 'transparent',
-                  outline: isAllMode ? '1px solid hsl(var(--primary))' : 'none',
-                  outlineOffset: -1, transition: 'background 0.1s',
-                  display: 'flex', alignItems: 'center', gap: 10,
-                }}
-              >
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, letterSpacing: '0.1em', textTransform: 'uppercase', color: isAllMode ? 'hsl(var(--primary))' : 'hsl(var(--muted-fg))' }}>
-                  All parameters
-                </span>
-                <span style={{ display: 'flex', gap: 4 }}>
-                  {numericFields.slice(0, 6).map(([k], i) => {
-                    const meta = schemaFields.find((f: any) => f.key === k);
-                    const c = meta?.chartColor ?? COLORS[i % COLORS.length];
-                    return <span key={k} style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: c, opacity: 0.7 }} />;
-                  })}
-                </span>
-              </button>
-            </div>
-          )}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))' }}>
             {numericFields.map(([k, v], i) => {
               const fMeta = schemaFields.find((f: any) => f.key === k);
               const fColor = fMeta?.chartColor ?? COLORS[i % COLORS.length];
+              const selected = chartFields.includes(k);
               return (
                 <button
                   key={k}
-                  onClick={() => { setChartField(k); setTelemView('chart'); }}
+                  onClick={() => toggleField(k)}
                   style={{
                     padding: `18px 20px 18px ${i % 4 === 0 ? 0 : 20}px`,
                     borderBottom: '1px solid hsl(var(--border))',
                     borderRight: (i + 1) % 4 !== 0 ? '1px solid hsl(var(--border))' : 'none',
                     textAlign: 'left',
-                    background: !isAllMode && chartField === k ? 'hsl(var(--surface-raised))' : 'transparent',
+                    background: selected ? 'hsl(var(--surface-raised))' : 'transparent',
                     cursor: 'pointer',
-                    outline: !isAllMode && chartField === k ? `1px solid ${fColor}` : 'none',
+                    outline: selected ? `1px solid ${fColor}` : 'none',
                     outlineOffset: -1,
                     transition: 'background 0.1s',
                   }}
                 >
-                  <div className="eyebrow" style={{ fontSize: 9.5 }}>{fieldLabel(k)}</div>
+                  <div className="eyebrow" style={{ fontSize: 9.5, color: selected ? fColor : undefined }}>{fieldLabel(k)}</div>
                   <div style={{ fontFamily: 'var(--font-display)', fontSize: 32, lineHeight: 1, letterSpacing: '-0.02em', marginTop: 4, color: fColor }} className="num">
                     {v.toFixed(2)}
                   </div>
@@ -769,8 +739,8 @@ export function DeviceDetailPage() {
               <div className="eyebrow">Live telemetry</div>
               <div style={{ fontFamily: 'var(--font-display)', fontSize: 28, lineHeight: 1, marginTop: 4, textTransform: 'capitalize' }}>
                 {telemView === 'chart' ? (
-                  isAllMode
-                    ? <>All parameters <span style={{ fontStyle: 'italic', color: 'hsl(var(--primary))' }}>· {chartRange}</span></>
+                  multiMode
+                    ? <>{chartFields.map(fieldLabel).join(' · ')} <span style={{ fontStyle: 'italic', color: 'hsl(var(--primary))' }}>· {chartRange}</span></>
                     : <>{chartFieldLabel} <span style={{ fontStyle: 'italic', color: 'hsl(var(--primary))' }}>· {chartRange}</span></>
                 ) : (
                   <>All fields <span style={{ fontStyle: 'italic', color: 'hsl(var(--primary))' }}>· {chartRange}</span></>
@@ -786,11 +756,11 @@ export function DeviceDetailPage() {
                   <TableProperties size={12} style={{ marginRight: 4, verticalAlign: 'middle' }} />Table
                 </button>
               </div>
-              {telemView === 'chart' && !isAllMode && (
+              {telemView === 'chart' && !multiMode && (
                 <div className="seg">
                   {(['line', 'area', 'bar'] as const).map(t => (
                     <button key={t} className={(chartFieldMeta?.chartType ?? 'line') === t ? 'on' : ''}
-                      onClick={() => saveChartType(chartField, t)} style={{ textTransform: 'capitalize' }}>{t}</button>
+                      onClick={() => saveChartType(primaryField, t)} style={{ textTransform: 'capitalize' }}>{t}</button>
                   ))}
                 </div>
               )}
@@ -890,13 +860,13 @@ export function DeviceDetailPage() {
                 </div>
               );
             })() : (
-              isAllMode ? (
-                allSeries.every(s => s.data.length === 0) ? (
+              multiMode ? (
+                chartSeries.every(s => s.data.length === 0) ? (
                   <div style={{ height: 280, display: 'flex', alignItems: 'center', justifyContent: 'center' }} className="dim">
                     No data in this range
                   </div>
                 ) : (
-                  <LineChart series={allSeries} height={280} normalize showArea={false} />
+                  <LineChart series={chartSeries} height={280} normalize showArea={false} />
                 )
               ) : seriesPoints.length === 0 ? (
                 <div style={{ height: 280, display: 'flex', alignItems: 'center', justifyContent: 'center' }} className="dim">

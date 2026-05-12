@@ -10,7 +10,7 @@ import { Download, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { useSocket } from '@/hooks/useSocket';
 
 const COLORS = ['hsl(var(--primary))', 'hsl(var(--fg))', 'hsl(var(--info))', 'hsl(var(--good))', 'hsl(var(--warn))', '#A06CD5'];
-const RANGES = [{ label: '24h', h: 24 }, { label: '7d', h: 168 }, { label: '30d', h: 720 }];
+const RANGES = [{ label: '1h', h: 1 }, { label: '6h', h: 6 }, { label: '24h', h: 24 }, { label: '7d', h: 168 }, { label: '30d', h: 720 }];
 
 const prettyKey = (k: string) =>
   k.replace(/_/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2')
@@ -25,7 +25,7 @@ export function TelemetryPage() {
   const [selectedDeviceId, setSelectedDeviceId] = useState('');
   const [selectedFields, setSelectedFields] = useState<string[]>([]);
   const [featuredField, setFeaturedField] = useState('');
-  const [range, setRange] = useState(RANGES[2]);
+  const [range, setRange] = useState(RANGES[2]); // default: 24h
   const [normalize, setNormalize] = useState(false);
   const [showArea, setShowArea] = useState(false);
   const [customFrom, setCustomFrom] = useState('');
