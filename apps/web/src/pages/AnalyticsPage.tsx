@@ -632,7 +632,7 @@ export function AnalyticsPage() {
   // Latest telemetry (for fields fallback)
   const { data: latestTelem } = useQuery({ queryKey:['analytics-latest',deviceId], queryFn:()=>telemetryApi.latest(deviceId), enabled:!!deviceId });
 
-  const schemaFields: any[] = deviceData?.meta?.schema ?? [];
+  const schemaFields: any[] = deviceData?.meta?.dataSchema?.fields ?? [];
 
   // Merge schema + live telemetry fields
   const numericFields = useMemo(()=>{
