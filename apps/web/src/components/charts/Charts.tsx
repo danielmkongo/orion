@@ -357,6 +357,15 @@ export function LineChart({
                     clipPath={`url(#${uid}-clip)`}
                   />
                 ))}
+                {gaps.map((gap, gi) => (
+                  <line key={`gc${gi}`}
+                    x1={xScale(gap.a.ts)} y1={yFn(gap.a.value)}
+                    x2={xScale(gap.b.ts)} y2={yFn(gap.b.value)}
+                    stroke="currentColor" strokeWidth={0.75}
+                    strokeDasharray="2 7" strokeOpacity={0.18}
+                    strokeLinecap="round"
+                    clipPath={`url(#${uid}-clip)`} />
+                ))}
               </g>
             );
           })}
