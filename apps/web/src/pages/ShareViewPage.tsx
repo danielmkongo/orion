@@ -1215,7 +1215,7 @@ function DeviceChart({ token, fields, colors, from, to, T, fieldLabel, chartType
       <div style={{ position: 'absolute', top: 10, right: 10, zIndex: 5 }}>
         <ExportBtn onClick={exportCsv} T={T} />
       </div>
-      <LineChart series={series} height={280} showArea={!multiMode && chartType === 'area'} normalize={multiMode} theme={resolved} />
+      <LineChart series={series} height={280} showArea={!multiMode && chartType === 'area'} theme={resolved} />
     </div>
   );
 }

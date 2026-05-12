@@ -738,13 +738,7 @@ export function DeviceDetailPage() {
             <div>
               <div className="eyebrow">Live telemetry</div>
               <div style={{ fontFamily: 'var(--font-display)', fontSize: 28, lineHeight: 1, marginTop: 4, textTransform: 'capitalize' }}>
-                {telemView === 'chart' ? (
-                  multiMode
-                    ? <>{chartFields.map(fieldLabel).join(' · ')} <span style={{ fontStyle: 'italic', color: 'hsl(var(--primary))' }}>· {chartRange}</span></>
-                    : <>{chartFieldLabel} <span style={{ fontStyle: 'italic', color: 'hsl(var(--primary))' }}>· {chartRange}</span></>
-                ) : (
-                  <>All fields <span style={{ fontStyle: 'italic', color: 'hsl(var(--primary))' }}>· {chartRange}</span></>
-                )}
+                {telemView === 'chart' ? chartRange.toUpperCase() : 'All fields'}
               </div>
             </div>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -866,7 +860,7 @@ export function DeviceDetailPage() {
                     No data in this range
                   </div>
                 ) : (
-                  <LineChart series={chartSeries} height={280} normalize showArea={false} />
+                  <LineChart series={chartSeries} height={280} showArea={false} />
                 )
               ) : seriesPoints.length === 0 ? (
                 <div style={{ height: 280, display: 'flex', alignItems: 'center', justifyContent: 'center' }} className="dim">
