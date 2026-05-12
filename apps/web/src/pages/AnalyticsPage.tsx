@@ -1,7 +1,8 @@
 import React, { useState, useRef, useMemo, useEffect, useCallback, useId } from 'react';
 import { useQuery, useQueries } from '@tanstack/react-query';
 import { Activity, Plus, X, Download, ChevronDown, Waves, BarChart2, RefreshCw } from 'lucide-react';
-import { devicesApi, telemetryApi } from '@/api';
+import { devicesApi } from '@/api/devices';
+import { telemetryApi } from '@/api/telemetry';
 import {
   computeStats, movingAverage, exponentialMA, differentiate, integrate,
   computePSD, applyLowPass, applyHighPass, applyBandPass, applyNotch,
