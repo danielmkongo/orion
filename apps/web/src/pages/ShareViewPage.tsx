@@ -750,7 +750,7 @@ function PageWidgetContent({ widget, data, T, contentH = 200, fieldLabel: fl }: 
         <div style={{ fontFamily: T.fontDisplay, fontSize: `clamp(24px,${Math.max(3, contentH / 8)}px,60px)`, lineHeight: 1, color: T.primary, letterSpacing: '-0.02em' }}>
           {val !== undefined ? Number(val).toFixed(2) : <span style={{ fontSize: 22, color: T.fgFaint }}>—</span>}
         </div>
-        {data?.timestamp && <div style={{ fontSize: 9, fontFamily: T.fontMono, color: T.fgFaint }}>updated {new Date(data.timestamp).toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}</div>}
+        {data?.timestamp && <div style={{ fontSize: 9, fontFamily: T.fontMono, color: T.fgFaint }}>updated {new Date(data.timestamp).toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false, timeZone: 'UTC' })}</div>}
       </div>
     );
   }
@@ -866,7 +866,7 @@ function PageWidgetContent({ widget, data, T, contentH = 200, fieldLabel: fl }: 
 
   if (widget.type === 'bar_chart') {
     const pts = (Array.isArray(data) ? data : []).slice(-24).map((p: any) => ({
-      label: new Date(p.ts).toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit', hour12: false }),
+      label: new Date(p.ts).toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'UTC' }),
       value: p.value,
     }));
     return pts.length > 0
@@ -1260,7 +1260,7 @@ function DeviceTable({ token, field, schemaFields, from, to, T, fieldLabel }: { 
           <tbody>
             {rows.map((row: any, i: number) => (
               <tr key={i} style={{ background: i % 2 === 0 ? 'transparent' : T.surfaceHover }}>
-                <td style={{ padding: '8px 16px', color: T.fgMuted, whiteSpace: 'nowrap', borderBottom: `1px solid ${T.border}` }}>{new Date(row.ts).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' })}</td>
+                <td style={{ padding: '8px 16px', color: T.fgMuted, whiteSpace: 'nowrap', borderBottom: `1px solid ${T.border}` }}>{new Date(row.ts).toLocaleString('en', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false, timeZone: 'UTC' })}</td>
                 <td style={{ padding: '8px 16px', textAlign: 'right', color, borderBottom: `1px solid ${T.border}`, fontVariantNumeric: 'tabular-nums' }}>{typeof row.value === 'number' ? row.value.toFixed(4) : String(row.value ?? '—')}</td>
               </tr>
             ))}

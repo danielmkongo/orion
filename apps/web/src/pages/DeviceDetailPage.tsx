@@ -827,7 +827,7 @@ export function DeviceDetailPage() {
                       {rows.map((row: any, i: number) => (
                         <tr key={row._id ?? i} style={{ background: i % 2 === 0 ? 'transparent' : 'hsl(var(--surface-raised) / 0.4)' }}>
                           <td style={{ padding: '7px 12px', color: 'hsl(var(--muted-fg))', whiteSpace: 'nowrap', borderBottom: '1px solid hsl(var(--rule-ghost))' }}>
-                            {formatTs(row.timestamp ?? row.ts ?? row.createdAt, timezone || undefined)}
+                            {formatTs(row.timestamp ?? row.ts ?? row.createdAt, 'UTC')}
                           </td>
                           {allFields.map((fk: string) => {
                             const val = row.fields?.[fk];
@@ -879,7 +879,7 @@ export function DeviceDetailPage() {
                 const maxV = chartFieldMeta?.max ?? 100;
                 if (ct === 'bar') {
                   const barData = seriesPoints.slice(-40).map(p => ({
-                    label: new Date(p.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                    label: new Date(p.ts).toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'UTC' }),
                     value: p.value,
                   }));
                   return <BarChart data={barData} color={chartColor} height={280} />;
