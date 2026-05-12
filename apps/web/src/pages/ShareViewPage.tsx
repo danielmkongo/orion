@@ -436,10 +436,7 @@ function DeviceShareView({ token, data }: { token: string; data: any }) {
                   <div>
                     <div style={{ fontSize: 9.5, fontFamily: T.fontMono, letterSpacing: '0.12em', textTransform: 'uppercase', color: T.fgMuted, marginBottom: 6 }}>Telemetry</div>
                     <div style={{ fontFamily: T.fontDisplay, fontSize: 30, lineHeight: 1, color: T.fg, letterSpacing: '-0.02em', textTransform: 'capitalize' }}>
-                      {telemView === 'chart'
-                        ? (multiMode ? chartFields.map(k => fieldLabel(k)).join(' · ') : fieldLabel(primaryField))
-                        : 'All fields'}{' '}
-                      <span style={{ fontStyle: 'italic', color: T.primary }}>· {chartRange}</span>
+                      {telemView === 'chart' ? chartRange.toUpperCase() : 'All fields'}
                     </div>
                   </div>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
