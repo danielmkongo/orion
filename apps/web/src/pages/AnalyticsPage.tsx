@@ -40,9 +40,15 @@ const FEATURE_DEFS = [
 type OvType = 'moving_avg'|'exp_ma'|'differentiate'|'integrate'|'lowpass'|'highpass'|'bandpass'|'notch';
 interface Overlay { id:string; type:OvType; label:string; fieldKey:string; color:string; params:Record<string,number>; }
 interface Point   { ts:number; value:number; }
-interface Series  { name:string; data:Point[]; color:string; fieldKey:string; }
+interface Series  { name:string; data:Point[]; color:string; fieldKey:string; id?:string; }
 type FeatVec = Record<string,number>;
 interface FeatureCloud { name:string; color:string; vecs:FeatVec[]; }
+
+function useIsMobile(bp=768) {
+  const [m,setM]=useState(()=>typeof window!=='undefined'&&window.innerWidth<bp);
+  useEffect(()=>{const f=()=>setM(window.innerWidth<bp);window.addEventListener('resize',f);return()=>window.removeEventListener('resize',f);},[bp]);
+  return m;
+}
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -105,9 +111,10 @@ function extractWindowedFeatures(data:Point[],wSz:number):FeatVec[] {
 // ── Signal Chart ─────────────────────────────────────────────────────────────
 
 const SP={top:20,right:24,bottom:42,left:58};
-function SignalChart({series,overlays:ovSeries,windowTs,onWindow,height=320,svgRef:extRef}:{
+function SignalChart({series,overlays:ovSeries,windowTs,onWindow,height=320,svgRef:extRef,highlightId}:{
   series:Series[];overlays:Series[];windowTs:[number,number]|null;
   onWindow:(w:[number,number]|null)=>void;height?:number;svgRef?:React.RefObject<SVGSVGElement>;
+  highlightId?:string|null;
 }) {
   const uid=useId();
   const cRef=useRef<HTMLDivElement>(null);
@@ -157,10 +164,33 @@ function SignalChart({series,overlays:ovSeries,windowTs,onWindow,height=320,svgR
   };
   const cursor=drag?(drag.type==='move'?'grabbing':'ew-resize'):(wx1!==null&&wx2!==null&&hx!==null&&(Math.abs(hx-wx1)<=HW||Math.abs(hx-wx2)<=HW))?'ew-resize':(wx1!==null&&wx2!==null&&hx!==null&&hx>wx1&&hx<wx2)?'grab':'crosshair';
   const clip=`${uid}-c`;
+
+  const getTX=(t:React.Touch)=>{const r=svgRef.current!.getBoundingClientRect();return clX(t.clientX-r.left);};
+  const onTS=(e:React.TouchEvent<SVGSVGElement>)=>{
+    if(e.touches.length!==1)return;
+    const x=getTX(e.touches[0]),ts=xTs(x);
+    if(windowTs&&wx1!==null&&wx2!==null){
+      if(Math.abs(x-wx1)<=HW*2){setDrag({type:'L',aTs:ts,aW:windowTs});e.preventDefault();return;}
+      if(Math.abs(x-wx2)<=HW*2){setDrag({type:'R',aTs:ts,aW:windowTs});e.preventDefault();return;}
+      if(x>wx1&&x<wx2){setDrag({type:'move',aTs:ts,aW:windowTs});e.preventDefault();return;}
+    }
+    setDrag({type:'new',aTs:ts});onWindow([clTs(ts),clTs(ts)]);e.preventDefault();
+  };
+  const onTM=(e:React.TouchEvent<SVGSVGElement>)=>{
+    if(!drag||e.touches.length!==1)return;
+    const x=getTX(e.touches[0]),ts=xTs(x),d=ts-drag.aTs;
+    if(drag.type==='new'){const a=drag.aTs,b=clTs(ts);onWindow([Math.min(a,b),Math.max(a,b)]);}
+    else if(drag.type==='L'&&drag.aW)onWindow([clTs(drag.aW[0]+d),drag.aW[1]]);
+    else if(drag.type==='R'&&drag.aW)onWindow([drag.aW[0],clTs(drag.aW[1]+d)]);
+    else if(drag.type==='move'&&drag.aW){const sp2=drag.aW[1]-drag.aW[0],ns=clTs(drag.aW[0]+d);onWindow([ns,clTs(ns+sp2)]);}
+    e.preventDefault();
+  };
+
   return (
     <div ref={cRef} style={{width:'100%'}}>
-      <svg ref={svgRef} width={W} height={height} style={{display:'block',cursor,userSelect:'none'}}
-        onMouseDown={onMD} onMouseMove={onMM} onMouseUp={()=>setDrag(null)} onMouseLeave={()=>{setDrag(null);setHx(null);}}>
+      <svg ref={svgRef} width={W} height={height} style={{display:'block',cursor,userSelect:'none',touchAction:'none'}}
+        onMouseDown={onMD} onMouseMove={onMM} onMouseUp={()=>setDrag(null)} onMouseLeave={()=>{setDrag(null);setHx(null);}}
+        onTouchStart={onTS} onTouchMove={onTM} onTouchEnd={()=>setDrag(null)} onTouchCancel={()=>setDrag(null)}>
         <defs><clipPath id={clip}><rect x={SP.left} y={SP.top} width={iW} height={iH}/></clipPath></defs>
         {yTicks.map((v,i)=><line key={i} x1={SP.left} y1={vY(v)} x2={SP.left+iW} y2={vY(v)} stroke="hsl(var(--border))" strokeWidth={0.5}/>)}
         {xTicks.map((t,i)=><line key={i} x1={tsX(t)} y1={SP.top} x2={tsX(t)} y2={SP.top+iH} stroke="hsl(var(--border))" strokeWidth={0.5}/>)}
@@ -173,7 +203,13 @@ function SignalChart({series,overlays:ovSeries,windowTs,onWindow,height=320,svgR
           {wx2-wx1>50&&<text x={(wx1+wx2)/2} y={SP.top+14} textAnchor="middle" fontSize={8} fontFamily="var(--font-mono)" fill="hsl(var(--primary))" fillOpacity={0.8}>{((windowTs![1]-windowTs![0])/60000).toFixed(1)} min window</text>}
         </>}
         {series.map((s,i)=><path key={i} d={pathD(s.data)} fill="none" stroke={s.color} strokeWidth={1.75} strokeLinejoin="round" strokeLinecap="round" clipPath={`url(#${clip})`}/>)}
-        {ovSeries.map((s,i)=><path key={i} d={pathD(s.data)} fill="none" stroke={s.color} strokeWidth={1.75} strokeDasharray="6 3" strokeLinejoin="round" clipPath={`url(#${clip})`}/>)}
+        {ovSeries.map((s,i)=>{
+          const isHl=highlightId&&s.id===highlightId;
+          const isDim=highlightId&&s.id!==highlightId;
+          return <path key={i} d={pathD(s.data)} fill="none" stroke={s.color}
+            strokeWidth={isHl?2.75:1.75} strokeOpacity={isDim?0.15:1}
+            strokeDasharray={isHl?undefined:'6 3'} strokeLinejoin="round" clipPath={`url(#${clip})`}/>;
+        })}
         {hx!==null&&<line x1={hx} y1={SP.top} x2={hx} y2={SP.top+iH} stroke="hsl(var(--fg))" strokeWidth={0.4} strokeOpacity={0.3} clipPath={`url(#${clip})`}/>}
         <line x1={SP.left} y1={SP.top} x2={SP.left} y2={SP.top+iH} stroke="hsl(var(--border))"/>
         {yTicks.map((v,i)=><text key={i} x={SP.left-7} y={vY(v)+3.5} textAnchor="end" fontSize={9} fontFamily="var(--font-mono)" fill="hsl(var(--muted-fg))">{fmt4(v)}</text>)}
@@ -302,10 +338,10 @@ function CorrelationHeatmap({series}:{series:Series[]}) {
   const N=56,pad={t:8,l:80,b:48,r:8},W=pad.l+m*N+pad.r,H=pad.t+m*N+pad.b;
   const corrColor=(r:number):string=>r>=0?`hsl(16,${Math.round(r*100)}%,${Math.round(60-r*25)}%)`:`hsl(224,${Math.round(-r*100)}%,${Math.round(60+r*25)}%)`;
   return (
-    <div style={{padding:'0 20px 20px',display:'flex',gap:40,flexWrap:'wrap',alignItems:'flex-start'}}>
-      <div style={{border:'1px solid hsl(var(--border))',padding:'12px 16px',background:'hsl(var(--surface))'}}>
+    <div style={{padding:'0 20px 20px',display:'flex',gap:24,flexWrap:'wrap',alignItems:'flex-start'}}>
+      <div style={{border:'1px solid hsl(var(--border))',padding:'12px 16px',background:'hsl(var(--surface))',maxWidth:'100%',overflowX:'auto'}}>
         <div style={{fontFamily:'var(--font-mono)',fontSize:9,letterSpacing:'0.12em',textTransform:'uppercase',color:'hsl(var(--muted-fg))',marginBottom:10}}>Pearson Correlation Matrix</div>
-        <svg width={W} height={H} style={{display:'block',overflow:'visible'}}>
+        <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} preserveAspectRatio="xMinYMin meet" style={{display:'block',overflow:'visible',maxWidth:'100%',height:'auto'}}>
           {series.map((s,i)=><React.Fragment key={i}>
             <text x={pad.l-6} y={pad.t+i*N+N/2+3.5} textAnchor="end" fontSize={10} fontFamily="var(--font-mono)" fill={s.color}>{s.name.substring(0,12)}</text>
             <text x={pad.l+i*N+N/2} y={pad.t+m*N+14} textAnchor="middle" fontSize={10} fontFamily="var(--font-mono)" fill={s.color}>{s.name.substring(0,8)}</text>
@@ -413,10 +449,13 @@ function FeatureScatter3D({clouds,axisX,axisY,axisZ,height=440}:{clouds:FeatureC
 
   return (
     <div ref={wRef} style={{width:'100%'}}>
-      <canvas ref={cRef} style={{display:'block',width:'100%',height,cursor:dragging?'grabbing':'grab'}}
+      <canvas ref={cRef} style={{display:'block',width:'100%',height,cursor:dragging?'grabbing':'grab',touchAction:'none'}}
         onMouseDown={e=>setDragging({x:e.clientX,y:e.clientY,az,el})}
         onMouseMove={e=>{if(!dragging)return;const dx=e.clientX-dragging.x,dy=e.clientY-dragging.y;setAz(dragging.az+dx*0.008);setEl(Math.max(-1.4,Math.min(1.4,dragging.el-dy*0.008)));}}
-        onMouseUp={()=>setDragging(null)} onMouseLeave={()=>setDragging(null)}/>
+        onMouseUp={()=>setDragging(null)} onMouseLeave={()=>setDragging(null)}
+        onTouchStart={e=>{if(e.touches.length===1){const t=e.touches[0];setDragging({x:t.clientX,y:t.clientY,az,el});e.preventDefault();}}}
+        onTouchMove={e=>{if(!dragging||e.touches.length!==1)return;const t=e.touches[0];const dx=t.clientX-dragging.x,dy=t.clientY-dragging.y;setAz(dragging.az+dx*0.008);setEl(Math.max(-1.4,Math.min(1.4,dragging.el-dy*0.008)));e.preventDefault();}}
+        onTouchEnd={()=>setDragging(null)} onTouchCancel={()=>setDragging(null)}/>
     </div>
   );
 }
@@ -493,6 +532,7 @@ export function AnalyticsPage() {
 
   // DSP pipeline
   const [overlays,    setOverlays]    = useState<Overlay[]>([]);
+  const [highlightOp, setHighlightOp] = useState<string|null>(null);
   const [opField,     setOpField]     = useState('');
   const [maW,         setMaW]         = useState(10);
   const [emaA,        setEmaA]        = useState(0.2);
@@ -509,6 +549,10 @@ export function AnalyticsPage() {
   const [fxY,         setFxY]         = useState('std');
   const [fxZ,         setFxZ]         = useState('mean');
   const [winSz,       setWinSz]       = useState(20);
+
+  // Responsive
+  const isMobile = useIsMobile(768);
+  const isTablet = useIsMobile(1024);
 
   // Focus mode
   const [focusMode,   setFocusMode]   = useState(false);
@@ -569,7 +613,7 @@ export function AnalyticsPage() {
       case 'notch':         proc=applyNotch(vals,ov.params.cen,ov.params.bw,ov.params.sr);break;
       default:proc=vals;
     }
-    return{name:ov.label,color:ov.color,fieldKey:ov.fieldKey,data:base.data.map((p,i)=>({ts:p.ts,value:proc[i]??0}))} satisfies Series;
+    return{id:ov.id,name:ov.label,color:ov.color,fieldKey:ov.fieldKey,data:base.data.map((p,i)=>({ts:p.ts,value:proc[i]??0}))} satisfies Series;
   }).filter(Boolean) as Series[],[overlays,series]);
 
   const sr=useMemo(()=>{const base=series.find(s=>s.fieldKey===activeFft)??series[0];return base?.data.length?detectSampleRate(base.data.map(p=>p.ts)):1;},[series,activeFft]);
@@ -597,8 +641,15 @@ export function AnalyticsPage() {
 
   const toggleField=(k:string)=>setSelFields(prev=>prev.includes(k)?(prev.length>1?prev.filter(f=>f!==k):prev):[...prev,k]);
   const addOverlay=(type:OvType,label:string,params:Record<string,number>)=>{
-    setOverlays(prev=>[...prev,{id:`${Date.now()}`,type,label,fieldKey:activeOp,color:O_COLORS[prev.length%O_COLORS.length],params}]);
+    const base=numericFields.find((f:any)=>f.key===activeOp);
+    const baseColor=base?.chartColor??COLORS[0];
+    setOverlays(prev=>{
+      const sameField=prev.filter(o=>o.fieldKey===activeOp).length;
+      const tint=lerpColor(0.25+Math.min(0.5,sameField*0.18),baseColor.startsWith('#')?baseColor:'#ff5b1f','#ffffff');
+      return[...prev,{id:`${Date.now()}-${Math.random().toString(36).slice(2,7)}`,type,label,fieldKey:activeOp,color:tint,params}];
+    });
   };
+  const removeOverlay=(id:string)=>{setOverlays(p=>p.filter(o=>o.id!==id));if(highlightOp===id)setHighlightOp(null);};
   const applyFilter=()=>{
     const base=series.find(s=>s.fieldKey===activeOp);if(!base?.data.length)return;
     const s2=detectSampleRate(base.data.map(p=>p.ts));
@@ -617,12 +668,12 @@ export function AnalyticsPage() {
     <div className="page">
 
       {/* ── Header ── */}
-      <div className="ph" style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}>
+      <div className="ph">
         <div>
           <span className="eyebrow">Signal Intelligence</span>
           <h1><em>Analytics</em>.</h1>
         </div>
-        <div style={{display:'flex',gap:8,marginTop:8,alignItems:'center'}}>
+        <div style={{gridColumn:3,display:'flex',alignItems:'flex-end',gap:8,paddingBottom:20,flexWrap:'wrap'}}>
           {loading&&<RefreshCw size={13} style={{animation:'spin 1s linear infinite',color:'hsl(var(--muted-fg))'}}/>}
           <button className="btn btn-sm btn-outline" onClick={()=>exportCSV(series,overlaySeries,windowTs)} style={{gap:5}}><Download size={12}/>CSV</button>
           <button className="btn btn-sm btn-outline" onClick={()=>{const s=new XMLSerializer();const blob=new Blob([s.serializeToString(svgRef.current!)],{type:'image/svg+xml'});const a=Object.assign(document.createElement('a'),{href:URL.createObjectURL(blob),download:'signal.svg'});a.click();}} style={{gap:5}}><Download size={12}/>SVG</button>
@@ -634,36 +685,61 @@ export function AnalyticsPage() {
       </div>
 
       {/* ── Toolbar ── */}
-      <div style={{display:'flex',gap:12,marginBottom:20,flexWrap:'wrap',alignItems:'flex-end',padding:'14px 18px',background:'hsl(var(--surface))',border:'1px solid hsl(var(--border))'}}>
-        <div style={{minWidth:200}}>
-          <label style={lbl}>Device</label>
-          <div style={{position:'relative'}}>
-            <select value={deviceId} onChange={e=>setDeviceId(e.target.value)} style={{...inp,paddingRight:26,appearance:'none',cursor:'pointer',minWidth:200}}>
-              <option value="">— Select device —</option>
-              {devices.map((d:any)=><option key={d._id} value={d._id}>{d.name}</option>)}
-            </select>
-            <ChevronDown size={11} style={{position:'absolute',right:7,top:'50%',transform:'translateY(-50%)',pointerEvents:'none',color:'hsl(var(--muted-fg))'}}/>
+      <div style={{marginBottom:20,background:'hsl(var(--surface))',border:'1px solid hsl(var(--border))'}}>
+
+        {/* Row 1: Device + Range + Window */}
+        <div style={{display:'flex',gap:12,padding:'12px 16px',flexWrap:'wrap',alignItems:'flex-end',borderBottom:deviceId&&numericFields.length>0?'1px solid hsl(var(--border))':'none'}}>
+          <div style={{flex:isMobile?'1 1 100%':'0 1 280px',minWidth:200}}>
+            <label style={lbl}>Device</label>
+            <div style={{position:'relative'}}>
+              <select value={deviceId} onChange={e=>setDeviceId(e.target.value)} style={{...inp,paddingRight:26,appearance:'none',cursor:'pointer'}}>
+                <option value="">— Select device —</option>
+                {devices.map((d:any)=><option key={d._id} value={d._id}>{d.name}</option>)}
+              </select>
+              <ChevronDown size={11} style={{position:'absolute',right:7,top:'50%',transform:'translateY(-50%)',pointerEvents:'none',color:'hsl(var(--muted-fg))'}}/>
+            </div>
           </div>
+
+          <div style={{flex:isMobile?'1 1 100%':'0 1 auto'}}>
+            <label style={lbl}>Range</label>
+            <div className="seg" style={{display:'flex',flexWrap:'wrap'}}>{RANGES.map(r=><button key={r.ms} className={rangeMs===r.ms?'on':''} onClick={()=>setRangeMs(r.ms)}>{r.label}</button>)}</div>
+          </div>
+
+          {windowTs&&<button className="btn btn-sm btn-outline" onClick={()=>setWindowTs(null)} style={{gap:5,color:'hsl(var(--primary))',marginBottom:1}}><X size={11}/>Clear window</button>}
         </div>
 
+        {/* Row 2: Parameters */}
         {deviceId&&numericFields.length>0&&(
-          <div style={{flex:1}}>
-            <label style={lbl}>Parameters <span style={{opacity:0.5}}>({selFields.length} active)</span></label>
-            <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+          <div style={{padding:'12px 16px'}}>
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8,flexWrap:'wrap',gap:8}}>
+              <label style={{...lbl,marginBottom:0}}>Parameters · <span style={{color:'hsl(var(--primary))'}}>{selFields.length}</span> active <span style={{opacity:0.4}}>/ {numericFields.length}</span></label>
+              {numericFields.length>1&&<div style={{display:'flex',gap:6}}>
+                <button onClick={()=>setSelFields(numericFields.map((f:any)=>f.key))} style={{background:'none',border:'1px solid hsl(var(--border))',padding:'3px 8px',fontSize:9,fontFamily:'var(--font-mono)',color:'hsl(var(--muted-fg))',cursor:'pointer',letterSpacing:'0.08em',textTransform:'uppercase'}}>All</button>
+                <button onClick={()=>setSelFields([numericFields[0].key])} style={{background:'none',border:'1px solid hsl(var(--border))',padding:'3px 8px',fontSize:9,fontFamily:'var(--font-mono)',color:'hsl(var(--muted-fg))',cursor:'pointer',letterSpacing:'0.08em',textTransform:'uppercase'}}>Reset</button>
+              </div>}
+            </div>
+            <div style={{display:'grid',gridTemplateColumns:`repeat(auto-fill,minmax(${isMobile?'140px':'170px'},1fr))`,gap:6}}>
               {numericFields.map((f:any,i:number)=>{
                 const color=f.chartColor??COLORS[i%COLORS.length];
                 const active=selFields.includes(f.key);
                 return (
                   <button key={f.key} onClick={()=>toggleField(f.key)} style={{
-                    padding:'5px 12px',fontSize:11,fontFamily:'var(--font-mono)',
+                    display:'flex',alignItems:'center',gap:8,
+                    padding:'8px 10px',fontSize:11,fontFamily:'var(--font-mono)',
                     border:`1px solid ${active?color:'hsl(var(--border))'}`,
-                    borderLeft:`3px solid ${active?color:'hsl(var(--border))'}`,
-                    background:active?`${color}15`:'transparent',
-                    color:active?color:'hsl(var(--muted-fg))',
-                    cursor:'pointer',transition:'all 0.1s',
+                    background:active?`${color}1a`:'transparent',
+                    color:active?'hsl(var(--fg))':'hsl(var(--muted-fg))',
+                    cursor:'pointer',transition:'all 0.12s',
+                    textAlign:'left',minWidth:0,
                   }}>
-                    {f.label||f.key.replace(/_/g,' ')}
-                    {f.unit&&<span style={{opacity:0.45,marginLeft:4,fontSize:9}}>{f.unit}</span>}
+                    <span style={{
+                      width:9,height:9,borderRadius:'50%',flexShrink:0,
+                      background:active?color:'transparent',
+                      border:`1.5px solid ${color}`,
+                      transition:'background 0.12s',
+                    }}/>
+                    <span style={{flex:1,minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{f.label||f.key.replace(/_/g,' ')}</span>
+                    {f.unit&&<span style={{opacity:0.55,fontSize:9,flexShrink:0}}>{f.unit}</span>}
                   </button>
                 );
               })}
@@ -672,14 +748,9 @@ export function AnalyticsPage() {
         )}
 
         {deviceId&&!numericFields.length&&!loading&&(
-          <div style={{fontFamily:'var(--font-mono)',fontSize:11,color:'hsl(var(--muted-fg))'}}>No numeric fields found — configure schema in device settings</div>
+          <div style={{padding:'12px 16px',fontFamily:'var(--font-mono)',fontSize:11,color:'hsl(var(--muted-fg))'}}>No numeric fields found — configure schema in device settings</div>
         )}
 
-        <div>
-          <label style={lbl}>Range</label>
-          <div className="seg">{RANGES.map(r=><button key={r.ms} className={rangeMs===r.ms?'on':''} onClick={()=>setRangeMs(r.ms)}>{r.label}</button>)}</div>
-        </div>
-        {windowTs&&<button className="btn btn-sm" onClick={()=>setWindowTs(null)} style={{gap:5,color:'hsl(var(--primary))',marginBottom:1}}><X size={11}/>Clear window</button>}
       </div>
 
       {/* ── Signal Panel ── */}
@@ -705,7 +776,7 @@ export function AnalyticsPage() {
           </div>
         ):(
           <>
-            <SignalChart series={series} overlays={overlaySeries} windowTs={windowTs} onWindow={setWindowTs} height={320} svgRef={svgRef}/>
+            <SignalChart series={series} overlays={overlaySeries} windowTs={windowTs} onWindow={setWindowTs} height={isMobile?220:320} svgRef={svgRef}/>
             <StatsStrip series={series} windowTs={windowTs}/>
           </>
         )}
@@ -747,36 +818,10 @@ export function AnalyticsPage() {
 
       {/* 3. DSP Processing */}
       <AnalysisCard id="dsp" icon={<Filter size={16}/>} title="DSP Processing" badge={overlays.length?`${overlays.length} op${overlays.length>1?'s':''}`:undefined} description="Apply moving averages, EMA, differentiation, integration, and Butterworth IIR filters — see before/after comparison" open={openModules.has('dsp')} onToggle={()=>toggleModule('dsp')}>
-        <div style={{display:'grid',gridTemplateColumns:'300px 1fr'}}>
+        <div style={{display:'grid',gridTemplateColumns:isMobile?'1fr':'300px 1fr'}}>
 
           {/* Pipeline controls */}
-          <div style={{borderRight:'1px solid hsl(var(--border))',display:'flex',flexDirection:'column',gap:0}}>
-            {/* Applied ops */}
-            <div style={{padding:'12px 14px',borderBottom:'1px solid hsl(var(--border))'}}>
-              <div style={{fontSize:8.5,fontFamily:'var(--font-mono)',letterSpacing:'0.12em',textTransform:'uppercase',color:'hsl(var(--muted-fg))',marginBottom:8}}>Pipeline</div>
-              <div style={{display:'flex',flexDirection:'column',gap:4}}>
-                <div style={{padding:'7px 10px',background:'hsl(var(--surface-raised,var(--surface)))',border:'1px solid hsl(var(--border))',fontSize:10,fontFamily:'var(--font-mono)',color:'hsl(var(--muted-fg))'}}>
-                  <span style={{color:'hsl(var(--fg))'}}>INPUT</span> · {series.reduce((s,x)=>s+x.data.length,0)} pts
-                </div>
-                {overlays.length===0&&<div style={{textAlign:'center',fontSize:9,fontFamily:'var(--font-mono)',color:'hsl(var(--muted-fg))',padding:'6px 0',opacity:0.45}}>↓ no operations yet</div>}
-                {overlays.map((ov,i)=>(
-                  <div key={ov.id} style={{display:'flex',flexDirection:'column',gap:2}}>
-                    <div style={{textAlign:'center',fontSize:9,color:'hsl(var(--muted-fg))',opacity:0.35}}>↓</div>
-                    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'6px 10px',border:'1px solid hsl(var(--border))',borderLeft:`3px solid ${ov.color}`}}>
-                      <div>
-                        <div style={{fontSize:10,fontFamily:'var(--font-mono)',color:ov.color}}>{ov.label}</div>
-                        <div style={{fontSize:8,fontFamily:'var(--font-mono)',color:'hsl(var(--muted-fg))',marginTop:1}}>{numericFields.find((f:any)=>f.key===ov.fieldKey)?.label??ov.fieldKey.replace(/_/g,' ')}</div>
-                      </div>
-                      <button onClick={()=>setOverlays(p=>p.filter(o=>o.id!==ov.id))} style={{background:'none',border:0,cursor:'pointer',color:'hsl(var(--muted-fg))',padding:0}}><X size={11}/></button>
-                    </div>
-                  </div>
-                ))}
-                {overlays.length>0&&<>
-                  <div style={{textAlign:'center',fontSize:9,color:'hsl(var(--muted-fg))',opacity:0.35}}>↓</div>
-                  <div style={{padding:'6px 10px',border:'1px solid hsl(var(--border))',fontSize:10,fontFamily:'var(--font-mono)',color:'hsl(var(--good,#22c55e))'}}>OUTPUT → chart</div>
-                </>}
-              </div>
-            </div>
+          <div style={{borderRight:isMobile?'none':'1px solid hsl(var(--border))',borderBottom:isMobile?'1px solid hsl(var(--border))':'none',display:'flex',flexDirection:'column',gap:0}}>
 
             {/* Add operations */}
             <div style={{padding:'12px 14px',flex:1,overflowY:'auto',display:'flex',flexDirection:'column',gap:10}}>
@@ -836,17 +881,52 @@ export function AnalyticsPage() {
           {/* Before / After view */}
           <div style={{minWidth:0}}>
             {overlays.length===0?(
-              <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:280,gap:10,color:'hsl(var(--muted-fg))'}}>
+              <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:280,gap:10,color:'hsl(var(--muted-fg))',textAlign:'center',padding:'0 16px'}}>
                 <Filter size={32} strokeWidth={1} style={{opacity:0.15}}/>
                 <div style={{fontFamily:'var(--font-mono)',fontSize:11}}>No operations applied yet</div>
-                <div style={{fontFamily:'var(--font-mono)',fontSize:10,opacity:0.55}}>Add an operation from the left panel</div>
+                <div style={{fontFamily:'var(--font-mono)',fontSize:10,opacity:0.55}}>Add an operation from the {isMobile?'panel above':'left panel'}</div>
               </div>
             ):(
               <>
                 <div style={{padding:'6px 16px',borderBottom:'1px solid hsl(var(--border))',fontSize:9,fontFamily:'var(--font-mono)',letterSpacing:'0.1em',textTransform:'uppercase',color:'hsl(var(--muted-fg))'}}>Original signal</div>
-                <SignalChart series={series} overlays={[]} windowTs={windowTs} onWindow={setWindowTs} height={200}/>
-                <div style={{padding:'6px 16px',borderTop:'1px solid hsl(var(--border))',borderBottom:'1px solid hsl(var(--border))',fontSize:9,fontFamily:'var(--font-mono)',letterSpacing:'0.1em',textTransform:'uppercase',color:'hsl(var(--primary))'}}>DSP output ↓ ({overlays.length} operation{overlays.length>1?'s':''})</div>
-                <SignalChart series={overlaySeries} overlays={[]} windowTs={windowTs} onWindow={()=>{}} height={200}/>
+                <SignalChart series={series} overlays={[]} windowTs={windowTs} onWindow={setWindowTs} height={isMobile?160:200}/>
+                <div style={{padding:'6px 16px',borderTop:'1px solid hsl(var(--border))',borderBottom:'1px solid hsl(var(--border))',fontSize:9,fontFamily:'var(--font-mono)',letterSpacing:'0.1em',textTransform:'uppercase',color:'hsl(var(--primary))'}}>DSP output ↓ ({overlays.length} operation{overlays.length>1?'s':''}){highlightOp&&<span style={{marginLeft:8,opacity:0.7}}>· highlighting 1 of {overlays.length}</span>}</div>
+                <SignalChart series={overlaySeries} overlays={[]} windowTs={windowTs} onWindow={()=>{}} height={isMobile?160:200} highlightId={highlightOp}/>
+
+                {/* Applied ops chip strip */}
+                <div style={{padding:'10px 14px',borderTop:'1px solid hsl(var(--border))',display:'flex',gap:6,flexWrap:'wrap',alignItems:'center',background:'hsl(var(--surface))'}}>
+                  <span style={{fontSize:9,fontFamily:'var(--font-mono)',color:'hsl(var(--muted-fg))',letterSpacing:'0.12em',textTransform:'uppercase',marginRight:4}}>Applied</span>
+                  {overlays.map(ov=>{
+                    const isHl=highlightOp===ov.id;
+                    const isDim=highlightOp&&highlightOp!==ov.id;
+                    const fLabel=numericFields.find((f:any)=>f.key===ov.fieldKey)?.label??ov.fieldKey.replace(/_/g,' ');
+                    return (
+                      <div key={ov.id} onClick={()=>setHighlightOp(p=>p===ov.id?null:ov.id)} style={{
+                        display:'inline-flex',alignItems:'center',gap:6,
+                        padding:'5px 4px 5px 10px',
+                        border:`1px solid ${ov.color}`,
+                        borderLeft:`3px solid ${ov.color}`,
+                        background:isHl?`${ov.color}33`:'transparent',
+                        color:ov.color,
+                        fontSize:10,fontFamily:'var(--font-mono)',
+                        cursor:'pointer',transition:'all 0.15s',
+                        opacity:isDim?0.4:1,
+                        userSelect:'none',
+                      }} title={`Click to ${isHl?'unhighlight':'highlight'} this operation`}>
+                        <span>{ov.label}</span>
+                        <span style={{opacity:0.6,fontSize:9,color:'hsl(var(--muted-fg))'}}>· {fLabel}</span>
+                        <span role="button" aria-label="Remove operation"
+                          onClick={e=>{e.stopPropagation();removeOverlay(ov.id);}}
+                          style={{display:'inline-flex',alignItems:'center',justifyContent:'center',width:18,height:18,marginLeft:2,opacity:0.6,cursor:'pointer',borderRadius:2}}
+                          onMouseEnter={e=>{e.currentTarget.style.opacity='1';e.currentTarget.style.background=`${ov.color}25`;}}
+                          onMouseLeave={e=>{e.currentTarget.style.opacity='0.6';e.currentTarget.style.background='transparent';}}>
+                          <X size={11}/>
+                        </span>
+                      </div>
+                    );
+                  })}
+                  {overlays.length>1&&<button onClick={()=>setHighlightOp(null)} disabled={!highlightOp} style={{marginLeft:'auto',background:'none',border:'1px solid hsl(var(--border))',padding:'4px 8px',fontSize:9,fontFamily:'var(--font-mono)',color:highlightOp?'hsl(var(--primary))':'hsl(var(--muted-fg))',cursor:highlightOp?'pointer':'default',letterSpacing:'0.08em',textTransform:'uppercase',opacity:highlightOp?1:0.4}}>Show all</button>}
+                </div>
               </>
             )}
           </div>
@@ -889,7 +969,7 @@ export function AnalyticsPage() {
           </div>
         </div>
 
-        <FeatureScatter3D clouds={featureClouds} axisX={fxX} axisY={fxY} axisZ={fxZ} height={500}/>
+        <FeatureScatter3D clouds={featureClouds} axisX={fxX} axisY={fxY} axisZ={fxZ} height={isMobile?340:isTablet?420:500}/>
 
         <div style={{padding:'8px 20px',borderTop:'1px solid hsl(var(--border))',display:'flex',gap:24,flexWrap:'wrap'}}>
           <div style={{fontSize:8.5,fontFamily:'var(--font-mono)',color:'hsl(var(--muted-fg))',lineHeight:1.6}}>
