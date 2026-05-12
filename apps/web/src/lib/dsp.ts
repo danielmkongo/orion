@@ -237,3 +237,119 @@ export function fmtPeriod(hz: number): string {
   if (s < 86400) return `${(s / 3600).toFixed(1)}h`;
   return `${(s / 86400).toFixed(1)}d`;
 }
+
+// ── Histogram ──────────────────────────────────────────────────────────────
+
+export interface HistBin { bin: number; lo: number; hi: number; count: number; freq: number; }
+
+export function computeHistogram(data: number[], bins = 24): HistBin[] {
+  if (!data.length) return [];
+  const min = Math.min(...data), max = Math.max(...data);
+  const range = max - min || 1;
+  const w = range / bins;
+  const counts = new Array(bins).fill(0);
+  for (const v of data) counts[Math.min(bins - 1, Math.floor((v - min) / w))]++;
+  return counts.map((count, i) => ({
+    bin: min + (i + 0.5) * w, lo: min + i * w, hi: min + (i + 1) * w,
+    count, freq: count / data.length,
+  }));
+}
+
+// ── Correlation Matrix ─────────────────────────────────────────────────────
+
+export function correlationMatrix(series: number[][]): number[][] {
+  const m = series.length;
+  return Array.from({ length: m }, (_, i) =>
+    Array.from({ length: m }, (_, j) => {
+      if (i === j) return 1;
+      const n = Math.min(series[i].length, series[j].length);
+      if (n < 2) return 0;
+      const xi = series[i].slice(0, n), xj = series[j].slice(0, n);
+      const mi = mean(xi), mj = mean(xj);
+      let num = 0, di = 0, dj = 0;
+      for (let k = 0; k < n; k++) {
+        const a = xi[k] - mi, b = xj[k] - mj;
+        num += a * b; di += a * a; dj += b * b;
+      }
+      return di * dj > 0 ? num / Math.sqrt(di * dj) : 0;
+    })
+  );
+}
+
+// ── Spectrogram ────────────────────────────────────────────────────────────
+
+export interface Spectrogram { times: number[]; freqs: number[]; powerDb: number[][]; }
+
+export function computeSpectrogram(values: number[], sampleRateHz: number, windowPts?: number, hopPts?: number): Spectrogram {
+  if (values.length < 8) return { times: [], freqs: [], powerDb: [] };
+  const wSize = windowPts ?? Math.max(8, Math.min(64, (() => { let p = 1; while (p * 16 < values.length) p <<= 1; return p; })()));
+  const hop = hopPts ?? Math.max(1, Math.floor(wSize / 4));
+  const times: number[] = [], powerDb: number[][] = [];
+  for (let start = 0; start + wSize <= values.length; start += hop) {
+    const seg = hannWindow(values.slice(start, start + wSize));
+    const re = new Float64Array(seg), im = new Float64Array(wSize);
+    fftInPlace(re, im);
+    let maxP = 0;
+    const bins: number[] = [];
+    for (let k = 1; k < wSize / 2; k++) {
+      const p = (re[k] ** 2 + im[k] ** 2) / (wSize * wSize);
+      if (p > maxP) maxP = p;
+      bins.push(p);
+    }
+    times.push((start + wSize / 2) / sampleRateHz);
+    powerDb.push(bins.map(p => maxP > 0 ? 10 * Math.log10(p / maxP + 1e-12) : -120));
+  }
+  const freqs = Array.from({ length: Math.floor(wSize / 2) - 1 }, (_, k) => ((k + 1) * sampleRateHz) / wSize);
+  return { times, freqs, powerDb };
+}
+
+// ── PCA (Jacobi eigendecomposition) ────────────────────────────────────────
+
+export interface PCAResult {
+  scores: number[][];        // [n_samples × k] projected coordinates
+  explainedVar: number[];    // fraction of variance per component
+  loadings: number[][];      // [k × m_features] eigenvectors
+}
+
+function jacobiEigen(A: number[][]): { vecs: number[][]; vals: number[] } {
+  const n = A.length;
+  const a = A.map(r => [...r]);
+  const V = Array.from({ length: n }, (_, i) => Array.from({ length: n }, (_, j) => +(i === j)));
+  for (let iter = 0; iter < 150 * n; iter++) {
+    let maxV = 0, p = 0, q = 1;
+    for (let i = 0; i < n - 1; i++) for (let j = i + 1; j < n; j++) if (Math.abs(a[i][j]) > maxV) { maxV = Math.abs(a[i][j]); p = i; q = j; }
+    if (maxV < 1e-10) break;
+    const th = 0.5 * Math.atan2(2 * a[p][q], a[q][q] - a[p][p]);
+    const c = Math.cos(th), s = Math.sin(th);
+    const na = a.map(r => [...r]);
+    na[p][p] = c*c*a[p][p] - 2*s*c*a[p][q] + s*s*a[q][q];
+    na[q][q] = s*s*a[p][p] + 2*s*c*a[p][q] + c*c*a[q][q];
+    na[p][q] = na[q][p] = 0;
+    for (let r = 0; r < n; r++) if (r !== p && r !== q) {
+      na[r][p] = na[p][r] = c*a[r][p] - s*a[r][q];
+      na[r][q] = na[q][r] = s*a[r][p] + c*a[r][q];
+    }
+    for (let i = 0; i < n; i++) a[i] = na[i];
+    for (let r = 0; r < n; r++) { const vp = V[r][p], vq = V[r][q]; V[r][p] = c*vp - s*vq; V[r][q] = s*vp + c*vq; }
+  }
+  const vals = a.map((r, i) => r[i]);
+  const order = vals.map((_, i) => i).sort((a, b) => vals[b] - vals[a]);
+  return { vals: order.map(i => vals[i]), vecs: order.map(i => V.map(r => r[i])) };
+}
+
+export function runPCA(data: number[][], k = 3): PCAResult {
+  if (data.length < 2 || !data[0]?.length) return { scores: [], explainedVar: [], loadings: [] };
+  const n = data.length, m = data[0].length;
+  const means = Array.from({ length: m }, (_, j) => mean(data.map(r => r[j] ?? 0)));
+  const stds  = Array.from({ length: m }, (_, j) => { const s = stdDev(data.map(r => (r[j] ?? 0) - means[j])); return s > 1e-10 ? s : 1; });
+  const X = data.map(r => r.map((v, j) => (v - means[j]) / stds[j]));
+  const cov = Array.from({ length: m }, (_, i) => Array.from({ length: m }, (_, j) => X.reduce((s, r) => s + r[i] * r[j], 0) / (n - 1)));
+  const { vals, vecs } = jacobiEigen(cov);
+  const nc = Math.min(k, m);
+  const totalVar = vals.reduce((s, v) => s + Math.max(0, v), 0);
+  return {
+    scores: X.map(r => vecs.slice(0, nc).map(v => r.reduce((s, x, j) => s + x * (v[j] ?? 0), 0))),
+    explainedVar: vals.slice(0, nc).map(v => Math.max(0, v) / (totalVar || 1)),
+    loadings: vecs.slice(0, nc),
+  };
+}

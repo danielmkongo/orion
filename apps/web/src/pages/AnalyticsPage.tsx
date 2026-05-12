@@ -1,730 +1,808 @@
-import React, { useState, useRef, useMemo, useEffect, useCallback, useId } from 'react';
+import React, {
+  useState, useRef, useMemo, useEffect, useCallback, useId,
+} from 'react';
 import { useQuery, useQueries } from '@tanstack/react-query';
-import { Activity, Plus, X, Download, ChevronDown, Waves, BarChart2, RefreshCw } from 'lucide-react';
+import {
+  Activity, X, Download, ChevronDown, Waves, RefreshCw,
+  BarChart2, Box, Layers,
+} from 'lucide-react';
 import { devicesApi } from '@/api/devices';
 import { telemetryApi } from '@/api/telemetry';
 import {
   computeStats, movingAverage, exponentialMA, differentiate, integrate,
   computePSD, applyLowPass, applyHighPass, applyBandPass, applyNotch,
   detectSampleRate, niceTicks, fmtFreq, fmtPeriod,
+  computeHistogram, correlationMatrix, computeSpectrogram, runPCA,
   type Stats, type FFTBin,
 } from '@/lib/dsp';
 
-const COLORS = ['#ff5b1f','#3b82f6','#22c55e','#a855f7','#f59e0b','#ec4899','#14b8a6','#f97316'];
-const OVERLAY_ALPHA = ['#ff9f6b','#93c5fd','#86efac','#d8b4fe','#fcd34d','#fbcfe8','#99f6e4','#fdba74'];
+// ── Constants ────────────────────────────────────────────────────────────────
+
+const COLORS  = ['#ff5b1f','#3b82f6','#22c55e','#a855f7','#f59e0b','#ec4899','#14b8a6','#f97316'];
+const O_COLORS = ['#ffb38a','#93c5fd','#86efac','#d8b4fe','#fde68a','#fbcfe8','#99f6e4','#fdba74'];
 const RANGES = [
-  { label: '1H', value: '1h', ms: 3_600_000 },
-  { label: '6H', value: '6h', ms: 21_600_000 },
-  { label: '24H', value: '24h', ms: 86_400_000 },
-  { label: '7D', value: '7d', ms: 604_800_000 },
-  { label: '30D', value: '30d', ms: 2_592_000_000 },
+  { label:'1H', ms:3_600_000 }, { label:'6H', ms:21_600_000 },
+  { label:'24H', ms:86_400_000 }, { label:'7D', ms:604_800_000 }, { label:'30D', ms:2_592_000_000 },
 ];
 
-type OverlayType = 'moving_avg' | 'exp_ma' | 'differentiate' | 'integrate' | 'lowpass' | 'highpass' | 'bandpass' | 'notch';
-interface Overlay {
-  id: string; type: OverlayType; label: string; fieldKey: string;
-  color: string; params: Record<string, number>;
-}
-interface Point { ts: number; value: number; }
-interface Series { name: string; data: Point[]; color: string; fieldKey: string; }
+type Tab = 'signal' | 'spectrum' | 'stats' | '3d';
+type OvType = 'moving_avg'|'exp_ma'|'differentiate'|'integrate'|'lowpass'|'highpass'|'bandpass'|'notch';
 
-function getRangeBounds(rangeValue: string): { from: string; to: string } {
-  const r = RANGES.find(x => x.value === rangeValue) ?? RANGES[2];
+interface Overlay { id:string; type:OvType; label:string; fieldKey:string; color:string; params:Record<string,number>; }
+interface Point   { ts:number; value:number; }
+interface Series  { name:string; data:Point[]; color:string; fieldKey:string; }
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function rangeBounds(ms: number) {
   const now = Date.now();
-  return {
-    from: new Date(now - r.ms).toISOString(),
-    to: new Date(now + 86_400_000).toISOString(),
-  };
+  return { from: new Date(now - ms).toISOString(), to: new Date(now + 86_400_000).toISOString() };
 }
 
-function fmtTs(ts: number, totalMs: number): string {
-  const d = new Date(ts);
-  if (totalMs > 7 * 86_400_000) return d.toLocaleDateString('en', { month: 'short', day: 'numeric', timeZone: 'UTC' });
-  if (totalMs > 86_400_000) return d.toLocaleDateString('en', { month: 'short', day: 'numeric', timeZone: 'UTC' }) + ' ' + d.toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'UTC' });
-  if (totalMs > 3_600_000) return d.toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'UTC' });
-  return d.toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false, timeZone: 'UTC' });
+function fmtTs(ts: number, spanMs: number): string {
+  const d = new Date(ts), tz = 'UTC';
+  if (spanMs > 7*864e5) return d.toLocaleDateString('en', { month:'short', day:'numeric', timeZone:tz });
+  if (spanMs > 864e5)   return d.toLocaleDateString('en', { month:'short', day:'numeric', timeZone:tz }) + ' ' + d.toLocaleTimeString('en', { hour:'2-digit', minute:'2-digit', hour12:false, timeZone:tz });
+  if (spanMs > 36e5)    return d.toLocaleTimeString('en', { hour:'2-digit', minute:'2-digit', hour12:false, timeZone:tz });
+  return d.toLocaleTimeString('en', { hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:false, timeZone:tz });
 }
 
 function fmt4(n: number): string {
   if (!isFinite(n)) return '—';
-  const abs = Math.abs(n);
-  if (abs >= 10000) return n.toFixed(0);
-  if (abs >= 100) return n.toFixed(1);
-  if (abs >= 1) return n.toFixed(2);
+  const a = Math.abs(n);
+  if (a >= 10000) return n.toFixed(0);
+  if (a >= 100)   return n.toFixed(1);
+  if (a >= 1)     return n.toFixed(2);
   return n.toFixed(4);
 }
 
-function downloadCSV(series: Series[], overlaySeries: Series[], windowTs: [number, number] | null) {
+function lerpColor(t: number, c1: string, c2: string): string {
+  const h = (s: string) => [parseInt(s.slice(1,3),16), parseInt(s.slice(3,5),16), parseInt(s.slice(5,7),16)] as const;
+  const [r1,g1,b1] = h(c1), [r2,g2,b2] = h(c2);
+  return `rgb(${Math.round(r1+t*(r2-r1))},${Math.round(g1+t*(g2-g1))},${Math.round(b1+t*(b2-b1))})`;
+}
+
+const INFERNO = [[0,0,4],[40,11,84],[101,21,110],[159,42,99],[212,72,66],[245,125,21],[252,193,57],[253,231,37]] as const;
+function infernoHex(t: number): string {
+  const n = INFERNO.length - 1;
+  const i = Math.min(n - 1, Math.floor(t * n));
+  const f = t * n - i;
+  const [r1,g1,b1] = INFERNO[i], [r2,g2,b2] = INFERNO[i+1];
+  return `rgb(${Math.round(r1+f*(r2-r1))},${Math.round(g1+f*(g2-g1))},${Math.round(b1+f*(b2-b1))})`;
+}
+
+function exportCSV(series: Series[], overlaySeries: Series[], windowTs: [number,number]|null) {
   const all = [...series, ...overlaySeries];
   const tsSet = new Set<number>();
-  all.forEach(s => s.data.forEach(p => {
-    if (!windowTs || (p.ts >= windowTs[0] && p.ts <= windowTs[1])) tsSet.add(p.ts);
-  }));
-  const tsList = [...tsSet].sort((a, b) => a - b);
+  all.forEach(s => s.data.forEach(p => { if (!windowTs || (p.ts >= windowTs[0] && p.ts <= windowTs[1])) tsSet.add(p.ts); }));
+  const sorted = [...tsSet].sort((a,b) => a-b);
   const header = ['timestamp', ...all.map(s => s.name)].join(',');
-  const rows = tsList.map(ts => {
-    const d = new Date(ts);
-    const tsStr = `${d.toISOString().replace('T', ' ').substring(0, 19)}`;
-    const vals = all.map(s => {
-      const pt = s.data.find(p => p.ts === ts);
-      return pt !== undefined ? fmt4(pt.value) : '';
-    });
-    return [tsStr, ...vals].join(',');
-  });
-  const blob = new Blob([header + '\n' + rows.join('\n')], { type: 'text/csv' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a'); a.href = url; a.download = 'orion-analytics.csv'; a.click();
-  URL.revokeObjectURL(url);
+  const rows = sorted.map(ts => [new Date(ts).toISOString(), ...all.map(s => { const p = s.data.find(x => x.ts === ts); return p ? fmt4(p.value) : ''; })].join(','));
+  const blob = new Blob([header+'\n'+rows.join('\n')], { type:'text/csv' });
+  const a = Object.assign(document.createElement('a'), { href:URL.createObjectURL(blob), download:'orion-analytics.csv' });
+  a.click(); URL.revokeObjectURL(a.href);
 }
 
-function downloadSVG(svgEl: SVGSVGElement | null) {
-  if (!svgEl) return;
-  const serializer = new XMLSerializer();
-  const src = '<?xml version="1.0" standalone="no"?>\n' + serializer.serializeToString(svgEl);
-  const blob = new Blob([src], { type: 'image/svg+xml' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a'); a.href = url; a.download = 'orion-analytics.svg'; a.click();
-  URL.revokeObjectURL(url);
-}
+// ── Signal Chart (SVG, window-selection) ────────────────────────────────────
 
-// ── Signal Chart ────────────────────────────────────────────────────────────
+const SP = { top:20, right:24, bottom:42, left:58 };
 
-const PAD = { top: 20, right: 24, bottom: 42, left: 58 };
-
-interface SignalChartProps {
-  series: Series[];
-  overlaySeries: Series[];
-  windowTs: [number, number] | null;
-  onWindowChange: (w: [number, number] | null) => void;
-  height?: number;
-  svgRef?: React.RefObject<SVGSVGElement>;
-}
-
-function SignalChart({ series, overlaySeries, windowTs, onWindowChange, height = 340, svgRef: externalSvgRef }: SignalChartProps) {
+function SignalChart({ series, overlays: ovSeries, windowTs, onWindow, height=360, svgRef: extRef }: {
+  series: Series[]; overlays: Series[]; windowTs:[number,number]|null;
+  onWindow:(w:[number,number]|null)=>void; height?:number; svgRef?:React.RefObject<SVGSVGElement>;
+}) {
   const uid = useId();
-  const containerRef = useRef<HTMLDivElement>(null);
-  const internalSvgRef = useRef<SVGSVGElement>(null);
-  const svgRef = externalSvgRef ?? internalSvgRef;
-  const [svgW, setSvgW] = useState(800);
-  const [drag, setDrag] = useState<{ type: 'new' | 'move' | 'left' | 'right'; anchorTs: number; anchorWin?: [number, number] } | null>(null);
-  const [hoverX, setHoverX] = useState<number | null>(null);
-  const [tooltip, setTooltip] = useState<{ x: number; y: number; ts: number } | null>(null);
+  const cRef = useRef<HTMLDivElement>(null);
+  const iRef = useRef<SVGSVGElement>(null);
+  const svgRef = extRef ?? iRef;
+  const [W, setW] = useState(800);
+  const [drag, setDrag] = useState<{type:'new'|'move'|'L'|'R'; aTs:number; aW?:[number,number]}|null>(null);
+  const [hx, setHx] = useState<number|null>(null);
 
   useEffect(() => {
-    if (!containerRef.current) return;
-    const ro = new ResizeObserver(([e]) => setSvgW(Math.floor(e.contentRect.width)));
-    ro.observe(containerRef.current);
-    return () => ro.disconnect();
+    if (!cRef.current) return;
+    const ro = new ResizeObserver(([e]) => setW(Math.floor(e.contentRect.width)));
+    ro.observe(cRef.current); return () => ro.disconnect();
   }, []);
 
-  const innerW = svgW - PAD.left - PAD.right;
-  const innerH = height - PAD.top - PAD.bottom;
+  const iW = W - SP.left - SP.right, iH = height - SP.top - SP.bottom;
+  const all = useMemo(() => [...series, ...ovSeries].flatMap(s => s.data), [series, ovSeries]);
 
-  const allPoints = useMemo(() => [...series, ...overlaySeries].flatMap(s => s.data), [series, overlaySeries]);
+  const { mnTs, mxTs, mnV, mxV } = useMemo(() => {
+    if (!all.length) return { mnTs:0, mxTs:1, mnV:0, mxV:1 };
+    const ts = all.map(p=>p.ts), vs = all.map(p=>p.value);
+    return { mnTs:Math.min(...ts), mxTs:Math.max(...ts), mnV:Math.min(...vs), mxV:Math.max(...vs) };
+  }, [all]);
 
-  const { minTs, maxTs, minVal, maxVal } = useMemo(() => {
-    if (!allPoints.length) return { minTs: 0, maxTs: 1, minVal: 0, maxVal: 1 };
-    const tss = allPoints.map(p => p.ts);
-    const vals = allPoints.map(p => p.value);
-    return { minTs: Math.min(...tss), maxTs: Math.max(...tss), minVal: Math.min(...vals), maxVal: Math.max(...vals) };
-  }, [allPoints]);
+  const span = mxTs - mnTs || 1, vRange = mxV - mnV || 1, vPad = vRange * 0.08;
+  const yMn = mnV - vPad, yMx = mxV + vPad;
 
-  const totalMs = maxTs - minTs || 1;
-  const valRange = maxVal - minVal || 1;
-  const valPad = valRange * 0.08;
-  const yMin = minVal - valPad, yMax = maxVal + valPad;
+  const tsX = useCallback((ts:number) => SP.left + (ts-mnTs)/span*iW, [mnTs,span,iW]);
+  const vY  = useCallback((v:number)  => SP.top + (1-(v-yMn)/(yMx-yMn))*iH, [yMn,yMx,iH]);
+  const xTs = useCallback((x:number)  => mnTs + (x-SP.left)/iW*span, [mnTs,span,iW]);
+  const clX = (x:number) => Math.max(SP.left, Math.min(SP.left+iW, x));
+  const clTs = (t:number) => Math.max(mnTs, Math.min(mxTs, t));
 
-  const tsToX = useCallback((ts: number) => PAD.left + ((ts - minTs) / totalMs) * innerW, [minTs, totalMs, innerW]);
-  const valToY = useCallback((v: number) => PAD.top + (1 - (v - yMin) / (yMax - yMin)) * innerH, [yMin, yMax, innerH]);
-  const xToTs = useCallback((x: number) => minTs + ((x - PAD.left) / innerW) * totalMs, [minTs, totalMs, innerW]);
+  const path = (data:Point[]) => data.length < 2 ? '' :
+    data.map((p,i)=>`${i?'L':'M'}${tsX(p.ts).toFixed(1)},${vY(p.value).toFixed(1)}`).join(' ');
 
-  const buildPath = (data: Point[]) =>
-    data.length < 2 ? '' :
-    data.map((p, i) => `${i === 0 ? 'M' : 'L'}${tsToX(p.ts).toFixed(1)},${valToY(p.value).toFixed(1)}`).join(' ');
+  const yTicks = useMemo(()=>niceTicks(yMn,yMx,6),[yMn,yMx]);
+  const xTicks = useMemo(()=>{
+    const n = Math.max(3, Math.floor(iW/90));
+    return Array.from({length:n+1},(_,i)=>mnTs+i*span/n);
+  },[mnTs,span,iW]);
 
-  const yTicks = useMemo(() => niceTicks(yMin, yMax, 6), [yMin, yMax]);
-  const xTicks = useMemo(() => {
-    const count = Math.max(3, Math.floor(innerW / 90));
-    const step = totalMs / count;
-    const ticks = [];
-    for (let i = 0; i <= count; i++) ticks.push(minTs + i * step);
-    return ticks;
-  }, [minTs, totalMs, innerW]);
+  const wx1 = windowTs ? Math.max(SP.left, tsX(windowTs[0])) : null;
+  const wx2 = windowTs ? Math.min(SP.left+iW, tsX(windowTs[1])) : null;
+  const HW = 7;
 
-  const wx1 = windowTs ? Math.max(PAD.left, tsToX(windowTs[0])) : null;
-  const wx2 = windowTs ? Math.min(PAD.left + innerW, tsToX(windowTs[1])) : null;
+  const getX = (e:React.MouseEvent) => { const r = svgRef.current!.getBoundingClientRect(); return clX(e.clientX-r.left); };
 
-  const HANDLE_W = 8;
-  const clampX = (x: number) => Math.max(PAD.left, Math.min(PAD.left + innerW, x));
-  const clampTs = (ts: number) => Math.max(minTs, Math.min(maxTs, ts));
-
-  const getSvgX = (e: React.MouseEvent): number => {
-    const rect = svgRef.current!.getBoundingClientRect();
-    return clampX(e.clientX - rect.left);
-  };
-
-  const onMouseDown = (e: React.MouseEvent<SVGSVGElement>) => {
+  const onMD = (e:React.MouseEvent<SVGSVGElement>) => {
     if (e.button !== 0) return;
-    const x = getSvgX(e);
-    const ts = xToTs(x);
-    if (windowTs && wx1 !== null && wx2 !== null) {
-      if (Math.abs(x - wx1) <= HANDLE_W) { setDrag({ type: 'left', anchorTs: ts, anchorWin: windowTs }); return; }
-      if (Math.abs(x - wx2) <= HANDLE_W) { setDrag({ type: 'right', anchorTs: ts, anchorWin: windowTs }); return; }
-      if (x > wx1 && x < wx2) { setDrag({ type: 'move', anchorTs: ts, anchorWin: windowTs }); return; }
+    const x = getX(e), ts = xTs(x);
+    if (windowTs && wx1!==null && wx2!==null) {
+      if (Math.abs(x-wx1)<=HW) { setDrag({type:'L',aTs:ts,aW:windowTs}); return; }
+      if (Math.abs(x-wx2)<=HW) { setDrag({type:'R',aTs:ts,aW:windowTs}); return; }
+      if (x>wx1 && x<wx2)      { setDrag({type:'move',aTs:ts,aW:windowTs}); return; }
     }
-    setDrag({ type: 'new', anchorTs: ts });
-    onWindowChange([clampTs(ts), clampTs(ts)]);
+    setDrag({type:'new',aTs:ts}); onWindow([clTs(ts),clTs(ts)]);
   };
-
-  const onMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
-    const x = getSvgX(e);
-    const ts = xToTs(x);
-    setHoverX(x);
-    setTooltip({ x, y: e.clientY, ts });
+  const onMM = (e:React.MouseEvent<SVGSVGElement>) => {
+    const x = getX(e), ts = xTs(x); setHx(x);
     if (!drag) return;
-    if (drag.type === 'new') {
-      const a = drag.anchorTs, b = clampTs(ts);
-      onWindowChange([Math.min(a, b), Math.max(a, b)]);
-    } else if (drag.type === 'left' && drag.anchorWin) {
-      const delta = ts - drag.anchorTs;
-      onWindowChange([clampTs(drag.anchorWin[0] + delta), drag.anchorWin[1]]);
-    } else if (drag.type === 'right' && drag.anchorWin) {
-      const delta = ts - drag.anchorTs;
-      onWindowChange([drag.anchorWin[0], clampTs(drag.anchorWin[1] + delta)]);
-    } else if (drag.type === 'move' && drag.anchorWin) {
-      const delta = ts - drag.anchorTs;
-      const span = drag.anchorWin[1] - drag.anchorWin[0];
-      const newStart = clampTs(drag.anchorWin[0] + delta);
-      onWindowChange([newStart, clampTs(newStart + span)]);
+    const d = ts - drag.aTs;
+    if (drag.type==='new') { const a=drag.aTs,b=clTs(ts); onWindow([Math.min(a,b),Math.max(a,b)]); }
+    else if (drag.type==='L' && drag.aW) onWindow([clTs(drag.aW[0]+d),drag.aW[1]]);
+    else if (drag.type==='R' && drag.aW) onWindow([drag.aW[0],clTs(drag.aW[1]+d)]);
+    else if (drag.type==='move' && drag.aW) {
+      const sp2 = drag.aW[1]-drag.aW[0], ns=clTs(drag.aW[0]+d);
+      onWindow([ns,clTs(ns+sp2)]);
     }
   };
+  const onMU = () => setDrag(null);
+  const onML = () => { setDrag(null); setHx(null); };
 
-  const onMouseUp = () => setDrag(null);
-  const onMouseLeave = () => { setDrag(null); setHoverX(null); setTooltip(null); };
+  const cursor = drag ? (drag.type==='move'?'grabbing':'ew-resize')
+    : (wx1!==null&&wx2!==null&&hx!==null&&(Math.abs(hx-wx1)<=HW||Math.abs(hx-wx2)<=HW)) ? 'ew-resize'
+    : (wx1!==null&&wx2!==null&&hx!==null&&hx>wx1&&hx<wx2) ? 'grab' : 'crosshair';
 
-  const cursor = drag
-    ? (drag.type === 'move' ? 'grabbing' : 'ew-resize')
-    : (windowTs && wx1 !== null && wx2 !== null && hoverX !== null && (Math.abs(hoverX - wx1) <= HANDLE_W || Math.abs(hoverX - wx2) <= HANDLE_W))
-      ? 'ew-resize'
-      : (windowTs && wx1 !== null && wx2 !== null && hoverX !== null && hoverX > wx1 && hoverX < wx2)
-        ? 'grab' : 'crosshair';
-
-  const clipId = `${uid}-clip`;
+  const clip = `${uid}-c`;
 
   return (
-    <div ref={containerRef} style={{ width: '100%', position: 'relative' }}>
-      <svg
-        ref={svgRef} width={svgW} height={height}
-        style={{ display: 'block', cursor, userSelect: 'none', touchAction: 'none' }}
-        onMouseDown={onMouseDown} onMouseMove={onMouseMove}
-        onMouseUp={onMouseUp} onMouseLeave={onMouseLeave}
-      >
+    <div ref={cRef} style={{width:'100%'}}>
+      <svg ref={svgRef} width={W} height={height}
+        style={{display:'block',cursor,userSelect:'none'}}
+        onMouseDown={onMD} onMouseMove={onMM} onMouseUp={onMU} onMouseLeave={onML}>
         <defs>
-          <clipPath id={clipId}>
-            <rect x={PAD.left} y={PAD.top} width={innerW} height={innerH} />
-          </clipPath>
+          <clipPath id={clip}><rect x={SP.left} y={SP.top} width={iW} height={iH}/></clipPath>
         </defs>
+        {yTicks.map((v,i)=><line key={i} x1={SP.left} y1={vY(v)} x2={SP.left+iW} y2={vY(v)} stroke="hsl(var(--border))" strokeWidth={0.5}/>)}
+        {xTicks.map((t,i)=><line key={i} x1={tsX(t)} y1={SP.top} x2={tsX(t)} y2={SP.top+iH} stroke="hsl(var(--border))" strokeWidth={0.5}/>)}
 
-        {/* Grid */}
-        {yTicks.map((v, i) => (
-          <line key={i} x1={PAD.left} y1={valToY(v)} x2={PAD.left + innerW} y2={valToY(v)}
-            stroke="hsl(var(--border))" strokeWidth={0.5} />
-        ))}
-        {xTicks.map((ts, i) => (
-          <line key={i} x1={tsToX(ts)} y1={PAD.top} x2={tsToX(ts)} y2={PAD.top + innerH}
-            stroke="hsl(var(--border))" strokeWidth={0.5} />
-        ))}
+        {wx1!==null&&wx2!==null&&wx1<wx2&&<>
+          <rect x={wx1} y={SP.top} width={Math.max(0,wx2-wx1)} height={iH}
+            fill="hsl(var(--primary)/0.07)" clipPath={`url(#${clip})`}/>
+          <line x1={wx1} y1={SP.top} x2={wx1} y2={SP.top+iH} stroke="hsl(var(--primary))" strokeWidth={1.5} strokeOpacity={0.7}/>
+          <line x1={wx2} y1={SP.top} x2={wx2} y2={SP.top+iH} stroke="hsl(var(--primary))" strokeWidth={1.5} strokeOpacity={0.7}/>
+          <rect x={wx1-HW/2} y={SP.top+iH/2-18} width={HW} height={36} rx={3} fill="hsl(var(--primary))" opacity={0.45}/>
+          <rect x={wx2-HW/2} y={SP.top+iH/2-18} width={HW} height={36} rx={3} fill="hsl(var(--primary))" opacity={0.45}/>
+          {wx2-wx1>50&&<text x={(wx1+wx2)/2} y={SP.top+14} textAnchor="middle"
+            fontSize={8} fontFamily="var(--font-mono)" fill="hsl(var(--primary))" fillOpacity={0.8}>
+            {((windowTs![1]-windowTs![0])/60000).toFixed(1)} min window
+          </text>}
+        </>}
 
-        {/* Window overlay */}
-        {wx1 !== null && wx2 !== null && wx1 < wx2 && (
-          <g>
-            <rect x={wx1} y={PAD.top} width={Math.max(0, wx2 - wx1)} height={innerH}
-              fill="hsl(var(--primary) / 0.06)" clipPath={`url(#${clipId})`} />
-            <line x1={wx1} y1={PAD.top} x2={wx1} y2={PAD.top + innerH}
-              stroke="hsl(var(--primary))" strokeWidth={1.5} strokeOpacity={0.6} />
-            <line x1={wx2} y1={PAD.top} x2={wx2} y2={PAD.top + innerH}
-              stroke="hsl(var(--primary))" strokeWidth={1.5} strokeOpacity={0.6} />
-            <rect x={wx1 - HANDLE_W / 2} y={PAD.top + innerH / 2 - 16} width={HANDLE_W} height={32}
-              rx={3} fill="hsl(var(--primary))" opacity={0.5} />
-            <rect x={wx2 - HANDLE_W / 2} y={PAD.top + innerH / 2 - 16} width={HANDLE_W} height={32}
-              rx={3} fill="hsl(var(--primary))" opacity={0.5} />
-            <text x={(wx1 + wx2) / 2} y={PAD.top + 13} textAnchor="middle"
-              fontSize={8.5} fontFamily="var(--font-mono)" fill="hsl(var(--primary))" fillOpacity={0.8}>
-              {((windowTs![1] - windowTs![0]) / 60000).toFixed(1)} min
-            </text>
-          </g>
-        )}
+        {series.map((s,i)=><path key={i} d={path(s.data)} fill="none" stroke={s.color}
+          strokeWidth={1.75} strokeLinejoin="round" strokeLinecap="round" clipPath={`url(#${clip})`}/>)}
+        {ovSeries.map((s,i)=><path key={i} d={path(s.data)} fill="none" stroke={s.color}
+          strokeWidth={1.75} strokeDasharray="6 3" strokeLinejoin="round" clipPath={`url(#${clip})`}/>)}
+        {hx!==null&&<line x1={hx} y1={SP.top} x2={hx} y2={SP.top+iH}
+          stroke="hsl(var(--fg))" strokeWidth={0.4} strokeOpacity={0.3} clipPath={`url(#${clip})`}/>}
 
-        {/* Raw series */}
-        {series.map((s, i) => (
-          <path key={i} d={buildPath(s.data)} fill="none" stroke={s.color}
-            strokeWidth={1.75} strokeLinejoin="round" strokeLinecap="round"
-            clipPath={`url(#${clipId})`} />
-        ))}
+        <line x1={SP.left} y1={SP.top} x2={SP.left} y2={SP.top+iH} stroke="hsl(var(--border))"/>
+        {yTicks.map((v,i)=><text key={i} x={SP.left-7} y={vY(v)+3.5} textAnchor="end"
+          fontSize={9} fontFamily="var(--font-mono)" fill="hsl(var(--muted-fg))">{fmt4(v)}</text>)}
+        <line x1={SP.left} y1={SP.top+iH} x2={SP.left+iW} y2={SP.top+iH} stroke="hsl(var(--border))"/>
+        {xTicks.map((t,i)=><text key={i} x={tsX(t)} y={SP.top+iH+14} textAnchor="middle"
+          fontSize={9} fontFamily="var(--font-mono)" fill="hsl(var(--muted-fg))">{fmtTs(t,span)}</text>)}
 
-        {/* Overlay series (dashed) */}
-        {overlaySeries.map((s, i) => (
-          <path key={i} d={buildPath(s.data)} fill="none" stroke={s.color}
-            strokeWidth={1.5} strokeDasharray="5 3" strokeLinejoin="round"
-            clipPath={`url(#${clipId})`} />
-        ))}
-
-        {/* Hover line */}
-        {hoverX !== null && (
-          <line x1={hoverX} y1={PAD.top} x2={hoverX} y2={PAD.top + innerH}
-            stroke="hsl(var(--fg))" strokeWidth={0.5} strokeOpacity={0.3}
-            clipPath={`url(#${clipId})`} />
-        )}
-
-        {/* Y axis */}
-        <line x1={PAD.left} y1={PAD.top} x2={PAD.left} y2={PAD.top + innerH}
-          stroke="hsl(var(--border))" strokeWidth={1} />
-        {yTicks.map((v, i) => (
-          <text key={i} x={PAD.left - 7} y={valToY(v) + 3.5} textAnchor="end"
-            fontSize={9} fontFamily="var(--font-mono)" fill="hsl(var(--muted-fg))">
-            {fmt4(v)}
-          </text>
-        ))}
-
-        {/* X axis */}
-        <line x1={PAD.left} y1={PAD.top + innerH} x2={PAD.left + innerW} y2={PAD.top + innerH}
-          stroke="hsl(var(--border))" strokeWidth={1} />
-        {xTicks.map((ts, i) => (
-          <text key={i} x={tsToX(ts)} y={PAD.top + innerH + 14} textAnchor="middle"
-            fontSize={9} fontFamily="var(--font-mono)" fill="hsl(var(--muted-fg))">
-            {fmtTs(ts, totalMs)}
-          </text>
-        ))}
-
-        {/* Window time labels */}
-        {windowTs && wx1 !== null && wx2 !== null && wx2 - wx1 > 60 && (
-          <>
-            <text x={wx1 + 4} y={PAD.top + innerH - 5} fontSize={7.5} fontFamily="var(--font-mono)" fill="hsl(var(--primary))" fillOpacity={0.8}>
-              {fmtTs(windowTs[0], totalMs)}
-            </text>
-            <text x={wx2 - 4} y={PAD.top + innerH - 5} textAnchor="end" fontSize={7.5} fontFamily="var(--font-mono)" fill="hsl(var(--primary))" fillOpacity={0.8}>
-              {fmtTs(windowTs[1], totalMs)}
-            </text>
-          </>
-        )}
+        {windowTs&&wx1!==null&&wx2!==null&&wx2-wx1>80&&<>
+          <text x={wx1+3} y={SP.top+iH-4} fontSize={7} fontFamily="var(--font-mono)" fill="hsl(var(--primary))" fillOpacity={0.7}>{fmtTs(windowTs[0],span)}</text>
+          <text x={wx2-3} y={SP.top+iH-4} textAnchor="end" fontSize={7} fontFamily="var(--font-mono)" fill="hsl(var(--primary))" fillOpacity={0.7}>{fmtTs(windowTs[1],span)}</text>
+        </>}
       </svg>
     </div>
   );
 }
 
-// ── PSD Chart ───────────────────────────────────────────────────────────────
+// ── PSD Chart ─────────────────────────────────────────────────────────────────
 
-function PSDChart({ bins, sampleRateHz, height = 200 }: { bins: FFTBin[]; sampleRateHz: number; height?: number }) {
+function PSDChart({ bins, sampleRateHz, height=220 }: { bins:FFTBin[]; sampleRateHz:number; height?:number }) {
   const uid = useId();
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [svgW, setSvgW] = useState(800);
-  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
-
-  useEffect(() => {
-    if (!containerRef.current) return;
-    const ro = new ResizeObserver(([e]) => setSvgW(Math.floor(e.contentRect.width)));
-    ro.observe(containerRef.current);
-    return () => ro.disconnect();
-  }, []);
-
-  if (!bins.length) return (
-    <div style={{ height, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'hsl(var(--muted-fg))', fontFamily: 'var(--font-mono)', fontSize: 11 }}>
-      Select a window on the signal chart to compute spectrum
-    </div>
-  );
-
-  const fp = { top: 16, right: 24, bottom: 38, left: 54 };
-  const iW = svgW - fp.left - fp.right;
-  const iH = height - fp.top - fp.bottom;
-
-  const freqs = bins.map(b => b.freq);
-  const powers = bins.map(b => b.powerDb);
-  const minF = Math.min(...freqs), maxF = Math.max(...freqs);
-  const minP = Math.max(-60, Math.min(...powers)), maxP = 0;
-
-  const fToX = (f: number) => fp.left + ((f - minF) / (maxF - minF || 1)) * iW;
-  const pToY = (p: number) => fp.top + (1 - (p - minP) / (maxP - minP)) * iH;
-
-  const clipId = `${uid}-psd`;
-  const barW = Math.max(1, iW / bins.length - 0.5);
-  const peakBin = bins.reduce((a, b) => b.powerDb > a.powerDb ? b : a, bins[0]);
-
-  const yTicks = niceTicks(minP, maxP, 5);
-  const xTicks = niceTicks(minF, maxF, 5);
-
+  const cRef = useRef<HTMLDivElement>(null);
+  const [W, setW] = useState(800);
+  const [hi, setHi] = useState<number|null>(null);
+  useEffect(()=>{ if(!cRef.current) return; const ro=new ResizeObserver(([e])=>setW(Math.floor(e.contentRect.width))); ro.observe(cRef.current); return ()=>ro.disconnect(); },[]);
+  if (!bins.length) return <div style={{height,display:'flex',alignItems:'center',justifyContent:'center',fontFamily:'var(--font-mono)',fontSize:11,color:'hsl(var(--muted-fg))'}}>Select a window on the signal to compute spectrum</div>;
+  const P={top:16,right:24,bottom:36,left:52}, iW=W-P.left-P.right, iH=height-P.top-P.bottom;
+  const freqs=bins.map(b=>b.freq), powers=bins.map(b=>b.powerDb);
+  const mnF=Math.min(...freqs),mxF=Math.max(...freqs), mnP=Math.max(-60,Math.min(...powers)),mxP=0;
+  const fX=(f:number)=>P.left+(f-mnF)/(mxF-mnF||1)*iW;
+  const pY=(p:number)=>P.top+(1-(p-mnP)/(mxP-mnP))*iH;
+  const bW=Math.max(1,iW/bins.length-0.5);
+  const peak=bins.reduce((a,b)=>b.powerDb>a.powerDb?b:a,bins[0]);
+  const yT=niceTicks(mnP,mxP,5), xT=niceTicks(mnF,mxF,5);
+  const clip=`${uid}-pc`;
   return (
-    <div ref={containerRef} style={{ width: '100%' }}>
-      <svg width={svgW} height={height} style={{ display: 'block' }}
-        onMouseMove={e => {
-          const rect = e.currentTarget.getBoundingClientRect();
-          const x = e.clientX - rect.left;
-          const frac = (x - fp.left) / iW;
-          const idx = Math.round(frac * (bins.length - 1));
-          setHoverIdx(idx >= 0 && idx < bins.length ? idx : null);
-        }}
-        onMouseLeave={() => setHoverIdx(null)}>
+    <div ref={cRef} style={{width:'100%'}}>
+      <svg width={W} height={height} style={{display:'block'}}
+        onMouseMove={e=>{const r=e.currentTarget.getBoundingClientRect(); const x=e.clientX-r.left; const idx=Math.round((x-P.left)/iW*(bins.length-1)); setHi(idx>=0&&idx<bins.length?idx:null);}}
+        onMouseLeave={()=>setHi(null)}>
         <defs>
-          <clipPath id={clipId}><rect x={fp.left} y={fp.top} width={iW} height={iH} /></clipPath>
-          <linearGradient id={`${uid}-bar`} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#ff5b1f" stopOpacity={0.9} />
-            <stop offset="100%" stopColor="#ff5b1f" stopOpacity={0.15} />
+          <clipPath id={clip}><rect x={P.left} y={P.top} width={iW} height={iH}/></clipPath>
+          <linearGradient id={`${uid}-bg`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#ff5b1f" stopOpacity={0.9}/>
+            <stop offset="100%" stopColor="#ff5b1f" stopOpacity={0.1}/>
           </linearGradient>
         </defs>
-
-        {yTicks.map((v, i) => (
-          <line key={i} x1={fp.left} y1={pToY(v)} x2={fp.left + iW} y2={pToY(v)}
-            stroke="hsl(var(--border))" strokeWidth={0.5} />
-        ))}
-
-        {bins.map((b, i) => {
-          const x = fToX(b.freq);
-          const y = pToY(b.powerDb);
-          const bh = Math.max(0, iH - (y - fp.top));
-          return (
-            <rect key={i} x={x} y={y} width={barW} height={bh}
-              fill={i === hoverIdx ? '#ff5b1f' : `url(#${uid}-bar)`}
-              clipPath={`url(#${clipId})`} />
-          );
-        })}
-
-        {/* Peak marker */}
-        {peakBin && (
-          <g>
-            <line x1={fToX(peakBin.freq)} y1={fp.top} x2={fToX(peakBin.freq)} y2={pToY(peakBin.powerDb)}
-              stroke="#ff5b1f" strokeWidth={1} strokeDasharray="3 3" strokeOpacity={0.5} />
-            <text x={fToX(peakBin.freq) + 4} y={fp.top + 12} fontSize={8} fontFamily="var(--font-mono)" fill="#ff5b1f" fillOpacity={0.8}>
-              {fmtFreq(peakBin.freq)} · T={fmtPeriod(peakBin.freq)}
-            </text>
-          </g>
-        )}
-
-        {/* Hover tooltip */}
-        {hoverIdx !== null && bins[hoverIdx] && (() => {
-          const b = bins[hoverIdx];
-          const x = fToX(b.freq);
-          const tooltipX = x > svgW - 140 ? x - 128 : x + 8;
-          return (
-            <g>
-              <rect x={tooltipX} y={fp.top + 4} width={120} height={38} rx={3}
-                fill="hsl(var(--surface))" stroke="hsl(var(--border))" />
-              <text x={tooltipX + 8} y={fp.top + 18} fontSize={9} fontFamily="var(--font-mono)" fill="hsl(var(--fg))">
-                {fmtFreq(b.freq)}
-              </text>
-              <text x={tooltipX + 8} y={fp.top + 32} fontSize={9} fontFamily="var(--font-mono)" fill="hsl(var(--muted-fg))">
-                {b.powerDb.toFixed(1)} dB · T={fmtPeriod(b.freq)}
-              </text>
-            </g>
-          );
-        })()}
-
-        {/* Y axis */}
-        <line x1={fp.left} y1={fp.top} x2={fp.left} y2={fp.top + iH} stroke="hsl(var(--border))" />
-        {yTicks.map((v, i) => (
-          <text key={i} x={fp.left - 6} y={pToY(v) + 3.5} textAnchor="end"
-            fontSize={9} fontFamily="var(--font-mono)" fill="hsl(var(--muted-fg))">
-            {v.toFixed(0)}dB
-          </text>
-        ))}
-
-        {/* X axis */}
-        <line x1={fp.left} y1={fp.top + iH} x2={fp.left + iW} y2={fp.top + iH} stroke="hsl(var(--border))" />
-        {xTicks.map((f, i) => (
-          <text key={i} x={fToX(f)} y={fp.top + iH + 14} textAnchor="middle"
-            fontSize={8.5} fontFamily="var(--font-mono)" fill="hsl(var(--muted-fg))">
-            {fmtFreq(f)}
-          </text>
-        ))}
+        {yT.map((v,i)=><line key={i} x1={P.left} y1={pY(v)} x2={P.left+iW} y2={pY(v)} stroke="hsl(var(--border))" strokeWidth={0.5}/>)}
+        {bins.map((b,i)=>{const x=fX(b.freq),y=pY(b.powerDb),bh=Math.max(0,iH-(y-P.top)); return <rect key={i} x={x} y={y} width={bW} height={bh} fill={i===hi?'#ff9f6b':`url(#${uid}-bg)`} clipPath={`url(#${clip})`}/>; })}
+        {peak&&<>
+          <line x1={fX(peak.freq)} y1={P.top} x2={fX(peak.freq)} y2={pY(peak.powerDb)} stroke="#ff5b1f" strokeWidth={1} strokeDasharray="3 4" strokeOpacity={0.5}/>
+          <text x={fX(peak.freq)+4} y={P.top+13} fontSize={8} fontFamily="var(--font-mono)" fill="#ff5b1f" fillOpacity={0.85}>{fmtFreq(peak.freq)} · T={fmtPeriod(peak.freq)}</text>
+        </>}
+        {hi!==null&&bins[hi]&&(()=>{const b=bins[hi],x=fX(b.freq),tx=x>W-140?x-128:x+8; return <g>
+          <rect x={tx} y={P.top+4} width={124} height={38} rx={3} fill="hsl(var(--surface))" stroke="hsl(var(--border))"/>
+          <text x={tx+7} y={P.top+18} fontSize={9} fontFamily="var(--font-mono)" fill="hsl(var(--fg))">{fmtFreq(b.freq)}</text>
+          <text x={tx+7} y={P.top+32} fontSize={9} fontFamily="var(--font-mono)" fill="hsl(var(--muted-fg))">{b.powerDb.toFixed(1)} dB · T={fmtPeriod(b.freq)}</text>
+        </g>;})()}
+        <line x1={P.left} y1={P.top} x2={P.left} y2={P.top+iH} stroke="hsl(var(--border))"/>
+        {yT.map((v,i)=><text key={i} x={P.left-5} y={pY(v)+3.5} textAnchor="end" fontSize={9} fontFamily="var(--font-mono)" fill="hsl(var(--muted-fg))">{v.toFixed(0)}dB</text>)}
+        <line x1={P.left} y1={P.top+iH} x2={P.left+iW} y2={P.top+iH} stroke="hsl(var(--border))"/>
+        {xT.map((f,i)=><text key={i} x={fX(f)} y={P.top+iH+14} textAnchor="middle" fontSize={8} fontFamily="var(--font-mono)" fill="hsl(var(--muted-fg))">{fmtFreq(f)}</text>)}
       </svg>
     </div>
   );
 }
 
-// ── Stats Panel ─────────────────────────────────────────────────────────────
+// ── Spectrogram (Canvas) ─────────────────────────────────────────────────────
 
-function StatsPanel({ series, windowTs }: { series: Series[]; windowTs: [number, number] | null }) {
-  const statsBySeries = useMemo(() => series.map(s => {
-    const pts = windowTs
-      ? s.data.filter(p => p.ts >= windowTs[0] && p.ts <= windowTs[1])
-      : s.data;
-    return { name: s.name, color: s.color, stats: computeStats(pts.map(p => p.value)) };
-  }), [series, windowTs]);
+function Spectrogram({ values, sampleRateHz, height=200 }: { values:number[]; sampleRateHz:number; height?:number }) {
+  const cRef = useRef<HTMLCanvasElement>(null);
+  const wRef = useRef<HTMLDivElement>(null);
+  const [W, setW] = useState(600);
+  useEffect(()=>{ if(!wRef.current) return; const ro=new ResizeObserver(([e])=>setW(Math.floor(e.contentRect.width))); ro.observe(wRef.current); return ()=>ro.disconnect(); },[]);
 
-  const rows: { key: keyof Stats; label: string }[] = [
-    { key: 'mean', label: 'Mean' },
-    { key: 'rms', label: 'RMS' },
-    { key: 'stdDev', label: 'Std Dev' },
-    { key: 'variance', label: 'Variance' },
-    { key: 'min', label: 'Min' },
-    { key: 'max', label: 'Max' },
-    { key: 'peakToPeak', label: 'Peak-to-Peak' },
-    { key: 'crestFactor', label: 'Crest Factor' },
-    { key: 'count', label: 'Samples' },
-  ];
+  const { times, freqs, powerDb } = useMemo(()=>computeSpectrogram(values, sampleRateHz),[values, sampleRateHz]);
 
-  if (!series.length) return (
-    <div style={{ padding: '24px 16px', textAlign: 'center', color: 'hsl(var(--muted-fg))', fontSize: 11, fontFamily: 'var(--font-mono)' }}>
-      Select a device and parameters
-    </div>
-  );
+  useEffect(() => {
+    const canvas = cRef.current; if (!canvas || !times.length || !freqs.length) return;
+    canvas.width = W; canvas.height = height;
+    const ctx = canvas.getContext('2d')!;
+    ctx.clearRect(0,0,W,height);
+    const PL=52,PB=28,iW=W-PL-8,iH=height-PB-4;
+    const nT=times.length, nF=freqs.length;
+    const cW=Math.max(1,Math.ceil(iW/nT)), cH=Math.max(1,Math.ceil(iH/nF));
+    for (let ti=0; ti<nT; ti++) {
+      for (let fi=0; fi<nF; fi++) {
+        const db = powerDb[ti]?.[fi] ?? -120;
+        const t = Math.max(0, Math.min(1, (db+60)/60));
+        ctx.fillStyle = infernoHex(t);
+        ctx.fillRect(PL+Math.floor(ti*iW/nT), 4+Math.floor((nF-1-fi)*iH/nF), cW+1, cH+1);
+      }
+    }
+    // Axes
+    ctx.strokeStyle = 'hsl(50,4%,18%)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(PL,4); ctx.lineTo(PL,4+iH); ctx.lineTo(PL+iW,4+iH); ctx.stroke();
+    ctx.fillStyle = '#6b6960'; ctx.font = '9px JetBrains Mono, monospace';
+    ctx.textAlign = 'right';
+    [0,0.25,0.5,0.75,1].forEach(t => {
+      const f = freqs[Math.round(t*(nF-1))] ?? 0;
+      const y = 4 + (1-t)*iH;
+      ctx.fillText(fmtFreq(f), PL-4, y+3);
+    });
+    ctx.textAlign = 'center';
+    [0,0.25,0.5,0.75,1].forEach(t => {
+      const ti2 = Math.round(t*(nT-1));
+      const label = `${(times[ti2]??0).toFixed(0)}s`;
+      ctx.fillText(label, PL+t*iW, 4+iH+14);
+    });
+    // Colorbar label
+    ctx.textAlign = 'left'; ctx.fillStyle = '#9a968c';
+    ctx.fillText('-60 dB', PL, 4+iH+24); ctx.textAlign='right'; ctx.fillText('0 dB', PL+iW, 4+iH+24);
+  }, [times, freqs, powerDb, W, height]);
+
+  if (!times.length) return <div style={{height,display:'flex',alignItems:'center',justifyContent:'center',fontFamily:'var(--font-mono)',fontSize:11,color:'hsl(var(--muted-fg))'}}>Not enough data for spectrogram (need ≥ 32 points)</div>;
 
   return (
-    <div>
-      <div className="eyebrow" style={{ marginBottom: 12, fontSize: 9.5, letterSpacing: '0.14em' }}>
-        {windowTs ? 'Window Statistics' : 'Full Range Statistics'}
-      </div>
-      <div style={{ overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, fontFamily: 'var(--font-mono)' }}>
-          <thead>
-            <tr>
-              <th style={{ textAlign: 'left', padding: '5px 8px 5px 0', color: 'hsl(var(--muted-fg))', fontWeight: 500, fontSize: 9, letterSpacing: '0.1em', textTransform: 'uppercase', borderBottom: '1px solid hsl(var(--border))', whiteSpace: 'nowrap' }}>Stat</th>
-              {statsBySeries.map(s => (
-                <th key={s.name} style={{ textAlign: 'right', padding: '5px 8px', color: s.color, fontWeight: 600, fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', borderBottom: '1px solid hsl(var(--border))', whiteSpace: 'nowrap' }}>
-                  {s.name}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map(({ key, label }) => (
-              <tr key={key} style={{ borderBottom: '1px solid hsl(var(--border) / 0.5)' }}>
-                <td style={{ padding: '5px 8px 5px 0', color: 'hsl(var(--muted-fg))', whiteSpace: 'nowrap' }}>{label}</td>
-                {statsBySeries.map(s => (
-                  <td key={s.name} style={{ padding: '5px 8px', textAlign: 'right', color: 'hsl(var(--fg))', fontVariantNumeric: 'tabular-nums' }}>
-                    {key === 'count' ? s.stats[key] : fmt4(s.stats[key] as number)}
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+    <div ref={wRef} style={{width:'100%'}}>
+      <canvas ref={cRef} style={{display:'block',width:'100%',height}} />
     </div>
   );
 }
 
-// ── Main Page ────────────────────────────────────────────────────────────────
+// ── Histogram Grid ───────────────────────────────────────────────────────────
+
+function HistogramGrid({ series }: { series:Series[] }) {
+  if (!series.length) return <div style={{padding:32,textAlign:'center',color:'hsl(var(--muted-fg))',fontFamily:'var(--font-mono)',fontSize:11}}>No data</div>;
+  return (
+    <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(280px,1fr))',gap:16}}>
+      {series.map((s,si) => {
+        const vals = s.data.map(p=>p.value);
+        const bins = computeHistogram(vals, 24);
+        const maxF = Math.max(...bins.map(b=>b.freq), 0.001);
+        const W=280,H=140,PL=44,PB=24,PT=8,PR=8;
+        const iW=W-PL-PR,iH=H-PB-PT;
+        const bW=iW/bins.length;
+        return (
+          <div key={si} className="panel" style={{padding:'12px 12px 8px'}}>
+            <div style={{fontFamily:'var(--font-mono)',fontSize:9,letterSpacing:'0.1em',textTransform:'uppercase',color:s.color,marginBottom:8}}>{s.name}</div>
+            <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{display:'block'}}>
+              {[0,0.25,0.5,0.75,1].map((t,i)=><line key={i} x1={PL} y1={PT+iH*(1-t)} x2={PL+iW} y2={PT+iH*(1-t)} stroke="hsl(var(--border))" strokeWidth={0.5}/>)}
+              {bins.map((b,i)=>{
+                const bH=Math.max(1,(b.freq/maxF)*iH);
+                return <rect key={i} x={PL+i*bW+0.5} y={PT+iH-bH} width={Math.max(1,bW-1)} height={bH} fill={s.color} fillOpacity={0.75}/>;
+              })}
+              <line x1={PL} y1={PT} x2={PL} y2={PT+iH} stroke="hsl(var(--border))"/>
+              <line x1={PL} y1={PT+iH} x2={PL+iW} y2={PT+iH} stroke="hsl(var(--border))"/>
+              {[0,0.5,1].map((t,i)=>{ const v=bins[Math.round(t*(bins.length-1))]?.bin??0; return <text key={i} x={PL+t*iW} y={PT+iH+14} textAnchor="middle" fontSize={8} fontFamily="var(--font-mono)" fill="hsl(var(--muted-fg))">{fmt4(v)}</text>; })}
+              {[0,0.5,1].map((t,i)=>{ const f=t*maxF; return <text key={i} x={PL-4} y={PT+iH*(1-t)+3.5} textAnchor="end" fontSize={8} fontFamily="var(--font-mono)" fill="hsl(var(--muted-fg))">{(f*100).toFixed(0)}%</text>; })}
+              {/* Normal distribution overlay */}
+              {vals.length>4&&(()=>{
+                const m=vals.reduce((s,v)=>s+v,0)/vals.length;
+                const sd=Math.sqrt(vals.reduce((s,v)=>s+(v-m)**2,0)/vals.length)||1;
+                const mn=Math.min(...vals),mx=Math.max(...vals),range=mx-mn||1;
+                const pts=Array.from({length:60},(_,i)=>{
+                  const x=mn+i*range/59;
+                  const y=Math.exp(-0.5*((x-m)/sd)**2)/(sd*Math.sqrt(2*Math.PI));
+                  return `${PL+(x-mn)/range*iW},${PT+iH-(y*(range/bins.length)/maxF)*iH}`;
+                });
+                return <polyline points={pts.join(' ')} fill="none" stroke="hsl(var(--fg))" strokeWidth={1} strokeOpacity={0.25} strokeDasharray="3 2"/>;
+              })()}
+            </svg>
+            <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:4,marginTop:4,fontSize:9,fontFamily:'var(--font-mono)',color:'hsl(var(--muted-fg))'}}>
+              {[['μ',computeStats(vals).mean],['σ',computeStats(vals).stdDev],['P-P',computeStats(vals).peakToPeak]].map(([k,v])=>(
+                <div key={String(k)}><span style={{opacity:0.6}}>{k} </span><span style={{color:'hsl(var(--fg))'}}>{fmt4(Number(v))}</span></div>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Correlation Heatmap ──────────────────────────────────────────────────────
+
+function CorrelationHeatmap({ series }: { series:Series[] }) {
+  if (series.length < 2) return <div style={{padding:24,textAlign:'center',fontFamily:'var(--font-mono)',fontSize:11,color:'hsl(var(--muted-fg))'}}>Select ≥ 2 parameters to see correlations</div>;
+  const m = series.length;
+  const vals = series.map(s => s.data.map(p=>p.value));
+  const corr = correlationMatrix(vals);
+  const N = 56, cellSize = N, pad = { t:8, l:80, b:48, r:8 };
+  const W = pad.l + m*cellSize + pad.r, H = pad.t + m*cellSize + pad.b;
+  const corrColor = (r: number): string => {
+    if (r>=0) return `hsl(16,${Math.round(r*100)}%,${Math.round(60-r*25)}%)`;
+    return `hsl(224,${Math.round(-r*100)}%,${Math.round(60+r*25)}%)`;
+  };
+  return (
+    <div className="panel" style={{padding:'12px 16px',display:'inline-block',maxWidth:'100%',overflowX:'auto'}}>
+      <div style={{fontFamily:'var(--font-mono)',fontSize:9,letterSpacing:'0.12em',textTransform:'uppercase',color:'hsl(var(--muted-fg))',marginBottom:10}}>Pearson Correlation Matrix</div>
+      <svg width={W} height={H} style={{display:'block'}}>
+        {series.map((s,i)=><React.Fragment key={i}>
+          <text x={pad.l-6} y={pad.t+i*cellSize+cellSize/2+3.5} textAnchor="end" fontSize={10} fontFamily="var(--font-mono)" fill={s.color}>{s.name.substring(0,10)}</text>
+          <text x={pad.l+i*cellSize+cellSize/2} y={pad.t+m*cellSize+14} textAnchor="middle" fontSize={10} fontFamily="var(--font-mono)" fill={s.color}>{s.name.substring(0,8)}</text>
+        </React.Fragment>)}
+        {Array.from({length:m},(_,i)=>Array.from({length:m},(_,j)=>{
+          const r=corr[i][j];
+          return <g key={`${i}-${j}`}>
+            <rect x={pad.l+j*cellSize} y={pad.t+i*cellSize} width={cellSize} height={cellSize} fill={corrColor(r)} rx={2} style={{transition:'fill 0.2s'}}/>
+            <text x={pad.l+j*cellSize+cellSize/2} y={pad.t+i*cellSize+cellSize/2+3.5} textAnchor="middle"
+              fontSize={Math.min(11,cellSize*0.35)} fontFamily="var(--font-mono)" fill="hsl(var(--fg))" fillOpacity={0.9} fontWeight={i===j?600:400}>
+              {r.toFixed(2)}
+            </text>
+          </g>;
+        }))}
+        <text x={pad.l} y={H-4} fontSize={8} fontFamily="var(--font-mono)" fill="hsl(var(--muted-fg))">■ orange = positive · ■ blue = negative</text>
+      </svg>
+    </div>
+  );
+}
+
+// ── 3D Scatter (Canvas, PCA or direct) ──────────────────────────────────────
+
+function Scatter3D({ series, windowTs, height=440 }: { series:Series[]; windowTs:[number,number]|null; height?:number }) {
+  const wRef = useRef<HTMLDivElement>(null);
+  const cRef = useRef<HTMLCanvasElement>(null);
+  const [W, setW] = useState(600);
+  const [az, setAz] = useState(0.6);
+  const [el, setEl] = useState(0.45);
+  const [dragging, setDragging] = useState<{x:number;y:number;az:number;el:number}|null>(null);
+
+  useEffect(()=>{ if(!wRef.current) return; const ro=new ResizeObserver(([e])=>setW(Math.floor(e.contentRect.width))); ro.observe(wRef.current); return ()=>ro.disconnect(); },[]);
+
+  const { points3D, labels, explainedVar, isPCA } = useMemo(() => {
+    const filtered = series.map(s => ({
+      ...s,
+      data: windowTs ? s.data.filter(p=>p.ts>=windowTs[0]&&p.ts<=windowTs[1]) : s.data,
+    }));
+    if (filtered.length === 0 || filtered.every(s=>s.data.length===0)) return { points3D:[], labels:['','',''], explainedVar:[], isPCA:false };
+
+    if (filtered.length === 1) {
+      // Phase space: x[t], x[t-1], x[t-2]
+      const vals = filtered[0].data.map(p=>p.value);
+      const pts = vals.slice(2).map((v,i)=>[vals[i+2],vals[i+1],vals[i]] as [number,number,number]);
+      return { points3D: pts, labels:['x(t)','x(t-1)','x(t-2)'], explainedVar:[], isPCA:false };
+    }
+
+    // Align timestamps (use primary series timestamps)
+    const primary = filtered[0].data;
+    const aligned = primary.map(p => {
+      const row = filtered.map(s => {
+        const nearest = s.data.reduce((a,b) => Math.abs(b.ts-p.ts)<Math.abs(a.ts-p.ts)?b:a, s.data[0] ?? {ts:0,value:0});
+        return nearest?.value ?? 0;
+      });
+      return row;
+    }).filter(r => r.every(isFinite));
+
+    if (filtered.length === 2) {
+      const v1=aligned.map(r=>r[0]), v2=aligned.map(r=>r[1]);
+      const dv1=v1.slice(1).map((v,i)=>v-v1[i]);
+      const pts = dv1.map((d,i)=>[v1[i+1],v2[i+1],d] as [number,number,number]);
+      return { points3D:pts, labels:[filtered[0].name, filtered[1].name, `d(${filtered[0].name})/dt`], explainedVar:[], isPCA:false };
+    }
+
+    // PCA for 3+ fields
+    const pca = runPCA(aligned, 3);
+    const pts = pca.scores.map(s=>[s[0]??0,s[1]??0,s[2]??0] as [number,number,number]);
+    return {
+      points3D: pts,
+      labels: pca.explainedVar.map((v,i)=>`PC${i+1} (${(v*100).toFixed(0)}%)`),
+      explainedVar: pca.explainedVar,
+      isPCA: true,
+    };
+  }, [series, windowTs]);
+
+  useEffect(() => {
+    const canvas = cRef.current; if (!canvas) return;
+    canvas.width = W; canvas.height = height;
+    const ctx = canvas.getContext('2d')!;
+    ctx.clearRect(0,0,W,height);
+    if (!points3D.length) {
+      ctx.fillStyle = '#6b6960'; ctx.font = '11px JetBrains Mono, monospace';
+      ctx.textAlign = 'center'; ctx.fillText('Select a device and ≥ 1 parameter', W/2, height/2);
+      return;
+    }
+
+    const cx=W/2, cy=height/2, scale=Math.min(W,height)*0.38;
+    const cosAz=Math.cos(az),sinAz=Math.sin(az),cosEl=Math.cos(el),sinEl=Math.sin(el);
+
+    function proj([x,y,z]:[number,number,number]): {sx:number;sy:number;depth:number} {
+      const x2=x*cosAz+z*sinAz, z2=-x*sinAz+z*cosAz;
+      const y3=y*cosEl-z2*sinEl, z3=y*sinEl+z2*cosEl;
+      return {sx:cx+x2*scale, sy:cy-y3*scale, depth:z3};
+    }
+
+    // Normalize to [-1,1]
+    const coords = [0,1,2].map(d=>{
+      const vs=points3D.map(p=>p[d]);
+      const mn=Math.min(...vs),mx=Math.max(...vs),r=mx-mn||1;
+      return {min:mn,range:r};
+    });
+    const norm = points3D.map(p=>[
+      2*(p[0]-coords[0].min)/coords[0].range-1,
+      2*(p[1]-coords[1].min)/coords[1].range-1,
+      2*(p[2]-coords[2].min)/coords[2].range-1,
+    ] as [number,number,number]);
+
+    // Sort by depth
+    const indexed = norm.map((pt,i)=>({pt,i,proj:proj(pt)})).sort((a,b)=>a.proj.depth-b.proj.depth);
+
+    // Draw axes
+    const axLen=0.95;
+    const axes:[[number,number,number],[number,number,number],string][] = [
+      [[axLen,0,0],[-axLen,0,0],labels[0]??'X'],
+      [[0,axLen,0],[0,-axLen,0],labels[1]??'Y'],
+      [[0,0,axLen],[0,0,-axLen],labels[2]??'Z'],
+    ];
+    ctx.lineWidth=1; ctx.setLineDash([4,4]);
+    axes.forEach(([pos,,label],ai) => {
+      const p0=proj([0,0,0]), p1=proj(pos as [number,number,number]);
+      ctx.strokeStyle=COLORS[ai]+'55';
+      ctx.beginPath(); ctx.moveTo(p0.sx,p0.sy); ctx.lineTo(p1.sx,p1.sy); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle=COLORS[ai]; ctx.font='bold 10px JetBrains Mono, monospace';
+      ctx.textAlign='center'; ctx.fillText(label,p1.sx,p1.sy-6);
+      ctx.setLineDash([4,4]);
+    });
+    ctx.setLineDash([]);
+
+    // Draw grid on XY plane
+    ctx.strokeStyle='rgba(100,100,90,0.12)'; ctx.lineWidth=0.5;
+    for (let g=-1;g<=1;g+=0.5) {
+      const a=proj([g,-1,0]),b=proj([g,1,0]); ctx.beginPath(); ctx.moveTo(a.sx,a.sy); ctx.lineTo(b.sx,b.sy); ctx.stroke();
+      const c=proj([-1,g,0]),d2=proj([1,g,0]); ctx.beginPath(); ctx.moveTo(c.sx,c.sy); ctx.lineTo(d2.sx,d2.sy); ctx.stroke();
+    }
+
+    // Draw points
+    const n=indexed.length;
+    indexed.forEach(({pt:_,i,proj:p},order) => {
+      const t=order/Math.max(1,n-1);
+      const color=lerpColor(t,'#3b82f6','#ff5b1f');
+      const r=Math.max(1.5,3.5*(1-(p.depth+1)/3));
+      ctx.beginPath(); ctx.arc(p.sx,p.sy,r,0,Math.PI*2);
+      ctx.fillStyle=color+'cc'; ctx.fill();
+    });
+
+    // Legend: time gradient
+    const grd=ctx.createLinearGradient(W-90,height-24,W-10,height-24);
+    grd.addColorStop(0,'#3b82f6'); grd.addColorStop(1,'#ff5b1f');
+    ctx.fillStyle=grd; ctx.fillRect(W-90,height-18,80,6);
+    ctx.fillStyle='#6b6960'; ctx.font='9px JetBrains Mono, monospace';
+    ctx.textAlign='left'; ctx.fillText('Earlier',W-90,height-22);
+    ctx.textAlign='right'; ctx.fillText('Recent',W-6,height-22);
+
+    // Info
+    ctx.fillStyle='#6b6960'; ctx.font='10px JetBrains Mono, monospace';
+    ctx.textAlign='left';
+    ctx.fillText(isPCA?`PCA · ${n} samples`:`Phase space · ${n} pts`, 12, 20);
+    ctx.fillText('drag to rotate', 12, height-10);
+
+    if (explainedVar.length) {
+      explainedVar.forEach((v,i)=>{
+        const y=height-20-i*16;
+        ctx.fillStyle=COLORS[i];
+        ctx.fillRect(12,y-8,v*(W<400?80:120),8);
+        ctx.fillStyle='#6b6960'; ctx.textAlign='left';
+        ctx.fillText(`PC${i+1} ${(v*100).toFixed(1)}%`,12+(v*(W<400?80:120))+6,y);
+      });
+    }
+  }, [points3D, labels, explainedVar, isPCA, az, el, W, height]);
+
+  const onMD = (e:React.MouseEvent) => setDragging({x:e.clientX,y:e.clientY,az,el});
+  const onMM = (e:React.MouseEvent) => {
+    if (!dragging) return;
+    const dx=e.clientX-dragging.x, dy=e.clientY-dragging.y;
+    setAz(dragging.az+dx*0.008);
+    setEl(Math.max(-1.4,Math.min(1.4,dragging.el-dy*0.008)));
+  };
+
+  return (
+    <div ref={wRef} style={{width:'100%'}}>
+      <canvas ref={cRef} style={{display:'block',width:'100%',height,cursor:dragging?'grabbing':'grab'}}
+        onMouseDown={onMD} onMouseMove={onMM} onMouseUp={()=>setDragging(null)} onMouseLeave={()=>setDragging(null)}/>
+    </div>
+  );
+}
+
+// ── Stats Row ────────────────────────────────────────────────────────────────
+
+function StatsRow({ series, windowTs }: { series:Series[]; windowTs:[number,number]|null }) {
+  if (!series.length) return null;
+  return (
+    <div style={{display:'flex',flexWrap:'wrap',gap:0,borderTop:'1px solid hsl(var(--border))'}}>
+      {series.map(s=>{
+        const pts = windowTs ? s.data.filter(p=>p.ts>=windowTs[0]&&p.ts<=windowTs[1]) : s.data;
+        const st = computeStats(pts.map(p=>p.value));
+        const fields:[string,number][] = [['Mean',st.mean],['RMS',st.rms],['Std',st.stdDev],['Min',st.min],['Max',st.max],['P-P',st.peakToPeak],['Crest',st.crestFactor]];
+        return (
+          <div key={s.fieldKey} style={{display:'flex',alignItems:'center',flexWrap:'wrap',padding:'8px 12px',borderRight:'1px solid hsl(var(--border))',gap:12}}>
+            <div style={{fontFamily:'var(--font-mono)',fontSize:9,color:s.color,letterSpacing:'0.1em',textTransform:'uppercase',minWidth:60}}>{s.name}</div>
+            {fields.map(([k,v])=>(
+              <div key={k} style={{display:'flex',flexDirection:'column',alignItems:'center',minWidth:36}}>
+                <div style={{fontSize:7.5,fontFamily:'var(--font-mono)',color:'hsl(var(--muted-fg))',letterSpacing:'0.08em',textTransform:'uppercase'}}>{k}</div>
+                <div style={{fontSize:11,fontFamily:'var(--font-mono)',color:'hsl(var(--fg))',marginTop:1}}>{fmt4(v)}</div>
+              </div>
+            ))}
+            <div style={{display:'flex',flexDirection:'column',alignItems:'center',minWidth:36}}>
+              <div style={{fontSize:7.5,fontFamily:'var(--font-mono)',color:'hsl(var(--muted-fg))',letterSpacing:'0.08em',textTransform:'uppercase'}}>N</div>
+              <div style={{fontSize:11,fontFamily:'var(--font-mono)',color:'hsl(var(--fg))',marginTop:1}}>{st.count}</div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Main Page ─────────────────────────────────────────────────────────────────
 
 export function AnalyticsPage() {
-  const [deviceId, setDeviceId] = useState<string>('');
-  const [selectedFields, setSelectedFields] = useState<string[]>([]);
-  const [range, setRange] = useState('24h');
-  const [windowTs, setWindowTs] = useState<[number, number] | null>(null);
-  const [overlays, setOverlays] = useState<Overlay[]>([]);
-  const [showFFT, setShowFFT] = useState(true);
-  const [normalizeY, setNormalizeY] = useState(false);
+  const [deviceId,    setDeviceId]    = useState('');
+  const [selFields,   setSelFields]   = useState<string[]>([]);
+  const [rangeMs,     setRangeMs]     = useState(RANGES[2].ms);
+  const [windowTs,    setWindowTs]    = useState<[number,number]|null>(null);
+  const [overlays,    setOverlays]    = useState<Overlay[]>([]);
+  const [tab,         setTab]         = useState<Tab>('signal');
+  const [opField,     setOpField]     = useState('');
+  const [maW,         setMaW]         = useState(10);
+  const [emaA,        setEmaA]        = useState(0.2);
+  const [fType,       setFType]       = useState<'lowpass'|'highpass'|'bandpass'|'notch'>('lowpass');
+  const [fCut,        setFCut]        = useState(0.001);
+  const [fCenter,     setFCenter]     = useState(0.001);
+  const [fBW,         setFBW]         = useState(1);
+  const [fftField,    setFftField]    = useState('');
+  const [showPipeline,setShowPipeline]= useState(true);
+  const svgRef = useRef<SVGSVGElement>(null);
 
-  // Operation form state
-  const [opField, setOpField] = useState('');
-  const [maWindow, setMaWindow] = useState(10);
-  const [emaAlpha, setEmaAlpha] = useState(0.2);
-  const [filterType, setFilterType] = useState<'lowpass' | 'highpass' | 'bandpass' | 'notch'>('lowpass');
-  const [filterCutoff, setFilterCutoff] = useState(0.001);
-  const [filterCenter, setFilterCenter] = useState(0.001);
-  const [filterBW, setFilterBW] = useState(1);
-  const [fftField, setFftField] = useState('');
+  // Devices
+  const { data: devData } = useQuery({ queryKey:['devices-analytics'], queryFn:()=>devicesApi.list({limit:200}) });
+  const devices = devData?.devices ?? [];
 
-  const signalSvgRef = useRef<SVGSVGElement>(null);
+  // Device detail (schema)
+  const { data: deviceData } = useQuery({ queryKey:['device-analytics-detail',deviceId], queryFn:()=>devicesApi.get(deviceId), enabled:!!deviceId });
 
-  // Queries
-  const { data: devicesData } = useQuery({
-    queryKey: ['devices-list-analytics'],
-    queryFn: () => devicesApi.list({ limit: 200 }),
-  });
-  const devices = devicesData?.devices ?? [];
-
-  const { data: deviceData } = useQuery({
-    queryKey: ['device-analytics', deviceId],
-    queryFn: () => devicesApi.get(deviceId),
-    enabled: !!deviceId,
-  });
+  // Latest telemetry (for fields fallback)
+  const { data: latestTelem } = useQuery({ queryKey:['analytics-latest',deviceId], queryFn:()=>telemetryApi.latest(deviceId), enabled:!!deviceId });
 
   const schemaFields: any[] = deviceData?.meta?.schema ?? [];
-  const numericFields = schemaFields.filter((f: any) => !f.type || f.type === 'number');
 
-  const { from, to } = useMemo(() => getRangeBounds(range), [range]);
+  // Merge schema + live telemetry fields
+  const numericFields = useMemo(()=>{
+    const fromSchema = schemaFields.filter((f:any)=>!f.type||f.type==='number'||f.type==='float'||f.type==='integer');
+    if (fromSchema.length) return fromSchema;
+    const liveFields = latestTelem?.fields ?? {};
+    return Object.entries(liveFields)
+      .filter(([,v])=>typeof v === 'number')
+      .map(([k],i)=>({ key:k, label:k.replace(/_/g,' '), type:'number', chartColor:COLORS[i%COLORS.length] }));
+  }, [schemaFields, latestTelem]);
+
+  const { from, to } = useMemo(()=>rangeBounds(rangeMs), [rangeMs]);
 
   const fieldQueries = useQueries({
-    queries: selectedFields.map(field => ({
-      queryKey: ['analytics-series', deviceId, field, range],
-      queryFn: () => telemetryApi.series(deviceId, field, from, to, 2000),
-      enabled: !!deviceId && !!field,
+    queries: selFields.map(field => ({
+      queryKey: ['analytics-series', deviceId, field, rangeMs],
+      queryFn:  () => telemetryApi.series(deviceId, field, from, to, 2000),
+      enabled:  !!deviceId && !!field,
       refetchInterval: 30_000,
     })),
   });
 
-  // Build series
-  const series: Series[] = useMemo(() => selectedFields.map((k, i) => {
-    const meta = schemaFields.find((f: any) => f.key === k);
-    const color = meta?.chartColor ?? COLORS[i % COLORS.length];
-    const raw = fieldQueries[i]?.data?.data ?? [];
-    const pts: Point[] = raw.map((p: any) => ({ ts: new Date(p.ts).getTime(), value: p.value ?? 0 }));
-    pts.sort((a, b) => a.ts - b.ts);
-    if (!normalizeY || pts.length < 2) return { name: meta?.label || k.replace(/_/g, ' '), data: pts, color, fieldKey: k };
-    const vals = pts.map(p => p.value);
-    const mn = Math.min(...vals), mx = Math.max(...vals);
-    const norm = pts.map(p => ({ ...p, value: mx > mn ? (p.value - mn) / (mx - mn) : 0 }));
-    return { name: meta?.label || k.replace(/_/g, ' '), data: norm, color, fieldKey: k };
-  }), [selectedFields, fieldQueries, schemaFields, normalizeY]);
+  // Build raw series
+  const series: Series[] = useMemo(()=>selFields.map((k,i)=>{
+    const meta = schemaFields.find((f:any)=>f.key===k);
+    const color = meta?.chartColor ?? COLORS[i%COLORS.length];
+    const pts: Point[] = (fieldQueries[i]?.data?.data??[])
+      .map((p:any)=>({ ts:new Date(p.ts).getTime(), value:p.value??0 }))
+      .sort((a:Point,b:Point)=>a.ts-b.ts);
+    return { name: meta?.label||k.replace(/_/g,' '), data:pts, color, fieldKey:k };
+  }), [selFields, fieldQueries, schemaFields]);
 
-  // Active field for ops
-  const activeOpField = opField || selectedFields[0] || '';
-  const activeFftField = fftField || selectedFields[0] || '';
+  const activeOp = opField || selFields[0] || '';
+  const activeFft = fftField || selFields[0] || '';
 
-  // Compute overlays
-  const overlaySeries: Series[] = useMemo(() => {
-    return overlays.map(ov => {
-      const base = series.find(s => s.fieldKey === ov.fieldKey);
-      if (!base) return null;
-      const vals = base.data.map(p => p.value);
-      let processed: number[];
-      switch (ov.type) {
-        case 'moving_avg':   processed = movingAverage(vals, ov.params.window ?? 10); break;
-        case 'exp_ma':       processed = exponentialMA(vals, ov.params.alpha ?? 0.2); break;
-        case 'differentiate': processed = differentiate(vals); break;
-        case 'integrate':    processed = integrate(vals); break;
-        case 'lowpass':      processed = applyLowPass(vals, ov.params.cutoff, ov.params.sr); break;
-        case 'highpass':     processed = applyHighPass(vals, ov.params.cutoff, ov.params.sr); break;
-        case 'bandpass':     processed = applyBandPass(vals, ov.params.center, ov.params.bw, ov.params.sr); break;
-        case 'notch':        processed = applyNotch(vals, ov.params.center, ov.params.bw, ov.params.sr); break;
-        default: processed = vals;
-      }
-      return {
-        name: ov.label, color: ov.color, fieldKey: ov.fieldKey,
-        data: base.data.map((p, i) => ({ ts: p.ts, value: processed[i] ?? 0 })),
-      } satisfies Series;
-    }).filter(Boolean) as Series[];
-  }, [overlays, series]);
-
-  // Detect sample rate for active series
-  const sampleRateHz = useMemo(() => {
-    const base = series.find(s => s.fieldKey === activeFftField) ?? series[0];
-    if (!base?.data.length) return 1;
-    return detectSampleRate(base.data.map(p => p.ts));
-  }, [series, activeFftField]);
-
-  // FFT data (windowed or full)
-  const psdBins: FFTBin[] = useMemo(() => {
-    const base = series.find(s => s.fieldKey === activeFftField) ?? series[0];
-    if (!base?.data.length) return [];
-    const pts = windowTs
-      ? base.data.filter(p => p.ts >= windowTs[0] && p.ts <= windowTs[1])
-      : base.data;
-    if (pts.length < 8) return [];
-    return computePSD(pts.map(p => p.value), sampleRateHz);
-  }, [series, activeFftField, windowTs, sampleRateHz]);
-
-  // Auto-select first field when device changes
-  useEffect(() => {
-    if (numericFields.length && selectedFields.length === 0) {
-      setSelectedFields([numericFields[0].key]);
+  // Compute overlay series
+  const overlaySeries: Series[] = useMemo(()=>overlays.map(ov=>{
+    const base = series.find(s=>s.fieldKey===ov.fieldKey);
+    if (!base) return null;
+    const vals = base.data.map(p=>p.value);
+    let proc: number[];
+    switch (ov.type) {
+      case 'moving_avg':    proc = movingAverage(vals,  ov.params.w??10); break;
+      case 'exp_ma':        proc = exponentialMA(vals,  ov.params.a??0.2); break;
+      case 'differentiate': proc = differentiate(vals); break;
+      case 'integrate':     proc = integrate(vals); break;
+      case 'lowpass':       proc = applyLowPass(vals,   ov.params.cut,  ov.params.sr); break;
+      case 'highpass':      proc = applyHighPass(vals,  ov.params.cut,  ov.params.sr); break;
+      case 'bandpass':      proc = applyBandPass(vals,  ov.params.cen,  ov.params.bw, ov.params.sr); break;
+      case 'notch':         proc = applyNotch(vals,     ov.params.cen,  ov.params.bw, ov.params.sr); break;
+      default: proc = vals;
     }
-  }, [numericFields.length, deviceId]);
+    return { name:ov.label, color:ov.color, fieldKey:ov.fieldKey, data:base.data.map((p,i)=>({ ts:p.ts, value:proc[i]??0 })) } satisfies Series;
+  }).filter(Boolean) as Series[], [overlays, series]);
 
-  useEffect(() => { setSelectedFields([]); setWindowTs(null); setOverlays([]); }, [deviceId]);
-  useEffect(() => { setWindowTs(null); }, [range]);
+  const sr = useMemo(()=>{
+    const base=series.find(s=>s.fieldKey===activeFft)??series[0];
+    return base?.data.length?detectSampleRate(base.data.map(p=>p.ts)):1;
+  },[series,activeFft]);
 
-  const toggleField = (k: string) => setSelectedFields(prev =>
-    prev.includes(k) ? (prev.length > 1 ? prev.filter(f => f !== k) : prev) : [...prev, k]
-  );
+  const nyquist = sr / 2;
 
-  const addOverlay = (type: OverlayType, label: string, params: Record<string, number>) => {
-    const idx = overlays.length;
-    setOverlays(prev => [...prev, {
-      id: `${Date.now()}`, type, label,
-      fieldKey: activeOpField, color: OVERLAY_ALPHA[idx % OVERLAY_ALPHA.length], params,
-    }]);
+  const psdBins: FFTBin[] = useMemo(()=>{
+    const base=series.find(s=>s.fieldKey===activeFft)??series[0];
+    if (!base?.data.length) return [];
+    const pts=(windowTs?base.data.filter(p=>p.ts>=windowTs[0]&&p.ts<=windowTs[1]):base.data);
+    if (pts.length<8) return [];
+    return computePSD(pts.map(p=>p.value), sr);
+  },[series,activeFft,windowTs,sr]);
+
+  const spectroVals = useMemo(()=>{
+    const base=series.find(s=>s.fieldKey===activeFft)??series[0];
+    if (!base?.data.length) return [];
+    const pts=(windowTs?base.data.filter(p=>p.ts>=windowTs[0]&&p.ts<=windowTs[1]):base.data);
+    return pts.map(p=>p.value);
+  },[series,activeFft,windowTs]);
+
+  // Auto-select first field
+  useEffect(()=>{ if(numericFields.length&&selFields.length===0) setSelFields([numericFields[0].key]); },[numericFields.length,deviceId]);
+  useEffect(()=>{ setSelFields([]); setWindowTs(null); setOverlays([]); },[deviceId]);
+  useEffect(()=>{ setWindowTs(null); },[rangeMs]);
+
+  const toggleField = (k:string) => setSelFields(prev=>prev.includes(k)?(prev.length>1?prev.filter(f=>f!==k):prev):[...prev,k]);
+
+  const addOverlay = (type:OvType, label:string, params:Record<string,number>) => {
+    setOverlays(prev=>[...prev,{id:`${Date.now()}`,type,label,fieldKey:activeOp,color:O_COLORS[prev.length%O_COLORS.length],params}]);
   };
 
-  const applyFilter = () => {
-    const base = series.find(s => s.fieldKey === activeOpField);
-    if (!base?.data.length) return;
-    const sr = detectSampleRate(base.data.map(p => p.ts));
-    if (filterType === 'lowpass') addOverlay('lowpass', `LP ${fmtFreq(filterCutoff)}`, { cutoff: filterCutoff, sr });
-    else if (filterType === 'highpass') addOverlay('highpass', `HP ${fmtFreq(filterCutoff)}`, { cutoff: filterCutoff, sr });
-    else if (filterType === 'bandpass') addOverlay('bandpass', `BP ${fmtFreq(filterCenter)}`, { center: filterCenter, bw: filterBW, sr });
-    else addOverlay('notch', `Notch ${fmtFreq(filterCenter)}`, { center: filterCenter, bw: filterBW, sr });
+  const applyFilter = ()=>{
+    const base=series.find(s=>s.fieldKey===activeOp); if(!base?.data.length) return;
+    const s2=detectSampleRate(base.data.map(p=>p.ts));
+    if (fType==='lowpass')   addOverlay('lowpass',   `LP ${fmtFreq(fCut)}`,    {cut:fCut,sr:s2});
+    else if (fType==='highpass')  addOverlay('highpass',  `HP ${fmtFreq(fCut)}`,    {cut:fCut,sr:s2});
+    else if (fType==='bandpass')  addOverlay('bandpass',  `BP ${fmtFreq(fCenter)}`,  {cen:fCenter,bw:fBW,sr:s2});
+    else                          addOverlay('notch',     `Notch ${fmtFreq(fCenter)}`,{cen:fCenter,bw:fBW,sr:s2});
   };
 
-  const isLoading = fieldQueries.some(q => q.isLoading);
-  const nyquist = sampleRateHz / 2;
+  const loading = fieldQueries.some(q=>q.isLoading);
 
-  const statsForPanel = useMemo(() => {
-    const all = [...series, ...overlaySeries];
-    return all.filter(s => selectedFields.includes(s.fieldKey));
-  }, [series, overlaySeries, selectedFields]);
+  const inp: React.CSSProperties = {
+    background:'hsl(var(--surface))', border:'1px solid hsl(var(--border))',
+    color:'hsl(var(--fg))', fontFamily:'var(--font-mono)', fontSize:11,
+    padding:'5px 8px', width:'100%',
+  };
+  const lbl: React.CSSProperties = {
+    display:'block', fontSize:8.5, fontFamily:'var(--font-mono)',
+    letterSpacing:'0.12em', textTransform:'uppercase', color:'hsl(var(--muted-fg))', marginBottom:3,
+  };
 
-  // Input style helper
-  const inputStyle: React.CSSProperties = {
-    background: 'hsl(var(--surface))', border: '1px solid hsl(var(--border))',
-    color: 'hsl(var(--fg))', fontFamily: 'var(--font-mono)', fontSize: 11,
-    padding: '5px 8px', borderRadius: 0, width: '100%',
-  };
-  const labelStyle: React.CSSProperties = {
-    display: 'block', fontSize: 9, fontFamily: 'var(--font-mono)',
-    letterSpacing: '0.12em', textTransform: 'uppercase',
-    color: 'hsl(var(--muted-fg))', marginBottom: 4,
-  };
+  const TABS: {id:Tab;label:string;icon:React.ReactNode}[] = [
+    {id:'signal',   label:'Signal',      icon:<Activity   size={12}/>},
+    {id:'spectrum', label:'Spectrum',    icon:<Waves      size={12}/>},
+    {id:'stats',    label:'Statistics',  icon:<BarChart2  size={12}/>},
+    {id:'3d',       label:'3D Explorer', icon:<Box        size={12}/>},
+  ];
 
   return (
-    <div style={{ padding: '32px 32px 64px', maxWidth: 1400, margin: '0 auto' }}>
+    <div style={{padding:'28px 28px 64px',maxWidth:1440,margin:'0 auto'}}>
 
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28 }}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:24}}>
         <div>
-          <div className="eyebrow" style={{ marginBottom: 6 }}>Signal Intelligence</div>
-          <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 36, lineHeight: 1, margin: 0, letterSpacing: '-0.02em' }}>
+          <div className="eyebrow" style={{marginBottom:6,fontSize:9.5}}>Signal Intelligence</div>
+          <h1 style={{fontFamily:'var(--font-display)',fontSize:40,lineHeight:1,margin:0,letterSpacing:'-0.03em'}}>
             Analytics
           </h1>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button className="btn btn-sm btn-outline" onClick={() => downloadCSV(series, overlaySeries, windowTs)}
-            title="Export data as CSV" style={{ gap: 6 }}>
-            <Download size={12} /> CSV
-          </button>
-          <button className="btn btn-sm btn-outline" onClick={() => downloadSVG(signalSvgRef.current)}
-            title="Export chart as SVG" style={{ gap: 6 }}>
-            <Download size={12} /> SVG
-          </button>
+        <div style={{display:'flex',gap:8,marginTop:8}}>
+          <button className="btn btn-sm btn-outline" onClick={()=>exportCSV(series,overlaySeries,windowTs)} style={{gap:5}}><Download size={12}/>CSV</button>
+          <button className="btn btn-sm btn-outline" onClick={()=>{ const c=document.createElement('canvas');c.width=svgRef.current?.clientWidth??800;c.height=svgRef.current?.clientHeight??360;const s=new XMLSerializer();const blob=new Blob([s.serializeToString(svgRef.current!)],{type:'image/svg+xml'});const a=Object.assign(document.createElement('a'),{href:URL.createObjectURL(blob),download:'signal.svg'});a.click(); }} style={{gap:5}}><Download size={12}/>SVG</button>
         </div>
       </div>
 
       {/* Toolbar */}
-      <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-        {/* Device selector */}
-        <div>
-          <label style={labelStyle}>Device</label>
-          <div style={{ position: 'relative', display: 'inline-block' }}>
-            <select value={deviceId} onChange={e => setDeviceId(e.target.value)}
-              style={{ ...inputStyle, width: 220, paddingRight: 28, appearance: 'none', cursor: 'pointer' }}>
+      <div style={{display:'flex',gap:12,marginBottom:20,flexWrap:'wrap',alignItems:'flex-end',padding:'12px 16px',background:'hsl(var(--surface))',border:'1px solid hsl(var(--border))'}}>
+        <div style={{minWidth:200}}>
+          <label style={lbl}>Device</label>
+          <div style={{position:'relative'}}>
+            <select value={deviceId} onChange={e=>{setDeviceId(e.target.value);}}
+              style={{...inp,paddingRight:26,appearance:'none',cursor:'pointer',minWidth:200}}>
               <option value="">— Select device —</option>
-              {devices.map((d: any) => (
-                <option key={d._id} value={d._id}>{d.name}</option>
-              ))}
+              {devices.map((d:any)=><option key={d._id} value={d._id}>{d.name}</option>)}
             </select>
-            <ChevronDown size={12} style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'hsl(var(--muted-fg))' }} />
+            <ChevronDown size={11} style={{position:'absolute',right:7,top:'50%',transform:'translateY(-50%)',pointerEvents:'none',color:'hsl(var(--muted-fg))'}}/>
           </div>
         </div>
 
-        {/* Field chips */}
         {deviceId && numericFields.length > 0 && (
-          <div>
-            <label style={labelStyle}>Parameters</label>
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              {numericFields.map((f: any, i: number) => {
-                const color = f.chartColor ?? COLORS[i % COLORS.length];
-                const active = selectedFields.includes(f.key);
+          <div style={{flex:1}}>
+            <label style={lbl}>Parameters <span style={{opacity:0.5}}>({selFields.length} selected)</span></label>
+            <div style={{display:'flex',gap:5,flexWrap:'wrap'}}>
+              {numericFields.map((f:any,i:number)=>{
+                const color = f.chartColor??COLORS[i%COLORS.length];
+                const active = selFields.includes(f.key);
                 return (
-                  <button key={f.key} onClick={() => toggleField(f.key)}
-                    style={{
-                      padding: '4px 10px', fontSize: 11, fontFamily: 'var(--font-mono)',
-                      border: `1px solid ${active ? color : 'hsl(var(--border))'}`,
-                      background: active ? `${color}18` : 'transparent',
-                      color: active ? color : 'hsl(var(--muted-fg))',
-                      cursor: 'pointer', transition: 'all 0.12s',
-                      borderLeft: active ? `3px solid ${color}` : '1px solid hsl(var(--border))',
-                    }}>
-                    {f.label || f.key.replace(/_/g, ' ')}
-                    {f.unit && <span style={{ opacity: 0.55, marginLeft: 4 }}>{f.unit}</span>}
+                  <button key={f.key} onClick={()=>toggleField(f.key)} style={{
+                    padding:'5px 11px',fontSize:11,fontFamily:'var(--font-mono)',
+                    borderLeft:`3px solid ${active?color:'hsl(var(--border))'}`,
+                    border:`1px solid ${active?color:'hsl(var(--border))'}`,
+                    borderLeftWidth:3,
+                    background: active?`${color}15`:'transparent',
+                    color: active?color:'hsl(var(--muted-fg))',
+                    cursor:'pointer',transition:'all 0.1s',
+                  }}>
+                    {f.label||f.key.replace(/_/g,' ')}
+                    {f.unit&&<span style={{opacity:0.45,marginLeft:4,fontSize:9}}>{f.unit}</span>}
                   </button>
                 );
               })}
@@ -732,249 +810,218 @@ export function AnalyticsPage() {
           </div>
         )}
 
-        {/* Range */}
+        {deviceId && !numericFields.length && !loading && (
+          <div style={{fontFamily:'var(--font-mono)',fontSize:11,color:'hsl(var(--muted-fg))'}}>
+            No numeric fields found for this device
+          </div>
+        )}
+
         <div>
-          <label style={labelStyle}>Range</label>
+          <label style={lbl}>Range</label>
           <div className="seg">
-            {RANGES.map(r => (
-              <button key={r.value} className={range === r.value ? 'on' : ''} onClick={() => setRange(r.value)}>
-                {r.label}
-              </button>
-            ))}
+            {RANGES.map(r=><button key={r.ms} className={rangeMs===r.ms?'on':''} onClick={()=>setRangeMs(r.ms)}>{r.label}</button>)}
           </div>
         </div>
 
-        {/* Normalize toggle */}
-        <div>
-          <label style={labelStyle}>Y Axis</label>
-          <div className="seg">
-            <button className={!normalizeY ? 'on' : ''} onClick={() => setNormalizeY(false)}>Raw</button>
-            <button className={normalizeY ? 'on' : ''} onClick={() => setNormalizeY(true)}>Norm</button>
-          </div>
+        <div style={{display:'flex',alignItems:'flex-end',gap:8}}>
+          {windowTs&&<button className="btn btn-sm" onClick={()=>setWindowTs(null)} style={{gap:5,color:'hsl(var(--primary))'}}><X size={11}/>Clear window</button>}
+          {loading&&<RefreshCw size={13} style={{animation:'spin 1s linear infinite',color:'hsl(var(--muted-fg))',marginBottom:6}}/>}
         </div>
-
-        {/* Window clear */}
-        {windowTs && (
-          <button className="btn btn-sm" style={{ gap: 6, alignSelf: 'flex-end', color: 'hsl(var(--primary))' }}
-            onClick={() => setWindowTs(null)}>
-            <X size={12} /> Clear window
-          </button>
-        )}
-
-        {isLoading && (
-          <div style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: 2 }}>
-            <RefreshCw size={13} style={{ animation: 'spin 1s linear infinite', color: 'hsl(var(--muted-fg))' }} />
-          </div>
-        )}
       </div>
 
-      {/* Main grid: chart + sidebar */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 24, marginBottom: 24 }}>
+      {/* Tabs */}
+      <div style={{display:'flex',gap:0,marginBottom:0,borderBottom:'1px solid hsl(var(--border))'}}>
+        {TABS.map(t=>(
+          <button key={t.id} onClick={()=>setTab(t.id)} style={{
+            display:'flex',alignItems:'center',gap:6,
+            padding:'10px 18px',fontSize:11,fontFamily:'var(--font-mono)',
+            background:'transparent',border:'none',
+            borderBottom:`2px solid ${tab===t.id?'hsl(var(--primary))':'transparent'}`,
+            color: tab===t.id?'hsl(var(--primary))':'hsl(var(--muted-fg))',
+            cursor:'pointer',transition:'all 0.1s',letterSpacing:'0.06em',textTransform:'uppercase',
+          }}>
+            {t.icon}{t.label}
+          </button>
+        ))}
+      </div>
 
-        {/* Signal chart */}
-        <div>
-          <div className="panel" style={{ padding: 0, overflow: 'hidden' }}>
-            <div style={{ padding: '12px 16px 8px', borderBottom: '1px solid hsl(var(--border))', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'hsl(var(--muted-fg))', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
-                Signal · {series.reduce((s, x) => s + x.data.length, 0)} pts
-                {windowTs && <span style={{ color: 'hsl(var(--primary))', marginLeft: 8 }}>
-                  · window: {((windowTs[1] - windowTs[0]) / 60000).toFixed(1)} min
-                </span>}
+      {/* ── Signal Tab ── */}
+      {tab==='signal'&&(
+        <div style={{display:'grid',gridTemplateColumns:showPipeline?'1fr 320px':'1fr',gap:0,border:'1px solid hsl(var(--border))',borderTop:'none'}}>
+          <div style={{minWidth:0}}>
+            {series.length===0?(
+              <div style={{height:360,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',color:'hsl(var(--muted-fg))'}}>
+                <Activity size={36} strokeWidth={1} style={{opacity:0.2,marginBottom:14}}/>
+                <div style={{fontFamily:'var(--font-mono)',fontSize:11}}>Select a device and parameters above</div>
+                <div style={{fontFamily:'var(--font-mono)',fontSize:10,opacity:0.55,marginTop:5}}>Then drag on the chart to select an analysis window</div>
               </div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                {[...series, ...overlaySeries].map((s, i) => (
-                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, fontFamily: 'var(--font-mono)', color: s.color }}>
-                    <svg width={14} height={6}>
-                      <line x1={0} y1={3} x2={14} y2={3} stroke={s.color} strokeWidth={i < series.length ? 2 : 1.5} strokeDasharray={i < series.length ? 'none' : '4 2'} />
-                    </svg>
-                    {s.name}
+            ):(
+              <>
+                <div style={{padding:'8px 14px 4px',borderBottom:'1px solid hsl(var(--border))',display:'flex',gap:14,flexWrap:'wrap',alignItems:'center'}}>
+                  {[...series,...overlaySeries].map((s,i)=>(
+                    <div key={i} style={{display:'flex',alignItems:'center',gap:5,fontSize:9.5,fontFamily:'var(--font-mono)',color:s.color}}>
+                      <svg width={16} height={6}><line x1={0} y1={3} x2={16} y2={3} stroke={s.color} strokeWidth={i<series.length?2:1.5} strokeDasharray={i<series.length?undefined:'5 3'}/></svg>
+                      {s.name}
+                    </div>
+                  ))}
+                  <button onClick={()=>setShowPipeline(v=>!v)} style={{marginLeft:'auto',fontSize:9,fontFamily:'var(--font-mono)',background:'none',border:0,cursor:'pointer',color:'hsl(var(--muted-fg))',display:'flex',alignItems:'center',gap:4}}>
+                    <Layers size={10}/>{showPipeline?'Hide':'Show'} pipeline
+                  </button>
+                </div>
+                <SignalChart series={series} overlays={overlaySeries} windowTs={windowTs} onWindow={setWindowTs} height={340} svgRef={svgRef}/>
+                <StatsRow series={series} windowTs={windowTs}/>
+              </>
+            )}
+          </div>
+
+          {/* Pipeline panel */}
+          {showPipeline&&(
+            <div style={{borderLeft:'1px solid hsl(var(--border))',display:'flex',flexDirection:'column',maxHeight:600,overflowY:'auto'}}>
+              <div style={{padding:'12px 14px',borderBottom:'1px solid hsl(var(--border))',fontSize:9,fontFamily:'var(--font-mono)',letterSpacing:'0.14em',textTransform:'uppercase',color:'hsl(var(--muted-fg))'}}>DSP Pipeline</div>
+
+              {/* Pipeline visualization */}
+              <div style={{padding:'10px 14px',display:'flex',flexDirection:'column',gap:4}}>
+                <div style={{padding:'7px 10px',background:'hsl(var(--surface-raised))',fontSize:10,fontFamily:'var(--font-mono)',color:'hsl(var(--muted-fg))'}}>
+                  <span style={{color:'hsl(var(--fg))'}}>INPUT</span> · {series.reduce((s,x)=>s+x.data.length,0)} pts · {selFields.length} field{selFields.length!==1?'s':''}
+                </div>
+                {overlays.length===0&&<div style={{textAlign:'center',fontSize:9,fontFamily:'var(--font-mono)',color:'hsl(var(--muted-fg))',padding:'4px 0',opacity:0.5}}>↓ no operations applied</div>}
+                {overlays.map((ov,i)=>(
+                  <div key={ov.id} style={{display:'flex',flexDirection:'column',gap:2}}>
+                    <div style={{textAlign:'center',fontSize:9,color:'hsl(var(--muted-fg))',opacity:0.4}}>↓</div>
+                    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'6px 10px',background:'hsl(var(--surface-raised))',borderLeft:`3px solid ${ov.color}`}}>
+                      <div>
+                        <div style={{fontSize:9.5,fontFamily:'var(--font-mono)',color:ov.color}}>{ov.label}</div>
+                        <div style={{fontSize:8,fontFamily:'var(--font-mono)',color:'hsl(var(--muted-fg))',marginTop:1}}>{ov.fieldKey}</div>
+                      </div>
+                      <button onClick={()=>setOverlays(p=>p.filter(o=>o.id!==ov.id))} style={{background:'none',border:0,cursor:'pointer',color:'hsl(var(--muted-fg))',padding:0}}><X size={11}/></button>
+                    </div>
                   </div>
                 ))}
+                {overlays.length>0&&<>
+                  <div style={{textAlign:'center',fontSize:9,color:'hsl(var(--muted-fg))',opacity:0.4}}>↓</div>
+                  <div style={{padding:'6px 10px',background:'hsl(var(--surface-raised))',fontSize:10,fontFamily:'var(--font-mono)',color:'hsl(var(--good))'}}>OUTPUT · shown on chart</div>
+                </>}
               </div>
-            </div>
-            {series.length === 0 ? (
-              <div style={{ height: 340, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'hsl(var(--muted-fg))' }}>
-                <Activity size={32} strokeWidth={1} style={{ marginBottom: 12, opacity: 0.3 }} />
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>Select a device and parameters above</div>
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, marginTop: 4, opacity: 0.6 }}>Then drag on the chart to select a window</div>
-              </div>
-            ) : (
-              <SignalChart
-                series={series} overlaySeries={overlaySeries}
-                windowTs={windowTs} onWindowChange={setWindowTs}
-                height={340} svgRef={signalSvgRef}
-              />
-            )}
-          </div>
-        </div>
 
-        {/* Sidebar */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div style={{padding:'0 14px 14px',display:'flex',flexDirection:'column',gap:10,borderTop:'1px solid hsl(var(--border))',paddingTop:12}}>
+                <div style={{fontSize:8.5,fontFamily:'var(--font-mono)',letterSpacing:'0.12em',textTransform:'uppercase',color:'hsl(var(--muted-fg))'}}>Add Operation</div>
 
-          {/* Stats */}
-          <div className="panel" style={{ padding: '14px 16px' }}>
-            <StatsPanel series={statsForPanel} windowTs={windowTs} />
-          </div>
+                {selFields.length>1&&<div><label style={lbl}>Apply to</label>
+                  <select value={activeOp} onChange={e=>setOpField(e.target.value)} style={inp}>
+                    {selFields.map(k=>{const m=schemaFields.find((f:any)=>f.key===k); return <option key={k} value={k}>{m?.label||k}</option>;})}
+                  </select>
+                </div>}
 
-          {/* Operations */}
-          <div className="panel" style={{ padding: '14px 16px' }}>
-            <div className="eyebrow" style={{ marginBottom: 14, fontSize: 9.5, letterSpacing: '0.14em' }}>Operations</div>
-
-            {selectedFields.length > 1 && (
-              <div style={{ marginBottom: 12 }}>
-                <label style={labelStyle}>Apply to field</label>
-                <select value={activeOpField} onChange={e => setOpField(e.target.value)} style={{ ...inputStyle }}>
-                  {selectedFields.map(k => {
-                    const meta = schemaFields.find((f: any) => f.key === k);
-                    return <option key={k} value={k}>{meta?.label || k}</option>;
-                  })}
-                </select>
-              </div>
-            )}
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {/* Moving average */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 6, alignItems: 'flex-end' }}>
-                <div>
-                  <label style={labelStyle}>Moving Average · window pts</label>
-                  <input type="number" min={2} max={200} value={maWindow} onChange={e => setMaWindow(+e.target.value)} style={inputStyle} />
+                <div style={{display:'grid',gridTemplateColumns:'1fr auto',gap:5,alignItems:'flex-end'}}>
+                  <div><label style={lbl}>Moving Avg · window</label>
+                    <input type="number" min={2} max={200} value={maW} onChange={e=>setMaW(+e.target.value)} style={inp}/>
+                  </div>
+                  <button className="btn btn-sm" onClick={()=>addOverlay('moving_avg',`MA(${maW})`,{w:maW})} disabled={!selFields.length}>+</button>
                 </div>
-                <button className="btn btn-sm" style={{ whiteSpace: 'nowrap' }}
-                  onClick={() => addOverlay('moving_avg', `MA(${maWindow})`, { window: maWindow })}
-                  disabled={!selectedFields.length}>Apply</button>
-              </div>
 
-              {/* EMA */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 6, alignItems: 'flex-end' }}>
-                <div>
-                  <label style={labelStyle}>Exp. Moving Average · α (0–1)</label>
-                  <input type="number" min={0.01} max={1} step={0.01} value={emaAlpha} onChange={e => setEmaAlpha(+e.target.value)} style={inputStyle} />
+                <div style={{display:'grid',gridTemplateColumns:'1fr auto',gap:5,alignItems:'flex-end'}}>
+                  <div><label style={lbl}>Exp MA · α</label>
+                    <input type="number" min={0.01} max={1} step={0.01} value={emaA} onChange={e=>setEmaA(+e.target.value)} style={inp}/>
+                  </div>
+                  <button className="btn btn-sm" onClick={()=>addOverlay('exp_ma',`EMA(${emaA})`,{a:emaA})} disabled={!selFields.length}>+</button>
                 </div>
-                <button className="btn btn-sm" style={{ whiteSpace: 'nowrap' }}
-                  onClick={() => addOverlay('exp_ma', `EMA(${emaAlpha})`, { alpha: emaAlpha })}
-                  disabled={!selectedFields.length}>Apply</button>
-              </div>
 
-              {/* Differentiate / Integrate */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-                <button className="btn btn-sm btn-outline"
-                  onClick={() => addOverlay('differentiate', 'd/dt', {})}
-                  disabled={!selectedFields.length}>Differentiate</button>
-                <button className="btn btn-sm btn-outline"
-                  onClick={() => addOverlay('integrate', '∫dt', {})}
-                  disabled={!selectedFields.length}>Integrate</button>
-              </div>
-            </div>
+                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:5}}>
+                  <button className="btn btn-sm btn-outline" onClick={()=>addOverlay('differentiate','d/dt',{})} disabled={!selFields.length}>d/dt</button>
+                  <button className="btn btn-sm btn-outline" onClick={()=>addOverlay('integrate','∫dt',{})} disabled={!selFields.length}>∫ dt</button>
+                </div>
 
-            {/* Filters */}
-            <div style={{ borderTop: '1px solid hsl(var(--border))', marginTop: 14, paddingTop: 14 }}>
-              <div className="eyebrow" style={{ marginBottom: 12, fontSize: 9.5, letterSpacing: '0.14em' }}>Filters</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <div>
-                  <label style={labelStyle}>Type</label>
-                  <div className="seg" style={{ width: '100%', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr' }}>
-                    {(['lowpass', 'highpass', 'bandpass', 'notch'] as const).map(t => (
-                      <button key={t} className={filterType === t ? 'on' : ''} onClick={() => setFilterType(t)}
-                        style={{ fontSize: 9, letterSpacing: '0.04em' }}>
-                        {t === 'lowpass' ? 'LP' : t === 'highpass' ? 'HP' : t === 'bandpass' ? 'BP' : 'Notch'}
+                {/* Filters */}
+                <div style={{borderTop:'1px solid hsl(var(--border))',paddingTop:10}}>
+                  <div style={{fontSize:8.5,fontFamily:'var(--font-mono)',letterSpacing:'0.12em',textTransform:'uppercase',color:'hsl(var(--muted-fg))',marginBottom:8}}>Filter</div>
+                  <div className="seg" style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr 1fr',marginBottom:8}}>
+                    {(['lowpass','highpass','bandpass','notch'] as const).map(t=>(
+                      <button key={t} className={fType===t?'on':''} onClick={()=>setFType(t)} style={{fontSize:8.5}}>
+                        {t==='lowpass'?'LP':t==='highpass'?'HP':t==='bandpass'?'BP':'Ntch'}
                       </button>
                     ))}
                   </div>
+                  {(fType==='lowpass'||fType==='highpass')&&(
+                    <div style={{marginBottom:6}}>
+                      <label style={lbl}>{fType==='lowpass'?'LP':'HP'} cutoff · {fmtFreq(fCut)} · T={fmtPeriod(fCut)}</label>
+                      <input type="number" min={0} max={nyquist*0.99} step={nyquist/200} value={fCut} onChange={e=>setFCut(+e.target.value)} style={inp}/>
+                      <div style={{fontSize:8,fontFamily:'var(--font-mono)',color:'hsl(var(--muted-fg))',marginTop:3,opacity:0.6}}>Nyquist: {fmtFreq(nyquist)}</div>
+                    </div>
+                  )}
+                  {(fType==='bandpass'||fType==='notch')&&(<>
+                    <div style={{marginBottom:6}}><label style={lbl}>Center · {fmtFreq(fCenter)}</label>
+                      <input type="number" min={0} max={nyquist*0.99} step={nyquist/200} value={fCenter} onChange={e=>setFCenter(+e.target.value)} style={inp}/>
+                    </div>
+                    <div style={{marginBottom:6}}><label style={lbl}>Bandwidth (octaves)</label>
+                      <input type="number" min={0.1} max={4} step={0.1} value={fBW} onChange={e=>setFBW(+e.target.value)} style={inp}/>
+                    </div>
+                  </>)}
+                  <button className="btn btn-sm btn-primary" style={{width:'100%'}} onClick={applyFilter} disabled={!selFields.length}>Apply Filter</button>
                 </div>
-
-                {(filterType === 'lowpass' || filterType === 'highpass') && (
-                  <div>
-                    <label style={labelStyle}>
-                      Cutoff · {fmtFreq(filterCutoff)} · T={fmtPeriod(filterCutoff)}
-                      {nyquist > 0 && <span style={{ marginLeft: 4, opacity: 0.6 }}>(Nyq: {fmtFreq(nyquist)})</span>}
-                    </label>
-                    <input type="number" min={0} max={nyquist * 0.999} step={nyquist / 100}
-                      value={filterCutoff} onChange={e => setFilterCutoff(+e.target.value)} style={inputStyle} />
-                  </div>
-                )}
-
-                {(filterType === 'bandpass' || filterType === 'notch') && (
-                  <>
-                    <div>
-                      <label style={labelStyle}>Center · {fmtFreq(filterCenter)} · T={fmtPeriod(filterCenter)}</label>
-                      <input type="number" min={0} max={nyquist * 0.999} step={nyquist / 100}
-                        value={filterCenter} onChange={e => setFilterCenter(+e.target.value)} style={inputStyle} />
-                    </div>
-                    <div>
-                      <label style={labelStyle}>Bandwidth · {filterBW.toFixed(1)} octave(s)</label>
-                      <input type="number" min={0.1} max={4} step={0.1}
-                        value={filterBW} onChange={e => setFilterBW(+e.target.value)} style={inputStyle} />
-                    </div>
-                  </>
-                )}
-
-                <button className="btn btn-sm btn-primary" onClick={applyFilter} disabled={!selectedFields.length}>
-                  Apply Filter
-                </button>
               </div>
             </div>
-
-            {/* Active overlays */}
-            {overlays.length > 0 && (
-              <div style={{ borderTop: '1px solid hsl(var(--border))', marginTop: 14, paddingTop: 14 }}>
-                <div className="eyebrow" style={{ marginBottom: 8, fontSize: 9.5 }}>Active Overlays</div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  {overlays.map(ov => (
-                    <div key={ov.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 8px', background: 'hsl(var(--surface-raised))', fontSize: 10, fontFamily: 'var(--font-mono)' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <svg width={14} height={6}><line x1={0} y1={3} x2={14} y2={3} stroke={ov.color} strokeWidth={1.5} strokeDasharray="4 2" /></svg>
-                        <span style={{ color: ov.color }}>{ov.label}</span>
-                        <span style={{ color: 'hsl(var(--muted-fg))', opacity: 0.7 }}>· {ov.fieldKey}</span>
-                      </div>
-                      <button onClick={() => setOverlays(prev => prev.filter(o => o.id !== ov.id))}
-                        style={{ background: 'none', border: 0, cursor: 'pointer', color: 'hsl(var(--muted-fg))', padding: 0, display: 'flex' }}>
-                        <X size={11} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
+          )}
         </div>
-      </div>
+      )}
 
-      {/* FFT / Frequency Domain */}
-      <div className="panel" style={{ padding: 0, overflow: 'hidden' }}>
-        <div style={{ padding: '12px 16px', borderBottom: '1px solid hsl(var(--border))', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <Waves size={14} style={{ color: 'hsl(var(--primary))' }} />
-            <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'hsl(var(--muted-fg))', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
-              Frequency Domain · PSD (Hann window)
-            </span>
-            {psdBins.length > 0 && (
-              <span style={{ fontSize: 9.5, fontFamily: 'var(--font-mono)', color: 'hsl(var(--muted-fg))', opacity: 0.7 }}>
-                · sr={fmtFreq(sampleRateHz)} · {psdBins.length} bins · Nyq={fmtFreq(nyquist)}
-              </span>
-            )}
-          </div>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            {selectedFields.length > 1 && (
-              <select value={activeFftField} onChange={e => setFftField(e.target.value)}
-                style={{ ...inputStyle, width: 130, paddingRight: 4 }}>
-                {selectedFields.map(k => {
-                  const meta = schemaFields.find((f: any) => f.key === k);
-                  return <option key={k} value={k}>{meta?.label || k}</option>;
-                })}
+      {/* ── Spectrum Tab ── */}
+      {tab==='spectrum'&&(
+        <div style={{border:'1px solid hsl(var(--border))',borderTop:'none'}}>
+          <div style={{padding:'10px 16px',borderBottom:'1px solid hsl(var(--border))',display:'flex',gap:12,alignItems:'center',flexWrap:'wrap'}}>
+            <span style={{fontSize:9.5,fontFamily:'var(--font-mono)',color:'hsl(var(--muted-fg))',letterSpacing:'0.1em',textTransform:'uppercase'}}>FFT · PSD (Hann) · sr={fmtFreq(sr)} · Nyq={fmtFreq(nyquist)}</span>
+            {selFields.length>1&&(
+              <select value={activeFft} onChange={e=>setFftField(e.target.value)} style={{...inp,width:150}}>
+                {selFields.map(k=>{const m=schemaFields.find((f:any)=>f.key===k); return <option key={k} value={k}>{m?.label||k}</option>;})}
               </select>
             )}
-            <button onClick={() => setShowFFT(v => !v)}
-              style={{ background: 'none', border: 0, cursor: 'pointer', color: 'hsl(var(--muted-fg))', fontSize: 10, fontFamily: 'var(--font-mono)' }}>
-              {showFFT ? 'Hide' : 'Show'}
-            </button>
+            {!windowTs&&<span style={{fontSize:9,fontFamily:'var(--font-mono)',color:'hsl(var(--primary))',opacity:0.7}}>Tip: select a window on the Signal tab for windowed FFT</span>}
+          </div>
+          <div style={{padding:'0 0 4px'}}>
+            <div style={{padding:'8px 16px 0',fontSize:9,fontFamily:'var(--font-mono)',color:'hsl(var(--muted-fg))',textTransform:'uppercase',letterSpacing:'0.1em'}}>Power Spectral Density</div>
+            <PSDChart bins={psdBins} sampleRateHz={sr} height={220}/>
+          </div>
+          <div style={{borderTop:'1px solid hsl(var(--border))',padding:'8px 16px 0'}}>
+            <div style={{fontSize:9,fontFamily:'var(--font-mono)',color:'hsl(var(--muted-fg))',textTransform:'uppercase',letterSpacing:'0.1em',marginBottom:4}}>Spectrogram (time × frequency)</div>
+            <Spectrogram values={spectroVals} sampleRateHz={sr} height={200}/>
+            <div style={{padding:'6px 0 8px',fontSize:8.5,fontFamily:'var(--font-mono)',color:'hsl(var(--muted-fg))'}}>Color: dark = low power · bright = high power</div>
           </div>
         </div>
-        {showFFT && (
-          <div style={{ padding: '8px 0' }}>
-            <PSDChart bins={psdBins} sampleRateHz={sampleRateHz} height={220} />
+      )}
+
+      {/* ── Statistics Tab ── */}
+      {tab==='stats'&&(
+        <div style={{border:'1px solid hsl(var(--border))',borderTop:'none',padding:20}}>
+          {series.length===0?(
+            <div style={{padding:32,textAlign:'center',fontFamily:'var(--font-mono)',fontSize:11,color:'hsl(var(--muted-fg))'}}>Select a device and parameters to see statistics</div>
+          ):(
+            <div style={{display:'flex',flexDirection:'column',gap:24}}>
+              <div>
+                <div style={{fontSize:9,fontFamily:'var(--font-mono)',letterSpacing:'0.14em',textTransform:'uppercase',color:'hsl(var(--muted-fg))',marginBottom:12}}>Value Distribution</div>
+                <HistogramGrid series={series}/>
+              </div>
+              <div>
+                <div style={{fontSize:9,fontFamily:'var(--font-mono)',letterSpacing:'0.14em',textTransform:'uppercase',color:'hsl(var(--muted-fg))',marginBottom:12}}>Correlation Analysis</div>
+                <CorrelationHeatmap series={series}/>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── 3D Explorer Tab ── */}
+      {tab==='3d'&&(
+        <div style={{border:'1px solid hsl(var(--border))',borderTop:'none'}}>
+          <div style={{padding:'10px 16px',borderBottom:'1px solid hsl(var(--border))'}}>
+            <span style={{fontSize:9.5,fontFamily:'var(--font-mono)',color:'hsl(var(--muted-fg))',letterSpacing:'0.1em',textTransform:'uppercase'}}>
+              {selFields.length>=3?'PCA 3D Scatter':selFields.length===2?'Feature Space (field1 vs field2 vs d/dt)':'Phase Space Reconstruction · x(t), x(t-1), x(t-2)'}
+            </span>
           </div>
-        )}
-      </div>
+          <Scatter3D series={series} windowTs={windowTs} height={460}/>
+          <div style={{padding:'8px 16px',fontSize:8.5,fontFamily:'var(--font-mono)',color:'hsl(var(--muted-fg))',borderTop:'1px solid hsl(var(--border))'}}>
+            {selFields.length<2?'Add more parameters to see multi-dimensional feature space · Drag to rotate · Color = time':'Drag to rotate · Color = time gradient (blue=earliest, orange=most recent)'}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
