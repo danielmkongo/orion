@@ -357,17 +357,6 @@ export function LineChart({
                     clipPath={`url(#${uid}-clip)`}
                   />
                 ))}
-                {gaps.map((gap, gi) => {
-                  const ax = xScale(gap.a.ts), ay = yFn(gap.a.value);
-                  const bx = xScale(gap.b.ts), by = yFn(gap.b.value);
-                  return (
-                    <line key={`gc${gi}`}
-                      x1={ax} y1={ay} x2={bx} y2={by}
-                      stroke={color} strokeWidth={1}
-                      strokeDasharray="3 5" strokeOpacity={0.22}
-                      clipPath={`url(#${uid}-clip)`} />
-                  );
-                })}
               </g>
             );
           })}
@@ -383,7 +372,7 @@ export function LineChart({
               const pillW = label.length * 6 + 14;
               const pillLeft = mx - pillW / 2;
               const pillRight = mx + pillW / 2;
-              if (bx - ax < pillW + 16 || pillLeft < lastPillRight + 8) return null;
+              if (pillLeft < lastPillRight + 8) return null;
               lastPillRight = pillRight;
               const pillY = PAD.top + 14;
               return (
