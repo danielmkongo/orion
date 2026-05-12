@@ -308,16 +308,6 @@ export function DeviceDetailPage() {
     value: typeof p.value === 'number' ? p.value : 0,
   }));
 
-  const allSeries = numericFields.map(([k], i) => {
-    const meta = schemaFields.find((f: any) => f.key === k);
-    const color = meta?.chartColor ?? COLORS[i % COLORS.length];
-    const pts = (allFieldsQueries[i]?.data?.data ?? []).map((p: any) => ({
-      ts: typeof p.ts === 'string' ? new Date(p.ts).getTime() : p.ts,
-      value: typeof p.value === 'number' ? p.value : 0,
-    }));
-    return { name: fieldLabel(k), data: pts, color };
-  });
-
   // Get field metadata from schema for chart color/type
   const chartFieldMeta = schemaFields.find((f: any) => f.key === chartField);
   const chartColor = chartFieldMeta?.chartColor ?? 'hsl(var(--primary))';
@@ -336,7 +326,17 @@ export function DeviceDetailPage() {
     return (lbl && lbl !== fm?.key) ? lbl : prettyKey(key);
   };
 
-  const chartFieldLabel = fieldLabel(chartField);
+  const chartFieldLabel = fieldLabel(chartField === '__all__' ? '' : chartField);
+
+  const allSeries = numericFields.map(([k], i) => {
+    const meta = schemaFields.find((f: any) => f.key === k);
+    const color = meta?.chartColor ?? COLORS[i % COLORS.length];
+    const pts = (allFieldsQueries[i]?.data?.data ?? []).map((p: any) => ({
+      ts: typeof p.ts === 'string' ? new Date(p.ts).getTime() : p.ts,
+      value: typeof p.value === 'number' ? p.value : 0,
+    }));
+    return { name: fieldLabel(k), data: pts, color };
+  });
 
   const { Icon: CatIcon } = d ? getCategoryIconInfo(d.category) : { Icon: () => null };
 
