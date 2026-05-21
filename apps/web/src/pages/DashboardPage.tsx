@@ -6,6 +6,7 @@ import apiClient from '@/api/client';
 import { devicesApi } from '@/api/devices';
 import { telemetryApi } from '@/api/telemetry';
 import { timeAgo, getCategoryIconInfo } from '@/lib/utils';
+import { useFmtTs } from '@/lib/use-fmt-ts';
 import { LineChart, Donut, Sparkline } from '@/components/charts/Charts';
 import { useSocket } from '@/hooks/useSocket';
 import { useAuthStore } from '@/store/auth.store';
@@ -21,6 +22,7 @@ export function DashboardPage() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
   const { on } = useSocket();
+  const { displayTz } = useFmtTs();
   const [liveIds, setLiveIds] = useState<Set<string>>(new Set());
   const [featuredDeviceId, setFeaturedDeviceId] = useState('');
   const [featuredField, setFeaturedField] = useState('temperature');
@@ -275,7 +277,9 @@ export function DashboardPage() {
               {effectiveDeviceId ? 'No telemetry data for this field' : 'No devices registered'}
             </div>
           ) : (
-            <LineChart series={[{ name: fieldLabel(featuredField), data: featuredPoints, color: 'hsl(var(--primary))' }]} height={260} showArea />
+            <LineChart series={[{ name: fieldLabel(featuredField), data: featuredPoints, color: 'hsl(var(--primary))' }]} height={260} showArea
+              storedTz={featuredDeviceData?.timestampFormat === 'utc' ? undefined : (featuredDeviceData?.timezone || 'Africa/Nairobi')}
+              displayTz={displayTz} />
           )}
           <div style={{ display: 'flex', gap: '16px', marginTop: '12px', paddingTop: '12px', borderTop: '1px solid hsl(var(--border))' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>

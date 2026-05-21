@@ -21,7 +21,7 @@ const normalizeKey = (k: string) => k.toLowerCase().replace(/[_\-\s]/g, '');
 
 export function TelemetryPage() {
   const { timezone } = useUIStore();
-  const { fmt: fmtTs } = useFmtTs();
+  const { fmt: fmtTs, displayTz } = useFmtTs();
   const queryClient = useQueryClient();
   const { on, subscribeDevice } = useSocket();
   const [selectedDeviceId, setSelectedDeviceId] = useState('');
@@ -419,7 +419,9 @@ export function TelemetryPage() {
         ) : chartSeries.every(s => s.data.length === 0) ? (
           <div style={{ height: 360, display: 'flex', alignItems: 'center', justifyContent: 'center' }} className="dim">No data for selected fields in {isCustom ? `${customFrom} → ${customTo}` : range.label}</div>
         ) : (
-          <LineChart series={chartSeries} height={360} showArea={showArea} normalize={normalize} />
+          <LineChart series={chartSeries} height={360} showArea={showArea} normalize={normalize}
+            storedTz={selectedDevice?.timestampFormat === 'utc' ? undefined : (selectedDevice?.timezone || 'Africa/Nairobi')}
+            displayTz={displayTz} />
         )}
       </div>
 

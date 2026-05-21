@@ -8,6 +8,7 @@ import { APIProvider, Map, AdvancedMarker } from '@vis.gl/react-google-maps';
 import apiClient from '@/api/client';
 import toast from 'react-hot-toast';
 import { copyText } from '@/lib/utils';
+import { useFmtTs } from '@/lib/use-fmt-ts';
 import { ArrowLeft, Plus, Globe, Lock, Pencil, Trash2, GripVertical, X, Check, Copy,
          ExternalLink, Download, Settings, ChevronLeft, ChevronDown, Eye, ArrowUp, ArrowDown,
          ArrowRight as ArrowRightIcon, ChevronRight } from 'lucide-react';
@@ -186,6 +187,14 @@ function SeriesRow({ series, index, devices, onUpdate, onRemove }: {
 
 /* ── Widget preview content ─────────────────────────────────────────── */
 function WidgetContent({ widget }: { widget: Widget }) {
+  const { displayTz } = useFmtTs();
+  const { data: widgetDevice } = useQuery({
+    queryKey: ['wpreview-device-tz', widget.deviceId],
+    queryFn: () => apiClient.get(`/devices/${widget.deviceId}`).then(r => r.data),
+    enabled: !!widget.deviceId && ['line_chart', 'multi_line_chart', 'bar_chart'].includes(widget.type),
+  });
+  const storedTz = widgetDevice?.timestampFormat === 'utc' ? undefined : (widgetDevice?.timezone || 'Africa/Nairobi');
+
   const { data: latest } = useQuery({
     queryKey: ['wpreview-latest', widget.deviceId],
     queryFn: () => apiClient.get('/telemetry/latest', { params: { deviceId: widget.deviceId } }).then(r => r.data),
@@ -382,7 +391,7 @@ function WidgetContent({ widget }: { widget: Widget }) {
     const pts = (series?.data ?? []).map((p: any) => ({ ts: new Date(p.ts).getTime(), value: p.value }));
     return (
       <ChartWrapper render={h => pts.length > 0
-        ? <LineChart series={[{ name: fieldLabel(widget.field ?? ''), data: pts, color: 'hsl(var(--primary))' }]} height={h} showArea />
+        ? <LineChart series={[{ name: fieldLabel(widget.field ?? ''), data: pts, color: 'hsl(var(--primary))' }]} height={h} showArea storedTz={storedTz} displayTz={displayTz} />
         : <div className="dim" style={dim}>No data yet</div>} />
     );
   }
@@ -391,7 +400,7 @@ function WidgetContent({ widget }: { widget: Widget }) {
   if (widget.type === 'multi_line_chart') {
     if (!multiData?.length) return <div className="dim" style={dim}>Add series in settings</div>;
     return (
-      <ChartWrapper render={h => <LineChart series={multiData as any} height={h} showArea={false} />} />
+      <ChartWrapper render={h => <LineChart series={multiData as any} height={h} showArea={false} storedTz={storedTz} displayTz={displayTz} />} />
     );
   }
 

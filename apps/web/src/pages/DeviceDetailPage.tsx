@@ -164,7 +164,7 @@ export function DeviceDetailPage() {
   const tableScrollRef = useRef<HTMLDivElement>(null);
   const { on, subscribeDevice } = useSocket();
   const queryClient = useQueryClient();
-  const { fmt: fmtTs, fmtAudit } = useFmtTs();
+  const { fmt: fmtTs, fmtAudit, displayTz } = useFmtTs();
 
   const { data: device, isLoading } = useQuery({
     queryKey: ['device', id],
@@ -862,7 +862,9 @@ export function DeviceDetailPage() {
                     No data in this range
                   </div>
                 ) : (
-                  <LineChart series={chartSeries} height={280} showArea={false} />
+                  <LineChart series={chartSeries} height={280} showArea={false}
+                    storedTz={(d as any)?.timestampFormat === 'utc' ? undefined : ((d as any)?.timezone || 'Africa/Nairobi')}
+                    displayTz={displayTz} />
                 )
               ) : seriesPoints.length === 0 ? (
                 <div style={{ height: 280, display: 'flex', alignItems: 'center', justifyContent: 'center' }} className="dim">
@@ -918,10 +920,14 @@ export function DeviceDetailPage() {
                     </div>
                   );
                 }
+                const tzProps = {
+                  storedTz: (d as any)?.timestampFormat === 'utc' ? undefined : ((d as any)?.timezone || 'Africa/Nairobi'),
+                  displayTz,
+                };
                 if (ct === 'scatter') {
-                  return <LineChart series={[{ name: chartFieldLabel, data: seriesPoints, color: chartColor }]} height={280} showArea={false} />;
+                  return <LineChart series={[{ name: chartFieldLabel, data: seriesPoints, color: chartColor }]} height={280} showArea={false} {...tzProps} />;
                 }
-                return <LineChart series={[{ name: chartFieldLabel, data: seriesPoints, color: chartColor }]} height={280} showArea={ct === 'area'} />;
+                return <LineChart series={[{ name: chartFieldLabel, data: seriesPoints, color: chartColor }]} height={280} showArea={ct === 'area'} {...tzProps} />;
               })()
             )}
           </div>

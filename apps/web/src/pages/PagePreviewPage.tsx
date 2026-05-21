@@ -10,6 +10,7 @@ import { useQuery } from '@tanstack/react-query';
 import apiClient from '@/api/client';
 import { ArrowLeft, Globe, Lock } from 'lucide-react';
 import { LineChart, BarChart } from '@/components/charts/Charts';
+import { useFmtTs } from '@/lib/use-fmt-ts';
 import { APIProvider, Map, AdvancedMarker } from '@vis.gl/react-google-maps';
 
 const GMAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
@@ -31,6 +32,13 @@ function Sparkline({ points, color }: { points: number[]; color: string }) {
 
 /* ── Widget content ─────────────────────────────────────────────────── */
 function PreviewWidgetContent({ widget, data, contentH = 200 }: { widget: any; data: any; contentH: number }) {
+  const { displayTz } = useFmtTs();
+  const { data: previewDevice } = useQuery({
+    queryKey: ['preview-device-tz', widget.deviceId],
+    queryFn: () => apiClient.get(`/devices/${widget.deviceId}`).then(r => r.data),
+    enabled: !!widget.deviceId && ['line_chart', 'multi_line_chart', 'bar_chart'].includes(widget.type),
+  });
+  const storedTz = previewDevice?.timestampFormat === 'utc' ? undefined : (previewDevice?.timezone || 'Africa/Nairobi');
   const chartH = Math.max(80, contentH - 20);
   const empty = (msg = 'No data') => (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', fontSize: 12, color: 'hsl(var(--muted-fg))', fontFamily: 'var(--font-mono)' }}>{msg}</div>
@@ -135,7 +143,7 @@ function PreviewWidgetContent({ widget, data, contentH = 200 }: { widget: any; d
   if (widget.type === 'line_chart') {
     const pts = (Array.isArray(data) ? data : []).map((p: any) => ({ ts: new Date(p.ts).getTime(), value: p.value }));
     return pts.length > 0
-      ? <div style={{ padding: '4px 0', height: '100%' }}><LineChart series={[{ name: widget.field ?? '', data: pts, color: 'hsl(var(--primary))' }]} height={chartH} showArea /></div>
+      ? <div style={{ padding: '4px 0', height: '100%' }}><LineChart series={[{ name: widget.field ?? '', data: pts, color: 'hsl(var(--primary))' }]} height={chartH} showArea storedTz={storedTz} displayTz={displayTz} /></div>
       : empty('No data yet');
   }
 
@@ -146,7 +154,7 @@ function PreviewWidgetContent({ widget, data, contentH = 200 }: { widget: any; d
       name: s.name ?? '', color: s.color || 'hsl(var(--primary))',
       data: (s.data ?? []).map((p: any) => ({ ts: new Date(p.ts).getTime(), value: p.value })),
     }));
-    return <div style={{ padding: '4px 0', height: '100%' }}><LineChart series={chartSeries} height={chartH} /></div>;
+    return <div style={{ padding: '4px 0', height: '100%' }}><LineChart series={chartSeries} height={chartH} storedTz={storedTz} displayTz={displayTz} /></div>;
   }
 
   if (widget.type === 'bar_chart') {

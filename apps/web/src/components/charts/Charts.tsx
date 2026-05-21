@@ -111,12 +111,18 @@ export function LineChart({
   showArea = false,
   normalize = false,
   theme,
+  storedTz,
+  displayTz,
 }: {
   series: ChartSeries[];
   height?: number;
   showArea?: boolean;
   normalize?: boolean;
   theme?: 'light' | 'dark';
+  /** If set, the chart treats stored ts digits as wall-clock in this TZ and shifts to true UTC before formatting. */
+  storedTz?: string;
+  /** TZ to format x-axis ticks in. Defaults to 'UTC'. */
+  displayTz?: string;
 }) {
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const w = useWidth(wrapRef);
@@ -177,12 +183,24 @@ export function LineChart({
 
   const totalHrs = (maxTs - minTs) / 3_600_000;
 
+  const tz = displayTz || 'UTC';
   const fmtTs = (ts: number): string => {
-    const d = new Date(ts);
-    if (totalHrs > 7 * 24) return d.toLocaleDateString('en', { month: 'short', day: 'numeric', timeZone: 'UTC' });
-    if (totalHrs > 24)     return d.toLocaleDateString('en', { month: 'short', day: 'numeric', timeZone: 'UTC' }) + ' ' + d.toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'UTC' });
-    if (totalHrs > 1)      return d.toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'UTC' });
-    return d.toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false, timeZone: 'UTC' });
+    let d = new Date(ts);
+    if (storedTz) {
+      // Reinterpret stored fake-UTC digits as wall-clock in storedTz, shift to real UTC
+      const parts0 = new Intl.DateTimeFormat('en-US', {
+        timeZone: storedTz, hour12: false,
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit',
+      }).formatToParts(d);
+      const g0 = (t: string) => Number(parts0.find(p => p.type === t)?.value);
+      const wallAsUtc = Date.UTC(g0('year'), g0('month') - 1, g0('day'), g0('hour'), g0('minute'), g0('second'));
+      d = new Date(d.getTime() - (wallAsUtc - ts));
+    }
+    if (totalHrs > 7 * 24) return d.toLocaleDateString('en', { month: 'short', day: 'numeric', timeZone: tz });
+    if (totalHrs > 24)     return d.toLocaleDateString('en', { month: 'short', day: 'numeric', timeZone: tz }) + ' ' + d.toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz });
+    if (totalHrs > 1)      return d.toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz });
+    return d.toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false, timeZone: tz });
   };
 
   const toXY = (data: { ts: number; value: number }[], yFn: (v: number) => number) =>
