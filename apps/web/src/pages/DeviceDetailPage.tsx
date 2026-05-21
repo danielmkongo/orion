@@ -4,7 +4,8 @@ import { useState, useEffect, useRef, useMemo, type ReactNode } from 'react';
 import { devicesApi } from '@/api/devices';
 import { telemetryApi } from '@/api/telemetry';
 import apiClient from '@/api/client';
-import { timeAgo, formatDate as fmtDate, formatTs, getCategoryIconInfo, copyText, formatPayloadStr, formatCommandStr } from '@/lib/utils';
+import { timeAgo, formatDate as fmtDate, getCategoryIconInfo, copyText, formatPayloadStr, formatCommandStr } from '@/lib/utils';
+import { useFmtTs } from '@/lib/use-fmt-ts';
 import { useUIStore } from '@/store/ui.store';
 import { useSocket } from '@/hooks/useSocket';
 import { LineChart, BarChart } from '@/components/charts/Charts';
@@ -163,6 +164,7 @@ export function DeviceDetailPage() {
   const tableScrollRef = useRef<HTMLDivElement>(null);
   const { on, subscribeDevice } = useSocket();
   const queryClient = useQueryClient();
+  const { fmt: fmtTs, fmtAudit } = useFmtTs();
 
   const { data: device, isLoading } = useQuery({
     queryKey: ['device', id],
@@ -821,7 +823,7 @@ export function DeviceDetailPage() {
                       {rows.map((row: any, i: number) => (
                         <tr key={row._id ?? i} style={{ background: i % 2 === 0 ? 'transparent' : 'hsl(var(--surface-raised) / 0.4)' }}>
                           <td style={{ padding: '7px 12px', color: 'hsl(var(--muted-fg))', whiteSpace: 'nowrap', borderBottom: '1px solid hsl(var(--rule-ghost))' }}>
-                            {formatTs(row.timestamp ?? row.ts ?? row.createdAt, 'UTC')}
+                            {fmtTs(row.timestamp ?? row.ts ?? row.createdAt, device as any)}
                           </td>
                           {allFields.map((fk: string) => {
                             const val = row.fields?.[fk];
@@ -1532,7 +1534,7 @@ export function DeviceDetailPage() {
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontFamily: 'var(--font-display)', fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</div>
                     <div className="mono faint" style={{ fontSize: 10, marginTop: 2 }}>
-                      {item.hardware} · <span style={{ color: 'hsl(var(--primary))' }}>{item.protocol?.toUpperCase()}</span> · {new Date(item.updatedAt).toLocaleDateString()}
+                      {item.hardware} · <span style={{ color: 'hsl(var(--primary))' }}>{item.protocol?.toUpperCase()}</span> · {fmtAudit(item.updatedAt, 'date')}
                     </div>
                   </div>
                   <button

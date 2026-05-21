@@ -3,7 +3,8 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { devicesApi } from '@/api/devices';
 import { telemetryApi } from '@/api/telemetry';
 import apiClient from '@/api/client';
-import { getCategoryIconInfo, downloadCSV, formatDate, formatTs, timeAgo } from '@/lib/utils';
+import { getCategoryIconInfo, downloadCSV, formatDate, timeAgo } from '@/lib/utils';
+import { useFmtTs } from '@/lib/use-fmt-ts';
 import { useUIStore } from '@/store/ui.store';
 import { LineChart } from '@/components/charts/Charts';
 import { Download, TrendingUp, TrendingDown, Minus } from 'lucide-react';
@@ -20,6 +21,7 @@ const normalizeKey = (k: string) => k.toLowerCase().replace(/[_\-\s]/g, '');
 
 export function TelemetryPage() {
   const { timezone } = useUIStore();
+  const { fmt: fmtTs } = useFmtTs();
   const queryClient = useQueryClient();
   const { on, subscribeDevice } = useSocket();
   const [selectedDeviceId, setSelectedDeviceId] = useState('');
@@ -192,7 +194,7 @@ export function TelemetryPage() {
     if (!chartSeries.length) return;
     const allTs = [...new Set(chartSeries.flatMap(s => s.data.map((p: any) => p.ts)))].sort();
     const rows = allTs.map(ts => {
-      const row: Record<string, unknown> = { timestamp: formatTs(ts, 'UTC') };
+      const row: Record<string, unknown> = { timestamp: fmtTs(ts, selectedDevice) };
       chartSeries.forEach(s => { row[s.name] = s.data.find((p: any) => p.ts === ts)?.value ?? ''; });
       return row;
     });
@@ -441,7 +443,7 @@ export function TelemetryPage() {
               <tbody>
                 {chartSeries[0].data.slice(-20).reverse().map((pt: any, ri: number) => (
                   <tr key={ri}>
-                    <td className="mono" style={{ fontSize: 11.5 }}>{formatTs(pt.ts, 'UTC')}</td>
+                    <td className="mono" style={{ fontSize: 11.5 }}>{fmtTs(pt.ts, selectedDevice)}</td>
                     {chartSeries.map((s, si) => {
                       const match = s.data.find((p: any) => p.ts === pt.ts);
                       return (

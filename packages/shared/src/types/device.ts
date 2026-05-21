@@ -72,6 +72,8 @@ export interface Device {
   templateId?: string;
   protocol: DeviceProtocol;
   payloadFormat: DevicePayloadFormat;
+  timezone?: string;
+  timestampFormat?: 'wallclock' | 'utc';
   tags: string[];
   attributes: DeviceAttribute[];
   location?: DeviceLocation;
@@ -92,6 +94,8 @@ export interface DeviceCreateInput {
   templateId?: string;
   protocol: DeviceProtocol;
   payloadFormat: DevicePayloadFormat;
+  timezone?: string;
+  timestampFormat?: 'wallclock' | 'utc';
   tags?: string[];
   attributes?: DeviceAttribute[];
   projectId?: string;
@@ -104,6 +108,8 @@ export interface DeviceUpdateInput {
   serialNumber?: string;
   category?: DeviceCategory;
   status?: DeviceStatus;
+  timezone?: string;
+  timestampFormat?: 'wallclock' | 'utc';
   tags?: string[];
   attributes?: DeviceAttribute[];
   firmwareVersion?: string;

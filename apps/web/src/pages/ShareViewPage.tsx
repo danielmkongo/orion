@@ -547,7 +547,7 @@ function DeviceShareView({ token, data }: { token: string; data: any }) {
                                 color: cmd.status === 'executed' ? T.good : cmd.status === 'failed' ? T.bad : T.fgMuted,
                               }}>{cmd.status?.toUpperCase()}</span>
                             </td>
-                            <td style={{ padding: '10px 16px', color: T.fgMuted, borderBottom: `1px solid ${T.border}` }}>{new Date(cmd.createdAt).toLocaleString()}</td>
+                            <td style={{ padding: '10px 16px', color: T.fgMuted, borderBottom: `1px solid ${T.border}` }}>{new Date(cmd.createdAt).toLocaleString('en', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false, timeZone: 'UTC' })}</td>
                           </tr>
                         ))}
                     </tbody>

@@ -7,6 +7,7 @@ import { Download, Plus, X, Printer, Trash2 } from 'lucide-react';
 import { devicesApi } from '@/api/devices';
 import apiClient from '@/api/client';
 import { downloadXLSX } from '@/lib/utils';
+import { useFmtTs } from '@/lib/use-fmt-ts';
 import toast from 'react-hot-toast';
 
 function rangeFrom(range: string): string {
@@ -37,6 +38,7 @@ const RANGE_ITEMS = [
 ];
 
 export function ReportsPage() {
+  const { fmtAudit } = useFmtTs();
   const [range, setRange] = useState('7d');
   const [showNewReport, setShowNewReport] = useState(false);
   const [savedReports, setSavedReports] = useState<SavedReport[]>(() => {
@@ -127,7 +129,7 @@ export function ReportsPage() {
       category:     d.category,
       estimated_uptime: d.status === 'online' ? '100%' : d.status === 'idle' ? '~60%' : '0%',
       is_error:     d.status === 'error' ? 'Yes' : 'No',
-      last_seen:    d.lastSeenAt ? new Date(d.lastSeenAt).toLocaleString() : '—',
+      last_seen:    d.lastSeenAt ? fmtAudit(d.lastSeenAt) : '—',
     }));
     setXlsxPreview({ report, rows });
   }
@@ -143,7 +145,7 @@ export function ReportsPage() {
       { metric: 'Devices online',   value: online,           note: '' },
       { metric: 'Devices total',    value: total,            note: '' },
       { metric: 'Incidents',        value: incidents,        note: '' },
-      { metric: 'Generated',        value: new Date().toLocaleString(), note: '' },
+      { metric: 'Generated',        value: fmtAudit(new Date()), note: '' },
       { metric: 'Range',            value: report?.range ?? range, note: '' },
     ];
     const catRows = catBreakdown.map(([cat, count]) => ({
@@ -283,14 +285,14 @@ export function ReportsPage() {
         <td><span class="badge" style="${statusStyle[d.status] ?? statusStyle.offline}">${d.status}</span></td>
         <td style="text-transform:capitalize;color:#aaa">${d.category ?? '—'}</td>
         <td class="mono">${d.status === 'online' ? '100%' : d.status === 'idle' ? '~60%' : '0%'}</td>
-        <td class="mono">${d.lastSeenAt ? new Date(d.lastSeenAt).toLocaleString() : '—'}</td>
+        <td class="mono">${d.lastSeenAt ? fmtAudit(d.lastSeenAt) : '—'}</td>
       </tr>`).join('')}
     </tbody>
   </table>
 
   <div class="footer">
     <span>Orion IoT Platform</span>
-    <span>Generated ${new Date().toLocaleString()}</span>
+    <span>Generated ${fmtAudit(new Date())}</span>
   </div>
 </div>
 </body>
@@ -483,7 +485,7 @@ export function ReportsPage() {
                     {r.devices.length ? `${r.devices.length} device(s)` : 'All devices'} · {r.metrics.join(', ')}
                   </p>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '16px' }}>
-                    <span className="mono faint" style={{ fontSize: '10.5px' }}>{new Date(r.createdAt).toLocaleString()}</span>
+                    <span className="mono faint" style={{ fontSize: '10.5px' }}>{fmtAudit(r.createdAt)}</span>
                     <div style={{ display: 'flex', gap: '6px' }}>
                       <button className="btn btn-sm" style={{ gap: '6px' }} onClick={() => printReport(r)}>
                         <Printer size={12} /> PDF

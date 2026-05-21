@@ -398,7 +398,7 @@ function WidgetContent({ widget }: { widget: Widget }) {
   // ── Bar Chart ──
   if (widget.type === 'bar_chart') {
     const pts = (series?.data ?? []).slice(-24).map((p: any) => ({
-      label: new Date(p.ts).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' }),
+      label: new Date(p.ts).toLocaleTimeString('en', { hour:'2-digit', minute:'2-digit', hour12: false, timeZone: 'UTC' }),
       value: p.value,
     }));
     return (

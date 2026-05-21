@@ -20,10 +20,18 @@ export async function telemetryRoutes(app: FastifyInstance) {
     if (!device) return reply.code(401).send({ error: 'Invalid API key' });
 
     const rawTs = body.timestamp as string | undefined;
-    // Normalise: if the timestamp has no timezone info, treat it as UTC (append Z)
-    const normTs = rawTs && !rawTs.endsWith('Z') && !/[+\-]\d{2}:\d{2}$/.test(rawTs)
-      ? rawTs + 'Z'
-      : rawTs;
+    const hasTzMarker = !!rawTs && (rawTs.endsWith('Z') || /[+\-]\d{2}:\d{2}$/.test(rawTs));
+    // For 'wallclock' devices (default): bare timestamps are device-local wall-clock — append Z so the
+    //   digits become a "fake-UTC" anchor in storage. The display layer reinterprets using device.timezone.
+    // For 'utc' devices: trust only timestamps that already declare a TZ; otherwise fall back to server-now
+    //   (a bare string here means firmware mis-config — refuse to silently mislabel it).
+    const tsFormat = (device as any).timestampFormat ?? 'wallclock';
+    let normTs: string | undefined;
+    if (tsFormat === 'utc') {
+      normTs = hasTzMarker ? rawTs : undefined;
+    } else {
+      normTs = rawTs && !hasTzMarker ? rawTs + 'Z' : rawTs;
+    }
     const timestamp = (normTs && !isNaN(new Date(normTs).getTime()))
       ? new Date(normTs).toISOString()
       : new Date().toISOString();

@@ -29,19 +29,82 @@ export function timeAgo(date: string | Date) {
   }
 }
 
-export function formatTs(date: Date | string | number, timezone?: string): string {
+export interface FormatTsOpts {
+  /** If set, treat stored ts digits as wall-clock in this TZ (devices that send local time without offset). */
+  storedTz?: string;
+  /** Format output in this TZ. Defaults to browser's resolved TZ. */
+  displayTz?: string;
+  /** Output pattern. */
+  pattern?: 'datetime' | 'date' | 'time' | 'short';
+}
+
+export interface DeviceTzInfo {
+  timezone?: string;
+  timestampFormat?: 'wallclock' | 'utc';
+}
+
+/** Default TZ assumed for legacy/unconfigured devices (matches firmware EAT default). */
+export const DEFAULT_DEVICE_TZ = 'Africa/Nairobi';
+
+/** Compute the offset (ms) of `tz` from UTC at instant `at`. Positive = east of UTC. */
+function getTzOffsetMs(tz: string, at: Date): number {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: tz, hour12: false,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+  }).formatToParts(at);
+  const g = (t: string) => Number(parts.find(p => p.type === t)?.value);
+  const wallAsUtc = Date.UTC(g('year'), g('month') - 1, g('day'), g('hour'), g('minute'), g('second'));
+  return wallAsUtc - at.getTime();
+}
+
+export function formatTs(date: Date | string | number, opts?: string | FormatTsOpts): string {
   if (!date) return '—';
   const d = new Date(date as any);
   if (isNaN(d.getTime())) return '—';
-  const tz = timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+  // Legacy: string arg = displayTz only, no reinterpretation
+  const o: FormatTsOpts = typeof opts === 'string' ? { displayTz: opts } : (opts ?? {});
+  const displayTz = o.displayTz || Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+  // Reinterpret: stored digits are wall-clock in storedTz → shift to true UTC
+  let actual = d;
+  if (o.storedTz) {
+    actual = new Date(d.getTime() - getTzOffsetMs(o.storedTz, d));
+  }
+
   const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: tz,
+    timeZone: displayTz,
     year: 'numeric', month: '2-digit', day: '2-digit',
     hour: '2-digit', minute: '2-digit', second: '2-digit',
     hour12: false,
-  }).formatToParts(d);
+  }).formatToParts(actual);
   const g = (t: string) => parts.find(p => p.type === t)?.value ?? '00';
-  return `${g('year')}-${g('month')}-${g('day')} ${g('hour')}:${g('minute')}:${g('second')}`;
+  const date_ = `${g('year')}-${g('month')}-${g('day')}`;
+  const time_ = `${g('hour')}:${g('minute')}:${g('second')}`;
+  switch (o.pattern) {
+    case 'date': return date_;
+    case 'time': return time_;
+    case 'short': return `${date_} ${time_.slice(0, 5)}`;
+    default: return `${date_} ${time_}`;
+  }
+}
+
+/** Format a stored telemetry timestamp given device info and a user-chosen display TZ. */
+export function formatDeviceTs(
+  ts: Date | string | number,
+  device: DeviceTzInfo | null | undefined,
+  displayTz: string | undefined,
+  pattern?: FormatTsOpts['pattern'],
+): string {
+  const dTz = displayTz || Intl.DateTimeFormat().resolvedOptions().timeZone;
+  // Device explicitly sends real UTC → no reinterpretation
+  if (device?.timestampFormat === 'utc') {
+    return formatTs(ts, { displayTz: dTz, pattern });
+  }
+  // Wall-clock (default): reinterpret stored digits as wall-clock in device's TZ
+  const storedTz = device?.timezone || DEFAULT_DEVICE_TZ;
+  return formatTs(ts, { storedTz, displayTz: dTz, pattern });
 }
 
 export function formatBytes(bytes: number): string {

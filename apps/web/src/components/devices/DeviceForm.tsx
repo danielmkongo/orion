@@ -498,6 +498,8 @@ export function DeviceForm({ onClose }: { onClose: () => void }) {
   const [serialNumber, setSerial] = useState('');
   const [protocol, setProtocol] = useState<DeviceProtocol>('http');
   const [payloadFormat, setFormat] = useState<DevicePayloadFormat>('json');
+  const [timezone, setTimezone] = useState<string>('Africa/Nairobi');
+  const [timestampFormat, setTimestampFormat] = useState<'wallclock' | 'utc'>('wallclock');
   const [tags, setTagsStr] = useState('');
   // Channel config
   const [mqttTopicPrefix, setMqttTopicPrefix] = useState('');
@@ -580,6 +582,7 @@ export function DeviceForm({ onClose }: { onClose: () => void }) {
       description: description.trim() || undefined,
       serialNumber: serialNumber.trim() || undefined,
       category, protocol, payloadFormat,
+      timezone, timestampFormat,
       tags: tags ? tags.split(',').map(t => t.trim()).filter(Boolean) : [],
       meta: {
         dataSchema: { fields: validFields },
@@ -698,6 +701,37 @@ export function DeviceForm({ onClose }: { onClose: () => void }) {
                         <option value="csv">CSV</option>
                         <option value="raw">Raw key=value</option>
                       </select>
+                    </div>
+                    <div>
+                      <label className="eyebrow text-[9px] block mb-2">Device Timezone</label>
+                      <select value={timezone} onChange={e => setTimezone(e.target.value)} className="select">
+                        <option value="Africa/Nairobi">Africa/Nairobi (EAT, UTC+3)</option>
+                        <option value="Africa/Cairo">Africa/Cairo (UTC+2)</option>
+                        <option value="Africa/Lagos">Africa/Lagos (WAT, UTC+1)</option>
+                        <option value="Europe/London">Europe/London</option>
+                        <option value="Europe/Berlin">Europe/Berlin</option>
+                        <option value="America/New_York">America/New_York</option>
+                        <option value="America/Los_Angeles">America/Los_Angeles</option>
+                        <option value="Asia/Dubai">Asia/Dubai (UTC+4)</option>
+                        <option value="Asia/Karachi">Asia/Karachi (UTC+5)</option>
+                        <option value="Asia/Kolkata">Asia/Kolkata (UTC+5:30)</option>
+                        <option value="Asia/Singapore">Asia/Singapore</option>
+                        <option value="Australia/Sydney">Australia/Sydney</option>
+                        <option value="UTC">UTC</option>
+                      </select>
+                      <p className="text-muted-foreground text-[10px] mt-1">Used when timestamps lack a timezone.</p>
+                    </div>
+                    <div>
+                      <label className="eyebrow text-[9px] block mb-2">Timestamp Format</label>
+                      <select value={timestampFormat} onChange={e => setTimestampFormat(e.target.value as 'wallclock' | 'utc')} className="select">
+                        <option value="wallclock">Wall-clock (local, no offset)</option>
+                        <option value="utc">UTC (already converted)</option>
+                      </select>
+                      <p className="text-muted-foreground text-[10px] mt-1">
+                        {timestampFormat === 'wallclock'
+                          ? `Device sends "2026-05-21T13:00:00" — server interprets in ${timezone}.`
+                          : 'Device sends true UTC (with Z or offset) — server trusts as-is.'}
+                      </p>
                     </div>
                   </div>
 

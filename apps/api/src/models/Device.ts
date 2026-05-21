@@ -29,6 +29,10 @@ export interface IDevice extends Document {
   lastSeenAt?: Date;
   lastDataAt?: Date;
   firstSeenAt?: Date;
+  /** IANA timezone the device reports timestamps in (used only when timestampFormat === 'wallclock'). */
+  timezone?: string;
+  /** 'wallclock' = device sends local time without offset, server treats digits as device-local. 'utc' = device sends real UTC, trust as-is. */
+  timestampFormat?: 'wallclock' | 'utc';
   meta: Record<string, unknown>;
   createdAt: Date;
   updatedAt: Date;
@@ -82,6 +86,8 @@ const DeviceSchema = new Schema<IDevice>(
     lastSeenAt: Date,
     lastDataAt: Date,
     firstSeenAt: Date,
+    timezone: { type: String, default: 'Africa/Nairobi' },
+    timestampFormat: { type: String, enum: ['wallclock', 'utc'], default: 'wallclock' },
     meta: { type: Schema.Types.Mixed, default: {} },
   },
   { timestamps: true }
