@@ -188,11 +188,11 @@ export function LineChart({
 
   const tz = displayTz || 'UTC';
   const offsetMs = (clockOffsetMin ?? 0) * 60_000;
-  const fmtTs = (ts: number): string => {
+  // Shared transform: device clock offset + optional storedTz reinterpretation → display Date
+  const toDisplayDate = (ts: number): Date => {
     const tsAdj = ts + offsetMs;
     let d = new Date(tsAdj);
     if (storedTz) {
-      // Reinterpret stored fake-UTC digits as wall-clock in storedTz, shift to real UTC
       const parts0 = new Intl.DateTimeFormat('en-US', {
         timeZone: storedTz, hour12: false,
         year: 'numeric', month: '2-digit', day: '2-digit',
@@ -202,10 +202,25 @@ export function LineChart({
       const wallAsUtc = Date.UTC(g0('year'), g0('month') - 1, g0('day'), g0('hour'), g0('minute'), g0('second'));
       d = new Date(d.getTime() - (wallAsUtc - tsAdj));
     }
+    return d;
+  };
+  // Compact: used for axis ticks (no time at >7d zoom)
+  const fmtTs = (ts: number): string => {
+    const d = toDisplayDate(ts);
     if (totalHrs > 7 * 24) return d.toLocaleDateString('en', { month: 'short', day: 'numeric', timeZone: tz });
     if (totalHrs > 24)     return d.toLocaleDateString('en', { month: 'short', day: 'numeric', timeZone: tz }) + ' ' + d.toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz });
     if (totalHrs > 1)      return d.toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz });
     return d.toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false, timeZone: tz });
+  };
+  // Verbose: used in the hover tooltip — always shows date AND time, regardless of zoom
+  const fmtHoverTs = (ts: number): string => {
+    const d = toDisplayDate(ts);
+    const date = d.toLocaleDateString('en', { month: 'short', day: 'numeric', timeZone: tz });
+    // Include seconds only for very tight zooms (<1h) where seconds matter
+    const time = totalHrs > 1
+      ? d.toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz })
+      : d.toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false, timeZone: tz });
+    return `${date} · ${time}`;
   };
 
   const toXY = (data: { ts: number; value: number }[], yFn: (v: number) => number) =>
@@ -270,7 +285,7 @@ export function LineChart({
       const val = closest?.value ?? 0;
       return { name: s.name, value: val, color, y: yFn(val) };
     });
-    setHover({ x: xScale(pt.ts), items, tsLabel: fmtTs(pt.ts) });
+    setHover({ x: xScale(pt.ts), items, tsLabel: fmtHoverTs(pt.ts) });
   }, [series, pivotData, w, normalize]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const isDark = theme !== 'light';
