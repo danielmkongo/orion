@@ -64,19 +64,13 @@ export function Header() {
       className="fixed top-0 left-0 right-0 h-[58px] z-40 flex items-stretch"
       style={{ background: 'hsl(var(--bg))', borderBottom: '1px solid hsl(var(--border))' }}
     >
-      {/* Desktop: brand area (sidebar-aligned width) */}
+      {/* Desktop: keep an empty sidebar-aligned spacer so the right cluster doesn't jump */}
       <div
-        className="hidden md:flex items-center gap-3 px-5 flex-shrink-0"
+        className="hidden md:block flex-shrink-0"
         style={{ width: 248, borderRight: '1px solid hsl(var(--border))' }}
-      >
-        <OrionMark size={20} className="text-primary flex-shrink-0" />
-        <span style={{ fontFamily: 'var(--font-display)', fontSize: 22, lineHeight: 1, letterSpacing: '-0.02em' }}>
-          <em style={{ fontStyle: 'italic', color: 'hsl(var(--primary))' }}>Orion</em>
-        </span>
-        <span className="eyebrow" style={{ fontSize: 9, marginLeft: 2, opacity: 0.55 }}>by Vortan</span>
-      </div>
+      />
 
-      {/* Mobile: hamburger only — page title takes the brand area */}
+      {/* Mobile: hamburger + small mark + page title */}
       <div className="md:hidden flex items-center gap-2 pl-3 pr-1 flex-shrink-0">
         <button
           onClick={toggleSidebar}
@@ -89,13 +83,8 @@ export function Header() {
         </button>
       </div>
 
-      {/* Desktop crumb: 'Orion Platform' eyebrow + the actual route label below.
-          Mobile: small mark + page label as a chunky display word. */}
+      {/* Flex spacer (mobile shows the page title; desktop is intentionally empty here) */}
       <div className="flex items-center flex-1 min-w-0" style={{ paddingLeft: 12, paddingRight: 12 }}>
-        <div className="hidden md:block" style={{ paddingLeft: 12 }}>
-          <p className="eyebrow" style={{ fontSize: 9 }}>Orion Platform</p>
-          <p style={{ fontSize: 13, fontWeight: 600, letterSpacing: '-0.01em', lineHeight: 1, marginTop: 2 }}>{pageLabel}</p>
-        </div>
         <div className="md:hidden" style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
           <OrionMark size={16} className="text-primary flex-shrink-0" />
           <p style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 500, letterSpacing: '-0.01em', lineHeight: 1, color: 'hsl(var(--fg))', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
