@@ -64,11 +64,32 @@ export function Header() {
       className="fixed top-0 left-0 right-0 h-[58px] z-40 flex items-stretch"
       style={{ background: 'hsl(var(--bg))', borderBottom: '1px solid hsl(var(--border))' }}
     >
-      {/* Desktop: keep an empty sidebar-aligned spacer so the right cluster doesn't jump */}
+      {/* Desktop: bold brand block — Orion logo + wordmark + 'by Vortan' */}
       <div
-        className="hidden md:block flex-shrink-0"
+        className="hidden md:flex items-center gap-3 px-5 flex-shrink-0"
         style={{ width: 248, borderRight: '1px solid hsl(var(--border))' }}
-      />
+      >
+        <OrionMark size={26} className="text-primary flex-shrink-0" />
+        <span style={{
+          fontFamily: 'var(--font-display)',
+          fontSize: 28,
+          fontWeight: 700,
+          lineHeight: 1,
+          letterSpacing: '-0.025em',
+          color: 'hsl(var(--fg))',
+        }}>
+          <em style={{ fontStyle: 'italic', color: 'hsl(var(--primary))' }}>Orion</em>
+        </span>
+        <span style={{
+          fontFamily: 'var(--font-mono)',
+          fontSize: 9.5,
+          fontWeight: 600,
+          letterSpacing: '0.18em',
+          textTransform: 'uppercase',
+          color: 'hsl(var(--muted-fg))',
+          marginLeft: 2,
+        }}>by Vortan</span>
+      </div>
 
       {/* Mobile: hamburger + small mark + page title */}
       <div className="md:hidden flex items-center gap-2 pl-3 pr-1 flex-shrink-0">
