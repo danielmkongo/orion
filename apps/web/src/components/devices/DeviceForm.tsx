@@ -11,6 +11,7 @@ import toast from 'react-hot-toast';
 import { LineChart as CustomLineChart, Sparkline } from '@/components/charts/Charts';
 import { formatPayloadStr } from '@/lib/utils';
 import { LocationPicker } from './LocationPicker';
+import { Select } from '@/components/ui/Select';
 
 /* ─── Types ─────────────────────────────────────────────────────── */
 export interface DataField {
@@ -696,38 +697,38 @@ export function DeviceForm({ onClose }: { onClose: () => void }) {
                     </div>
                     <div>
                       <label className="eyebrow text-[9px] block mb-2">Payload Format</label>
-                      <select value={payloadFormat} onChange={e => setFormat(e.target.value as DevicePayloadFormat)} className="select">
-                        <option value="json">JSON</option>
-                        <option value="xml">XML</option>
-                        <option value="csv">CSV</option>
-                        <option value="raw">Raw key=value</option>
-                      </select>
+                      <Select value={payloadFormat} onChange={(v) => setFormat(v as DevicePayloadFormat)} options={[
+                        { value: 'json', label: 'JSON' },
+                        { value: 'xml', label: 'XML' },
+                        { value: 'csv', label: 'CSV' },
+                        { value: 'raw', label: 'Raw key=value' },
+                      ]} />
                     </div>
                     <div>
                       <label className="eyebrow text-[9px] block mb-2">Device Timezone</label>
-                      <select value={timezone} onChange={e => setTimezone(e.target.value)} className="select">
-                        <option value="Africa/Nairobi">Africa/Nairobi (EAT, UTC+3)</option>
-                        <option value="Africa/Cairo">Africa/Cairo (UTC+2)</option>
-                        <option value="Africa/Lagos">Africa/Lagos (WAT, UTC+1)</option>
-                        <option value="Europe/London">Europe/London</option>
-                        <option value="Europe/Berlin">Europe/Berlin</option>
-                        <option value="America/New_York">America/New_York</option>
-                        <option value="America/Los_Angeles">America/Los_Angeles</option>
-                        <option value="Asia/Dubai">Asia/Dubai (UTC+4)</option>
-                        <option value="Asia/Karachi">Asia/Karachi (UTC+5)</option>
-                        <option value="Asia/Kolkata">Asia/Kolkata (UTC+5:30)</option>
-                        <option value="Asia/Singapore">Asia/Singapore</option>
-                        <option value="Australia/Sydney">Australia/Sydney</option>
-                        <option value="UTC">UTC</option>
-                      </select>
+                      <Select value={timezone} onChange={setTimezone} options={[
+                        { value: 'Africa/Nairobi', label: 'Africa/Nairobi (EAT, UTC+3)' },
+                        { value: 'Africa/Cairo', label: 'Africa/Cairo (UTC+2)' },
+                        { value: 'Africa/Lagos', label: 'Africa/Lagos (WAT, UTC+1)' },
+                        { value: 'Europe/London', label: 'Europe/London' },
+                        { value: 'Europe/Berlin', label: 'Europe/Berlin' },
+                        { value: 'America/New_York', label: 'America/New_York' },
+                        { value: 'America/Los_Angeles', label: 'America/Los_Angeles' },
+                        { value: 'Asia/Dubai', label: 'Asia/Dubai (UTC+4)' },
+                        { value: 'Asia/Karachi', label: 'Asia/Karachi (UTC+5)' },
+                        { value: 'Asia/Kolkata', label: 'Asia/Kolkata (UTC+5:30)' },
+                        { value: 'Asia/Singapore', label: 'Asia/Singapore' },
+                        { value: 'Australia/Sydney', label: 'Australia/Sydney' },
+                        { value: 'UTC', label: 'UTC' },
+                      ]} />
                       <p className="text-muted-foreground text-[10px] mt-1">Used when timestamps lack a timezone.</p>
                     </div>
                     <div>
                       <label className="eyebrow text-[9px] block mb-2">Timestamp Format</label>
-                      <select value={timestampFormat} onChange={e => setTimestampFormat(e.target.value as 'wallclock' | 'utc')} className="select">
-                        <option value="wallclock">Wall-clock (local, no offset)</option>
-                        <option value="utc">UTC (already converted)</option>
-                      </select>
+                      <Select value={timestampFormat} onChange={(v) => setTimestampFormat(v as 'wallclock' | 'utc')} options={[
+                        { value: 'wallclock', label: 'Wall-clock (local, no offset)' },
+                        { value: 'utc', label: 'UTC (already converted)' },
+                      ]} />
                       <p className="text-muted-foreground text-[10px] mt-1">
                         {timestampFormat === 'wallclock'
                           ? `Device sends "2026-05-21T13:00:00" — server interprets in ${timezone}.`

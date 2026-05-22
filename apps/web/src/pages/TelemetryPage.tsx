@@ -7,6 +7,7 @@ import { getCategoryIconInfo, downloadCSV, formatDate, timeAgo } from '@/lib/uti
 import { useFmtTs } from '@/lib/use-fmt-ts';
 import { useIsMobile } from '@/lib/use-responsive';
 import { useUIStore } from '@/store/ui.store';
+import { Select } from '@/components/ui/Select';
 import { LineChart } from '@/components/charts/Charts';
 import { Download, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { useSocket } from '@/hooks/useSocket';
@@ -287,16 +288,13 @@ export function TelemetryPage() {
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <label className="eyebrow" style={{ fontSize: 9 }}>Field</label>
-              <select
-                value={featuredField}
-                onChange={e => setFeaturedField(e.target.value)}
-                className="select"
-                style={{ minWidth: 160 }}
-              >
-                {numericFields.map(({ key }) => (
-                  <option key={key} value={key}>{fieldLabel(key)}</option>
-                ))}
-              </select>
+              <div style={{ minWidth: 160 }}>
+                <Select
+                  value={featuredField}
+                  onChange={setFeaturedField}
+                  options={numericFields.map(({ key }) => ({ value: key, label: fieldLabel(key) }))}
+                />
+              </div>
             </div>
           </div>
         </div>

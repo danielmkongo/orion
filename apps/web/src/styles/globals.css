@@ -708,6 +708,7 @@
   .form-2col                      { grid-template-columns: 1fr !important; }
 }
 
+
 @media (max-width: 640px) {
   .section                        { gap: 16px !important; }
 }

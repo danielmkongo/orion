@@ -6,6 +6,7 @@ import apiClient from '@/api/client';
 import type { Organization } from '@orion/shared';
 import { Check, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { Select } from '@/components/ui/Select';
 
 const API_BASE = import.meta.env.VITE_API_URL ?? '';
 
@@ -290,16 +291,13 @@ export function SettingsPage() {
                     {!timezone && <span>Currently: <b>{Intl.DateTimeFormat().resolvedOptions().timeZone}</b> (browser)</span>}
                   </p>
                 </div>
-                <select
-                  className="select"
-                  value={timezone}
-                  onChange={e => setTimezone(e.target.value)}
-                  style={{ fontSize: 12, minWidth: 260 }}
-                >
-                  {TIMEZONES.map(tz => (
-                    <option key={tz.value} value={tz.value}>{tz.label}</option>
-                  ))}
-                </select>
+                <div style={{ minWidth: 260 }}>
+                  <Select
+                    value={timezone}
+                    onChange={setTimezone}
+                    options={TIMEZONES.map(tz => ({ value: tz.value, label: tz.label }))}
+                  />
+                </div>
               </div>
             </div>
           )}

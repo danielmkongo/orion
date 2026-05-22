@@ -6,6 +6,7 @@ import { telemetryApi } from '@/api/telemetry';
 import apiClient from '@/api/client';
 import { timeAgo, formatDate as fmtDate, getCategoryIconInfo, copyText, formatPayloadStr, formatCommandStr } from '@/lib/utils';
 import { useFmtTs } from '@/lib/use-fmt-ts';
+import { Select } from '@/components/ui/Select';
 import { useUIStore } from '@/store/ui.store';
 import { useSocket } from '@/hooks/useSocket';
 import { LineChart, BarChart } from '@/components/charts/Charts';
@@ -1842,30 +1843,30 @@ export function DeviceDetailPage() {
               {/* Time settings */}
               <div style={{ marginBottom: 20, padding: 14, border: '1px solid hsl(var(--rule-ghost))', background: 'hsl(var(--surface))' }}>
                 <div className="eyebrow" style={{ fontSize: 9, marginBottom: 10, color: 'hsl(var(--primary))' }}>Time settings</div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+                <div className="form-2col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
                   <div>
                     <label className="eyebrow" style={{ fontSize: 9, display: 'block', marginBottom: 6 }}>Device timezone</label>
-                    <select className="select" value={tzDraft} onChange={e => setTzDraft(e.target.value)} style={{ fontSize: 12 }}>
-                      <option value="Africa/Nairobi">Africa/Nairobi (EAT, UTC+3)</option>
-                      <option value="Africa/Cairo">Africa/Cairo (UTC+2)</option>
-                      <option value="Africa/Lagos">Africa/Lagos (UTC+1)</option>
-                      <option value="Europe/London">Europe/London (UTC+0/+1)</option>
-                      <option value="Europe/Berlin">Europe/Berlin (UTC+1/+2)</option>
-                      <option value="America/New_York">America/New_York</option>
-                      <option value="America/Los_Angeles">America/Los_Angeles</option>
-                      <option value="Asia/Dubai">Asia/Dubai (UTC+4)</option>
-                      <option value="Asia/Karachi">Asia/Karachi (UTC+5)</option>
-                      <option value="Asia/Kolkata">Asia/Kolkata (UTC+5:30)</option>
-                      <option value="Asia/Singapore">Asia/Singapore</option>
-                      <option value="UTC">UTC</option>
-                    </select>
+                    <Select value={tzDraft} onChange={setTzDraft} options={[
+                      { value: 'Africa/Nairobi', label: 'Africa/Nairobi (EAT, UTC+3)' },
+                      { value: 'Africa/Cairo', label: 'Africa/Cairo (UTC+2)' },
+                      { value: 'Africa/Lagos', label: 'Africa/Lagos (UTC+1)' },
+                      { value: 'Europe/London', label: 'Europe/London (UTC+0/+1)' },
+                      { value: 'Europe/Berlin', label: 'Europe/Berlin (UTC+1/+2)' },
+                      { value: 'America/New_York', label: 'America/New_York' },
+                      { value: 'America/Los_Angeles', label: 'America/Los_Angeles' },
+                      { value: 'Asia/Dubai', label: 'Asia/Dubai (UTC+4)' },
+                      { value: 'Asia/Karachi', label: 'Asia/Karachi (UTC+5)' },
+                      { value: 'Asia/Kolkata', label: 'Asia/Kolkata (UTC+5:30)' },
+                      { value: 'Asia/Singapore', label: 'Asia/Singapore' },
+                      { value: 'UTC', label: 'UTC' },
+                    ]} />
                   </div>
                   <div>
                     <label className="eyebrow" style={{ fontSize: 9, display: 'block', marginBottom: 6 }}>Timestamp format</label>
-                    <select className="select" value={tsFormatDraft} onChange={e => setTsFormatDraft(e.target.value as 'wallclock' | 'utc')} style={{ fontSize: 12 }}>
-                      <option value="wallclock">Wall-clock (local, no offset)</option>
-                      <option value="utc">UTC (already converted)</option>
-                    </select>
+                    <Select value={tsFormatDraft} onChange={(v) => setTsFormatDraft(v as 'wallclock' | 'utc')} options={[
+                      { value: 'wallclock', label: 'Wall-clock (local, no offset)' },
+                      { value: 'utc', label: 'UTC (already converted)' },
+                    ]} />
                   </div>
                 </div>
                 <div>

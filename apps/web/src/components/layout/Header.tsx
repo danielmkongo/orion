@@ -74,28 +74,30 @@ export function Header() {
         <span className="eyebrow" style={{ fontSize: 9, marginLeft: 2, opacity: 0.55 }}>by Vortan</span>
       </div>
 
-      {/* Mobile: hamburger + brand */}
-      <div className="md:hidden flex items-center gap-3 px-4 flex-shrink-0">
+      {/* Mobile: hamburger only — page title takes the brand area */}
+      <div className="md:hidden flex items-center gap-2 pl-3 pr-1 flex-shrink-0">
         <button
           onClick={toggleSidebar}
-          className="w-8 h-8 flex items-center justify-center text-muted-foreground hover:text-foreground"
+          className="w-9 h-9 flex items-center justify-center text-muted-foreground hover:text-foreground"
           aria-label="Menu"
         >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" />
           </svg>
         </button>
-        <OrionMark size={18} className="text-primary" />
-        <span style={{ fontFamily: 'var(--font-display)', fontSize: 18, lineHeight: 1 }}>
-          <em style={{ fontStyle: 'italic', color: 'hsl(var(--primary))' }}>Orion</em>
-        </span>
       </div>
 
-      {/* Page crumb */}
-      <div className="flex items-center px-6 flex-1 min-w-0">
-        <div>
+      {/* Page crumb — mobile: just the title (big). Desktop: eyebrow + title. */}
+      <div className="flex items-center flex-1 min-w-0" style={{ paddingLeft: 12, paddingRight: 12 }}>
+        <div className="hidden md:block" style={{ paddingLeft: 12 }}>
           <p className="eyebrow" style={{ fontSize: 9 }}>Orion Platform</p>
           <p style={{ fontSize: 13, fontWeight: 600, letterSpacing: '-0.01em', lineHeight: 1, marginTop: 2 }}>{pageLabel}</p>
+        </div>
+        <div className="md:hidden" style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+          <OrionMark size={16} className="text-primary flex-shrink-0" />
+          <p style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 500, letterSpacing: '-0.01em', lineHeight: 1, color: 'hsl(var(--fg))', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {pageLabel}
+          </p>
         </div>
       </div>
 

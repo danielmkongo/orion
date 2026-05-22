@@ -371,15 +371,18 @@ function CorrelationHeatmap({series}:{series:Series[]}) {
 
 // ── Feature Scatter 3D ────────────────────────────────────────────────────────
 
+type RenderedPoint = { sx:number; sy:number; r:number; cloudName:string; cloudColor:string; vec:FeatVec; idx:number };
 function FeatureScatter3D({clouds,axisX,axisY,axisZ,height=440}:{clouds:FeatureCloud[];axisX:string;axisY:string;axisZ:string;height?:number}) {
   const wRef=useRef<HTMLDivElement>(null);
   const cRef=useRef<HTMLCanvasElement>(null);
+  const renderedRef=useRef<RenderedPoint[]>([]);
   const [W,setW]=useState(700);
   const [az,setAz]=useState(0.6);
   const [el,setEl]=useState(0.45);
   const [zoom,setZoom]=useState(1);
-  const [dragging,setDragging]=useState<{x:number;y:number;az:number;el:number}|null>(null);
+  const [dragging,setDragging]=useState<{x:number;y:number;az:number;el:number;moved:boolean}|null>(null);
   const [pinchDist,setPinchDist]=useState<number|null>(null);
+  const [selected,setSelected]=useState<RenderedPoint|null>(null);
   useEffect(()=>{if(!wRef.current)return;const ro=new ResizeObserver(([e])=>setW(Math.floor(e.contentRect.width)));ro.observe(wRef.current);return()=>ro.disconnect();},[]);
   // Wheel zoom: need a non-passive listener to preventDefault page scroll.
   useEffect(()=>{
@@ -435,12 +438,29 @@ function FeatureScatter3D({clouds,axisX,axisY,axisZ,height=440}:{clouds:FeatureC
     });
     ctx.setLineDash([]);
     // All points depth-sorted
-    const allPts=clouds.flatMap(cloud=>cloud.vecs.map(vec=>({pt:[nX(vec[axisX]??0),nY(vec[axisY]??0),nZ(vec[axisZ]??0)] as [number,number,number],color:cloud.color})));
+    const allPts=clouds.flatMap(cloud=>cloud.vecs.map((vec,vi)=>({
+      pt:[nX(vec[axisX]??0),nY(vec[axisY]??0),nZ(vec[axisZ]??0)] as [number,number,number],
+      color:cloud.color,cloudName:cloud.name,vec,idx:vi,
+    })));
     const sorted=allPts.map(item=>({...item,p:proj(item.pt)})).sort((a,b)=>a.p.depth-b.p.depth);
-    sorted.forEach(({p,color})=>{
+    const rendered:RenderedPoint[]=[];
+    sorted.forEach(({p,color,cloudName,vec,idx})=>{
       const r=Math.max(2,4*(1-(p.depth+1)/3));
       ctx.beginPath();ctx.arc(p.sx,p.sy,r,0,Math.PI*2);ctx.fillStyle=color+'bb';ctx.fill();
+      rendered.push({sx:p.sx,sy:p.sy,r,cloudName,cloudColor:color,vec,idx});
     });
+    // Highlight selected point
+    if(selected){
+      // Find the current rendered position of the previously selected point (by cloud + idx).
+      const cur=rendered.find(p=>p.cloudName===selected.cloudName&&p.idx===selected.idx);
+      if(cur){
+        ctx.beginPath();ctx.arc(cur.sx,cur.sy,cur.r+5,0,Math.PI*2);
+        ctx.strokeStyle=cur.cloudColor;ctx.lineWidth=1.5;ctx.stroke();
+        ctx.beginPath();ctx.arc(cur.sx,cur.sy,cur.r+9,0,Math.PI*2);
+        ctx.strokeStyle=cur.cloudColor+'66';ctx.lineWidth=1;ctx.stroke();
+      }
+    }
+    renderedRef.current=rendered;
     // Legend
     ctx.font='10px JetBrains Mono, monospace';
     clouds.filter(c=>c.vecs.length>0).forEach((cloud,i)=>{
@@ -448,20 +468,46 @@ function FeatureScatter3D({clouds,axisX,axisY,axisZ,height=440}:{clouds:FeatureC
       ctx.fillStyle=cloud.color+'cc';ctx.beginPath();ctx.arc(16,ly-4,5,0,Math.PI*2);ctx.fill();
       ctx.fillStyle=cloud.color;ctx.textAlign='left';ctx.fillText(`${cloud.name} (${cloud.vecs.length})`,26,ly);
     });
-    // Info
+    // Info (single line, bottom-left) — axis labels rendered in HTML below the canvas to avoid overlap on mobile
     ctx.fillStyle='#4a4844';ctx.font='9px JetBrains Mono, monospace';ctx.textAlign='left';
-    ctx.fillText(`drag to rotate · scroll / pinch to zoom (${zoom.toFixed(2)}x)`,12,height-10);
-    // Axis labels on bottom
-    ctx.fillStyle='#6b6960';ctx.textAlign='left';
-    ctx.fillText(`X: ${xDef?.label??axisX}  Y: ${yDef?.label??axisY}  Z: ${zDef?.label??axisZ}`,cx-120,height-10);
-  },[clouds,axisX,axisY,axisZ,az,el,zoom,W,height]);
+    ctx.fillText(`zoom ${zoom.toFixed(2)}× · drag to rotate · scroll / pinch to zoom`,12,height-10);
+  },[clouds,axisX,axisY,axisZ,az,el,zoom,W,height,selected]);
+
+  const xDefMeta=FEATURE_DEFS.find(f=>f.key===axisX);
+  const yDefMeta=FEATURE_DEFS.find(f=>f.key===axisY);
+  const zDefMeta=FEATURE_DEFS.find(f=>f.key===axisZ);
 
   return (
-    <div ref={wRef} style={{width:'100%'}}>
-      <canvas ref={cRef} style={{display:'block',width:'100%',height,cursor:dragging?'grabbing':'grab',touchAction:'none'}}
-        onMouseDown={e=>setDragging({x:e.clientX,y:e.clientY,az,el})}
-        onMouseMove={e=>{if(!dragging)return;const dx=e.clientX-dragging.x,dy=e.clientY-dragging.y;setAz(dragging.az+dx*0.008);setEl(Math.max(-1.4,Math.min(1.4,dragging.el-dy*0.008)));}}
-        onMouseUp={()=>setDragging(null)} onMouseLeave={()=>setDragging(null)}
+    <div ref={wRef} style={{width:'100%',position:'relative'}}>
+      <div style={{
+        padding:'8px 14px',borderBottom:'1px solid hsl(var(--border))',
+        display:'flex',flexWrap:'wrap',gap:14,alignItems:'center',
+        fontSize:9.5,fontFamily:'var(--font-mono)',letterSpacing:'0.06em',
+      }}>
+        <span style={{display:'inline-flex',alignItems:'center',gap:5}}>
+          <span style={{width:8,height:8,borderRadius:'50%',background:COLORS[0],display:'inline-block'}}/>
+          <span style={{color:COLORS[0],fontWeight:600}}>X</span>
+          <span style={{color:'hsl(var(--muted-fg))'}}>{xDefMeta?.label??axisX}</span>
+        </span>
+        <span style={{display:'inline-flex',alignItems:'center',gap:5}}>
+          <span style={{width:8,height:8,borderRadius:'50%',background:COLORS[1],display:'inline-block'}}/>
+          <span style={{color:COLORS[1],fontWeight:600}}>Y</span>
+          <span style={{color:'hsl(var(--muted-fg))'}}>{yDefMeta?.label??axisY}</span>
+        </span>
+        <span style={{display:'inline-flex',alignItems:'center',gap:5}}>
+          <span style={{width:8,height:8,borderRadius:'50%',background:COLORS[2],display:'inline-block'}}/>
+          <span style={{color:COLORS[2],fontWeight:600}}>Z</span>
+          <span style={{color:'hsl(var(--muted-fg))'}}>{zDefMeta?.label??axisZ}</span>
+        </span>
+      </div>
+      <canvas ref={cRef} style={{display:'block',width:'100%',height,cursor:dragging?'grabbing':'grab',touchAction:'none',position:'relative'}}
+        onMouseDown={e=>setDragging({x:e.clientX,y:e.clientY,az,el,moved:false})}
+        onMouseMove={e=>{if(!dragging)return;const dx=e.clientX-dragging.x,dy=e.clientY-dragging.y;if(Math.abs(dx)+Math.abs(dy)>3)dragging.moved=true;setAz(dragging.az+dx*0.008);setEl(Math.max(-1.4,Math.min(1.4,dragging.el-dy*0.008)));}}
+        onMouseUp={e=>{
+          const wasDrag=dragging?.moved;setDragging(null);
+          if(!wasDrag){pickAt(e.clientX,e.clientY);}
+        }}
+        onMouseLeave={()=>setDragging(null)}
         onTouchStart={e=>{
           if(e.touches.length===2){
             const t1=e.touches[0],t2=e.touches[1];
@@ -469,7 +515,7 @@ function FeatureScatter3D({clouds,axisX,axisY,axisZ,height=440}:{clouds:FeatureC
             setDragging(null);
             e.preventDefault();
           } else if(e.touches.length===1){
-            const t=e.touches[0];setDragging({x:t.clientX,y:t.clientY,az,el});setPinchDist(null);e.preventDefault();
+            const t=e.touches[0];setDragging({x:t.clientX,y:t.clientY,az,el,moved:false});setPinchDist(null);e.preventDefault();
           }
         }}
         onTouchMove={e=>{
@@ -482,17 +528,81 @@ function FeatureScatter3D({clouds,axisX,axisY,axisZ,height=440}:{clouds:FeatureC
             e.preventDefault();
           } else if(dragging&&e.touches.length===1){
             const t=e.touches[0];const dx=t.clientX-dragging.x,dy=t.clientY-dragging.y;
+            if(Math.abs(dx)+Math.abs(dy)>3)dragging.moved=true;
             setAz(dragging.az+dx*0.008);setEl(Math.max(-1.4,Math.min(1.4,dragging.el-dy*0.008)));
             e.preventDefault();
           }
         }}
         onTouchEnd={e=>{
           if(e.touches.length<2)setPinchDist(null);
-          if(e.touches.length===0)setDragging(null);
+          if(e.touches.length===0){
+            const wasDrag=dragging?.moved;
+            const t=e.changedTouches[0];
+            setDragging(null);
+            if(!wasDrag&&t){pickAt(t.clientX,t.clientY);}
+          }
         }}
         onTouchCancel={()=>{setDragging(null);setPinchDist(null);}}/>
+      {selected&&(()=>{
+        const cur=renderedRef.current.find(p=>p.cloudName===selected.cloudName&&p.idx===selected.idx);
+        if(!cur)return null;
+        const tipW=Math.min(220,W-16);
+        const tipH=Math.min(160, 56 + FEATURE_DEFS.length*14);
+        // header strip is 33px (8 padding + 9.5 font + 8 padding) approx; canvas starts after it
+        const headerH=33;
+        const left=Math.max(8,Math.min(W-tipW-8,cur.sx-tipW/2));
+        const above=cur.sy>height/2;
+        const top=headerH+(above?Math.max(8,cur.sy-tipH-6):Math.min(height-tipH-8,cur.sy+12));
+        return (
+          <div style={{
+            position:'absolute',left,top,width:tipW,zIndex:5,
+            background:'hsl(var(--surface))',border:`1px solid ${selected.cloudColor}`,
+            boxShadow:'0 10px 28px hsl(0 0% 0% / 0.18)',
+            fontFamily:'var(--font-mono)',fontSize:10.5,color:'hsl(var(--fg))',
+            pointerEvents:'auto',
+          }}>
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'7px 9px',borderBottom:'1px solid hsl(var(--border))',background:`${selected.cloudColor}1a`}}>
+              <span style={{display:'inline-flex',alignItems:'center',gap:6,minWidth:0}}>
+                <span style={{width:9,height:9,borderRadius:'50%',background:selected.cloudColor,flexShrink:0}}/>
+                <span style={{color:selected.cloudColor,fontWeight:600,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{selected.cloudName}</span>
+              </span>
+              <button onClick={()=>setSelected(null)} aria-label="Close" style={{background:'none',border:0,color:'hsl(var(--muted-fg))',cursor:'pointer',padding:2,display:'inline-flex'}}>
+                <X size={11}/>
+              </button>
+            </div>
+            <div style={{padding:'8px 9px',display:'grid',gridTemplateColumns:'auto 1fr',columnGap:8,rowGap:3.5}}>
+              <span style={{color:'hsl(var(--muted-fg))'}}>Window</span><span>#{selected.idx+1}</span>
+              {FEATURE_DEFS.map(f=>{
+                const v=selected.vec[f.key];
+                const isAxis=f.key===axisX||f.key===axisY||f.key===axisZ;
+                const axisColor=f.key===axisX?COLORS[0]:f.key===axisY?COLORS[1]:f.key===axisZ?COLORS[2]:undefined;
+                return (
+                  <React.Fragment key={f.key}>
+                    <span style={{color:isAxis?axisColor:'hsl(var(--muted-fg))',fontWeight:isAxis?600:400}}>{f.abbr}</span>
+                    <span style={{color:isAxis?'hsl(var(--fg))':'hsl(var(--muted-fg))',fontWeight:isAxis?600:400}}>{fmt4(v)}</span>
+                  </React.Fragment>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
+
+  function pickAt(clientX:number,clientY:number){
+    const canvas=cRef.current;if(!canvas){setSelected(null);return;}
+    const r=canvas.getBoundingClientRect();
+    const x=clientX-r.left,y=clientY-r.top;
+    let best:RenderedPoint|null=null,bestD=Infinity;
+    // Hit threshold scales with screen size — generous on touch
+    const threshold=Math.max(16,Math.min(W,height)*0.04);
+    for(const p of renderedRef.current){
+      const dx=p.sx-x,dy=p.sy-y;const d=Math.hypot(dx,dy);
+      if(d<bestD&&d<threshold+p.r){bestD=d;best=p;}
+    }
+    setSelected(best);
+  }
 }
 
 // ── Stats Strip ───────────────────────────────────────────────────────────────
