@@ -236,7 +236,7 @@ export function DeviceDetailPage() {
   const { data: tableData, isFetching: tableLoading } = useQuery({
     queryKey: ['telemetry-table', id, chartRange, tableLimit, customFrom, customTo],
     queryFn: () => { const { from: f, to: t } = getRangeBounds(); return telemetryApi.query({ deviceId: id!, from: f, to: t, limit: tableLimit }); },
-    enabled: !!id && telemView === 'table',
+    enabled: !!id && (telemView === 'table' || showRawPayloads),
     refetchInterval: 10_000,
   });
 
