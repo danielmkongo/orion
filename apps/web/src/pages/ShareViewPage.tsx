@@ -9,6 +9,7 @@ import { useParams } from 'react-router-dom';
 import { useQuery, useQueries } from '@tanstack/react-query';
 import { publicClient } from '@/api/publicClient';
 import { LineChart, BarChart } from '@/components/charts/Charts';
+import { formatDeviceTs, type DeviceTzInfo } from '@/lib/utils';
 import { APIProvider, Map, AdvancedMarker, useMap } from '@vis.gl/react-google-maps';
 import { BarChart2, TableProperties, Sun, Moon, Monitor, Download } from 'lucide-react';
 
@@ -465,7 +466,7 @@ function DeviceShareView({ token, data }: { token: string; data: any }) {
                 </div>
                 <div style={{ background: T.surface, border: `1px solid ${T.border}`, overflow: 'hidden' }}>
                   {telemView === 'chart'
-                    ? <DeviceChart token={token} fields={chartFields} colors={chartFields.map(k => fieldColors[k] ?? T.primary)} from={fromTs} to={customToTs} T={T} fieldLabel={fieldLabel} chartType={multiMode ? 'line' : fm?.chartType} />
+                    ? <DeviceChart token={token} fields={chartFields} colors={chartFields.map(k => fieldColors[k] ?? T.primary)} from={fromTs} to={customToTs} T={T} fieldLabel={fieldLabel} chartType={multiMode ? 'line' : fm?.chartType} device={device as any} />
                     : <DeviceTable token={token} field={primaryField} schemaFields={schemaFields} from={fromTs} to={customToTs} T={T} fieldLabel={fieldLabel} />}
                 </div>
               </div>
@@ -687,7 +688,8 @@ function PageWidgetCard({ widget, data, T, allowExports, contentH, deviceSchemas
       downloadCsv(`${widget.title.replace(/\s+/g, '-')}-${new Date().toISOString().slice(0,10)}.csv`, ['field', 'value'], rows as any);
     } else {
       const pts: any[] = Array.isArray(data) ? data : [];
-      const rows = pts.map(p => `"${new Date(p.ts).toISOString()}","${p.value}"`);
+      // Public viewer doesn't have device tz/format info per widget — default to device-tz-as-stored convention (Africa/Nairobi)
+      const rows = pts.map(p => `"${formatDeviceTs(p.ts, { timezone: 'Africa/Nairobi', timestampFormat: 'wallclock' }, 'Africa/Nairobi')}","${p.value}"`);
       const field = widget.field ?? widget.type;
       downloadCsv(`${field}-${new Date().toISOString().slice(0,10)}.csv`, ['timestamp', field], rows as any);
     }
@@ -1172,7 +1174,7 @@ function ExportBtn({ onClick, T }: { onClick: () => void; T: Tokens }) {
 }
 
 /* ── Device share chart ──────────────────────────────────────────────── */
-function DeviceChart({ token, fields, colors, from, to, T, fieldLabel, chartType }: { token: string; fields: string[]; colors: string[]; from: string; to?: string; T: Tokens; fieldLabel?: (k: string) => string; chartType?: string }) {
+function DeviceChart({ token, fields, colors, from, to, T, fieldLabel, chartType, device }: { token: string; fields: string[]; colors: string[]; from: string; to?: string; T: Tokens; fieldLabel?: (k: string) => string; chartType?: string; device?: DeviceTzInfo }) {
   const { resolved } = useT();
   const queries = useQueries({
     queries: fields.map(field => ({
@@ -1198,7 +1200,8 @@ function DeviceChart({ token, fields, colors, from, to, T, fieldLabel, chartType
 
   const exportCsv = () => {
     const primaryRaw: any[] = queries[0]?.data?.data ?? [];
-    const rows = primaryRaw.map(p => `"${new Date(p.ts).toISOString()}","${p.value}"`);
+    const displayTz = device?.timezone || 'Africa/Nairobi';
+    const rows = primaryRaw.map(p => `"${formatDeviceTs(p.ts, device, displayTz)}","${p.value}"`);
     downloadCsv(`${fields[0]}-${new Date().toISOString().slice(0,10)}.csv`, ['timestamp', fields[0]], rows);
   };
 

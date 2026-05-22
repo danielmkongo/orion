@@ -168,6 +168,8 @@ export function DeviceDetailPage() {
   const tableScrollRef = useRef<HTMLDivElement>(null);
   const [showRawPayloads, setShowRawPayloads] = useState(false);
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
+  const [payloadFilter, setPayloadFilter] = useState('');
+  const [payloadWrap, setPayloadWrap] = useState(false);
   const { on, subscribeDevice } = useSocket();
   const queryClient = useQueryClient();
   const { fmt: fmtTs, fmtAudit, displayTz } = useFmtTs();
@@ -941,79 +943,6 @@ export function DeviceDetailPage() {
           </div>
         </div>)}
 
-        {/* Raw payloads (collapsed by default) */}
-        <div style={{ marginBottom: 20 }}>
-          <button
-            type="button"
-            onClick={() => setShowRawPayloads(v => !v)}
-            style={{
-              width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              padding: '10px 14px', background: 'hsl(var(--surface))', border: '1px solid hsl(var(--border))',
-              cursor: 'pointer', fontFamily: 'var(--font-mono)', fontSize: 11,
-              letterSpacing: '0.1em', textTransform: 'uppercase', color: 'hsl(var(--muted-fg))',
-            }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              {showRawPayloads ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-              Raw payloads <span style={{ opacity: 0.5, marginLeft: 4, textTransform: 'none', letterSpacing: 0 }}>· what the device actually sent</span>
-            </span>
-            <span style={{ opacity: 0.6, fontSize: 10 }}>{(tableData as any[] | undefined)?.length ?? 0} entries</span>
-          </button>
-          {showRawPayloads && (
-            <div style={{ border: '1px solid hsl(var(--border))', borderTop: 'none', maxHeight: 480, overflowY: 'auto', background: 'hsl(var(--surface))' }}>
-              {!(tableData as any[] | undefined)?.length ? (
-                <div style={{ padding: 24, textAlign: 'center', color: 'hsl(var(--muted-fg))', fontFamily: 'var(--font-mono)', fontSize: 11 }}>No payloads yet</div>
-              ) : (
-                ((tableData as any[]) ?? []).map((row: any, i: number) => {
-                  const rid = String(row._id ?? i);
-                  const isOpen = expandedRow === rid;
-                  const rawObj = { timestamp: row.timestamp ?? row.ts ?? row.createdAt, ...(row.fields ?? {}) };
-                  const pretty = JSON.stringify(rawObj, null, 2);
-                  const compact = JSON.stringify(rawObj);
-                  return (
-                    <div key={rid} style={{ borderBottom: '1px solid hsl(var(--rule-ghost))' }}>
-                      <button
-                        type="button"
-                        onClick={() => setExpandedRow(isOpen ? null : rid)}
-                        style={{
-                          width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                          padding: '8px 14px', gap: 12,
-                          background: 'none', border: 'none', cursor: 'pointer',
-                          textAlign: 'left', fontFamily: 'var(--font-mono)', fontSize: 11,
-                        }}>
-                        <span style={{ color: 'hsl(var(--muted-fg))', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                          {fmtTs(row.timestamp ?? row.ts ?? row.createdAt, device as any)}
-                        </span>
-                        <span style={{ flex: 1, color: 'hsl(var(--fg))', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', opacity: isOpen ? 0.4 : 1 }}>
-                          {compact}
-                        </span>
-                        {isOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-                      </button>
-                      {isOpen && (
-                        <div style={{ padding: '0 14px 12px' }}>
-                          <pre style={{
-                            margin: 0, padding: 12,
-                            background: 'hsl(var(--surface-raised))', border: '1px solid hsl(var(--rule-ghost))',
-                            fontFamily: 'var(--font-mono)', fontSize: 11, lineHeight: 1.5,
-                            color: 'hsl(var(--fg))', overflowX: 'auto', whiteSpace: 'pre',
-                          }}>{pretty}</pre>
-                          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 6 }}>
-                            <button
-                              type="button"
-                              onClick={() => { copyText(pretty); toast.success('Copied'); }}
-                              style={{ background: 'none', border: '1px solid hsl(var(--border))', padding: '3px 8px', fontSize: 9.5, fontFamily: 'var(--font-mono)', color: 'hsl(var(--muted-fg))', cursor: 'pointer', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-                              <Copy size={10} style={{ verticalAlign: 'middle', marginRight: 4 }} />Copy
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          )}
-        </div>
-
         {/* Device info */}
         {ss('info', <div>
           <div className="eyebrow" style={{ marginBottom: 12 }}>Device info</div>
@@ -1723,6 +1652,156 @@ export function DeviceDetailPage() {
           </div>
         </div>
       )}
+
+      {/* ── Raw payloads · debug panel · always at the bottom of the page ── */}
+      <div style={{ marginTop: 32, marginBottom: 24 }}>
+        <button
+          type="button"
+          onClick={() => setShowRawPayloads(v => !v)}
+          style={{
+            width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '10px 14px', background: 'hsl(var(--surface))', border: '1px solid hsl(var(--border))',
+            cursor: 'pointer', fontFamily: 'var(--font-mono)', fontSize: 11,
+            letterSpacing: '0.1em', textTransform: 'uppercase', color: 'hsl(var(--muted-fg))',
+          }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {showRawPayloads ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+            Raw payloads <span style={{ opacity: 0.5, marginLeft: 4, textTransform: 'none', letterSpacing: 0 }}>· debug · what the device actually sent</span>
+          </span>
+          <span style={{ opacity: 0.6, fontSize: 10 }}>{(tableData as any[] | undefined)?.length ?? 0} entries</span>
+        </button>
+        {showRawPayloads && (() => {
+          const all = (tableData as any[] | undefined) ?? [];
+          const q = payloadFilter.trim().toLowerCase();
+          const filtered = q
+            ? all.filter((row: any) => {
+                const rawObj = { timestamp: row.timestamp ?? row.ts ?? row.createdAt, ...(row.fields ?? {}) };
+                return JSON.stringify(rawObj).toLowerCase().includes(q);
+              })
+            : all;
+          const copyAll = () => {
+            const text = filtered.map((row: any) => {
+              const rawObj = { timestamp: row.timestamp ?? row.ts ?? row.createdAt, ...(row.fields ?? {}) };
+              return JSON.stringify(rawObj);
+            }).join('\n');
+            copyText(text); toast.success(`Copied ${filtered.length} payload${filtered.length !== 1 ? 's' : ''}`);
+          };
+          return (
+            <div style={{ border: '1px solid hsl(var(--border))', borderTop: 'none', background: 'hsl(var(--surface))' }}>
+              {/* Toolbar */}
+              <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, padding: '10px 14px', borderBottom: '1px solid hsl(var(--rule-ghost))' }}>
+                <input
+                  type="text"
+                  value={payloadFilter}
+                  onChange={e => setPayloadFilter(e.target.value)}
+                  placeholder="Filter — match any field or value…"
+                  className="input"
+                  style={{ flex: '1 1 200px', height: 30, fontSize: 12, fontFamily: 'var(--font-mono)' }}
+                />
+                <span className="mono" style={{ fontSize: 10.5, color: 'hsl(var(--muted-fg))', letterSpacing: '0.06em' }}>
+                  {filtered.length} {q ? `of ${all.length}` : ''}
+                </span>
+                <label style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 10.5, fontFamily: 'var(--font-mono)', color: 'hsl(var(--muted-fg))', cursor: 'pointer', userSelect: 'none' }}>
+                  <input type="checkbox" checked={payloadWrap} onChange={e => setPayloadWrap(e.target.checked)} style={{ width: 12, height: 12 }} />
+                  Wrap JSON
+                </label>
+                <button
+                  type="button"
+                  onClick={copyAll}
+                  disabled={!filtered.length}
+                  style={{ background: 'none', border: '1px solid hsl(var(--border))', padding: '4px 10px', fontSize: 10, fontFamily: 'var(--font-mono)', color: filtered.length ? 'hsl(var(--fg))' : 'hsl(var(--muted-fg))', cursor: filtered.length ? 'pointer' : 'not-allowed', letterSpacing: '0.08em', textTransform: 'uppercase', opacity: filtered.length ? 1 : 0.5 }}
+                >
+                  <Copy size={10} style={{ verticalAlign: 'middle', marginRight: 4 }} />Copy all
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setExpandedRow(null); setPayloadFilter(''); }}
+                  style={{ background: 'none', border: '1px solid hsl(var(--border))', padding: '4px 10px', fontSize: 10, fontFamily: 'var(--font-mono)', color: 'hsl(var(--muted-fg))', cursor: 'pointer', letterSpacing: '0.08em', textTransform: 'uppercase' }}
+                >
+                  Reset
+                </button>
+              </div>
+              {/* Scroll body */}
+              <div style={{ maxHeight: 600, overflowY: 'auto' }}>
+                {!filtered.length ? (
+                  <div style={{ padding: 24, textAlign: 'center', color: 'hsl(var(--muted-fg))', fontFamily: 'var(--font-mono)', fontSize: 11 }}>
+                    {all.length ? `No matches for "${payloadFilter}"` : 'No payloads yet'}
+                  </div>
+                ) : (
+                  filtered.map((row: any, i: number) => {
+                    const rid = String(row._id ?? i);
+                    const isOpen = expandedRow === rid;
+                    const rawObj = { timestamp: row.timestamp ?? row.ts ?? row.createdAt, ...(row.fields ?? {}) };
+                    const pretty = JSON.stringify(rawObj, null, 2);
+                    const compact = JSON.stringify(rawObj);
+                    const bytes = new Blob([compact]).size;
+                    return (
+                      <div key={rid} style={{ borderBottom: '1px solid hsl(var(--rule-ghost))' }}>
+                        <button
+                          type="button"
+                          onClick={() => setExpandedRow(isOpen ? null : rid)}
+                          style={{
+                            width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                            padding: '8px 14px', gap: 12,
+                            background: isOpen ? 'hsl(var(--surface-raised))' : 'none',
+                            border: 'none', cursor: 'pointer',
+                            textAlign: 'left', fontFamily: 'var(--font-mono)', fontSize: 11,
+                          }}>
+                          <span style={{ color: 'hsl(var(--muted-fg))', whiteSpace: 'nowrap', flexShrink: 0, fontSize: 10 }}>
+                            #{i + 1}
+                          </span>
+                          <span style={{ color: 'hsl(var(--muted-fg))', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                            {fmtTs(row.timestamp ?? row.ts ?? row.createdAt, device as any)}
+                          </span>
+                          <span style={{ flex: 1, color: 'hsl(var(--fg))', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', opacity: isOpen ? 0.4 : 1, minWidth: 0 }}>
+                            {compact}
+                          </span>
+                          <span style={{ color: 'hsl(var(--muted-fg))', whiteSpace: 'nowrap', flexShrink: 0, fontSize: 9.5, opacity: 0.7 }}>
+                            {bytes}B
+                          </span>
+                          {isOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                        </button>
+                        {isOpen && (
+                          <div style={{ padding: '0 14px 12px' }}>
+                            <pre style={{
+                              margin: 0, padding: 12,
+                              background: 'hsl(var(--bg))', border: '1px solid hsl(var(--rule-ghost))',
+                              fontFamily: 'var(--font-mono)', fontSize: 11, lineHeight: 1.55,
+                              color: 'hsl(var(--fg))',
+                              overflowX: payloadWrap ? 'visible' : 'auto',
+                              whiteSpace: payloadWrap ? 'pre-wrap' : 'pre',
+                              wordBreak: payloadWrap ? 'break-all' : 'normal',
+                            }}>{pretty}</pre>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 }}>
+                              <span className="mono" style={{ fontSize: 9.5, color: 'hsl(var(--muted-fg))' }}>
+                                {Object.keys(row.fields ?? {}).length} field{Object.keys(row.fields ?? {}).length !== 1 ? 's' : ''} · {bytes} bytes
+                              </span>
+                              <div style={{ display: 'flex', gap: 6 }}>
+                                <button
+                                  type="button"
+                                  onClick={() => { copyText(compact); toast.success('Copied compact'); }}
+                                  style={{ background: 'none', border: '1px solid hsl(var(--border))', padding: '3px 8px', fontSize: 9.5, fontFamily: 'var(--font-mono)', color: 'hsl(var(--muted-fg))', cursor: 'pointer', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                                  <Copy size={10} style={{ verticalAlign: 'middle', marginRight: 4 }} />Compact
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => { copyText(pretty); toast.success('Copied'); }}
+                                  style={{ background: 'none', border: '1px solid hsl(var(--border))', padding: '3px 8px', fontSize: 9.5, fontFamily: 'var(--font-mono)', color: 'hsl(var(--fg))', cursor: 'pointer', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                                  <Copy size={10} style={{ verticalAlign: 'middle', marginRight: 4 }} />JSON
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          );
+        })()}
+      </div>
 
       {/* ── Share mode overlay + bar ── */}
       {shareMode && (

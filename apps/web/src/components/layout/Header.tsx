@@ -19,6 +19,8 @@ const ROUTE_LABELS: Record<string, string> = {
   '/ota':       'Firmware',
   '/rules':     'Rules',
   '/reports':   'Reports',
+  '/analytics': 'Analytics',
+  '/pages':     'Pages',
   '/users':     'Users',
   '/settings':  'Settings',
 };

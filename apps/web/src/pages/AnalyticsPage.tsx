@@ -9,6 +9,8 @@ import {
 import { devicesApi } from '@/api/devices';
 import { telemetryApi } from '@/api/telemetry';
 import { useUIStore } from '@/store/ui.store';
+import { useFmtTs } from '@/lib/use-fmt-ts';
+import { Select } from '@/components/ui/Select';
 import {
   computeStats, movingAverage, exponentialMA, differentiate, integrate,
   computePSD, applyLowPass, applyHighPass, applyBandPass, applyNotch,
@@ -82,13 +84,13 @@ function infernoHex(t:number):string {
   const [r1,g1,b1]=INFERNO[i],[r2,g2,b2]=INFERNO[i+1];
   return `rgb(${Math.round(r1+f*(r2-r1))},${Math.round(g1+f*(g2-g1))},${Math.round(b1+f*(b2-b1))})`;
 }
-function exportCSV(series:Series[],overlaySeries:Series[],windowTs:[number,number]|null) {
+function exportCSV(series:Series[],overlaySeries:Series[],windowTs:[number,number]|null,fmtTimestamp:(ts:number)=>string) {
   const all=[...series,...overlaySeries];
   const tsSet=new Set<number>();
   all.forEach(s=>s.data.forEach(p=>{if(!windowTs||(p.ts>=windowTs[0]&&p.ts<=windowTs[1]))tsSet.add(p.ts);}));
   const sorted=[...tsSet].sort((a,b)=>a-b);
   const header=['timestamp',...all.map(s=>s.name)].join(',');
-  const rows=sorted.map(ts=>[new Date(ts).toISOString(),...all.map(s=>{const p=s.data.find(x=>x.ts===ts);return p?fmt4(p.value):'';})].join(','));
+  const rows=sorted.map(ts=>[fmtTimestamp(ts),...all.map(s=>{const p=s.data.find(x=>x.ts===ts);return p?fmt4(p.value):'';})].join(','));
   const blob=new Blob([header+'\n'+rows.join('\n')],{type:'text/csv'});
   const a=Object.assign(document.createElement('a'),{href:URL.createObjectURL(blob),download:'orion-analytics.csv'});
   a.click();URL.revokeObjectURL(a.href);
@@ -715,6 +717,7 @@ export function AnalyticsPage() {
   useEffect(()=>()=>{ if(focusMode) useUIStore.getState().setSidebarCollapsed(prevSidebarRef.current); },[focusMode]);
 
   const svgRef = useRef<SVGSVGElement>(null);
+  const { fmt: fmtDeviceTs } = useFmtTs();
 
   // ── Data fetching
   const {data:devData} = useQuery({queryKey:['devices-analytics'],queryFn:()=>devicesApi.list({limit:200})});
@@ -822,7 +825,7 @@ export function AnalyticsPage() {
         </div>
         <div style={{gridColumn:3,display:'flex',alignItems:'flex-end',gap:8,paddingBottom:20,flexWrap:'wrap'}}>
           {loading&&<RefreshCw size={13} style={{animation:'spin 1s linear infinite',color:'hsl(var(--muted-fg))'}}/>}
-          <button className="btn btn-sm btn-outline" onClick={()=>exportCSV(series,overlaySeries,windowTs)} style={{gap:5}}><Download size={12}/>CSV</button>
+          <button className="btn btn-sm btn-outline" onClick={()=>exportCSV(series,overlaySeries,windowTs,(ts:number)=>fmtDeviceTs(ts,deviceData as any))} style={{gap:5}}><Download size={12}/>CSV</button>
           <button className="btn btn-sm btn-outline" onClick={()=>{const s=new XMLSerializer();const blob=new Blob([s.serializeToString(svgRef.current!)],{type:'image/svg+xml'});const a=Object.assign(document.createElement('a'),{href:URL.createObjectURL(blob),download:'signal.svg'});a.click();}} style={{gap:5}}><Download size={12}/>SVG</button>
           <button className="btn btn-sm btn-outline" onClick={toggleFocus} style={{gap:5}} title={focusMode?'Exit focus mode':'Focus mode — hides navigation'}>
             {focusMode?<Minimize2 size={13}/>:<Maximize2 size={13}/>}
@@ -838,13 +841,16 @@ export function AnalyticsPage() {
         <div style={{display:'flex',gap:12,padding:'12px 16px',flexWrap:'wrap',alignItems:'flex-end',borderBottom:deviceId&&numericFields.length>0?'1px solid hsl(var(--border))':'none'}}>
           <div style={{flex:isMobile?'1 1 100%':'0 1 280px',minWidth:200}}>
             <label style={lbl}>Device</label>
-            <div style={{position:'relative'}}>
-              <select value={deviceId} onChange={e=>setDeviceId(e.target.value)} style={{...inp,paddingRight:26,appearance:'none',cursor:'pointer'}}>
-                <option value="">— Select device —</option>
-                {devices.map((d:any)=><option key={d._id} value={d._id}>{d.name}</option>)}
-              </select>
-              <ChevronDown size={11} style={{position:'absolute',right:7,top:'50%',transform:'translateY(-50%)',pointerEvents:'none',color:'hsl(var(--muted-fg))'}}/>
-            </div>
+            <Select
+              value={deviceId}
+              onChange={setDeviceId}
+              size="sm"
+              placeholder="— Select device —"
+              options={[
+                { value:'', label:'— Select device —' },
+                ...devices.map((d:any)=>({ value:d._id, label:d.name })),
+              ]}
+            />
           </div>
 
           <div style={{flex:isMobile?'1 1 100%':'0 1 auto'}}>
@@ -950,9 +956,14 @@ export function AnalyticsPage() {
         <div style={{padding:'10px 20px',borderBottom:'1px solid hsl(var(--border))',display:'flex',gap:14,alignItems:'center',flexWrap:'wrap'}}>
           <span style={{fontSize:9.5,fontFamily:'var(--font-mono)',color:'hsl(var(--muted-fg))',letterSpacing:'0.1em',textTransform:'uppercase'}}>sr={fmtFreq(sr)} · Nyquist={fmtFreq(nyquist)}</span>
           {selFields.length>1&&(
-            <select value={activeFft} onChange={e=>setFftField(e.target.value)} style={{...inp,width:160}}>
-              {selFields.map(k=>{const m=numericFields.find((f:any)=>f.key===k);return <option key={k} value={k}>{m?.label||k.replace(/_/g,' ')}</option>;})}
-            </select>
+            <div style={{width:160}}>
+              <Select
+                value={activeFft}
+                onChange={setFftField}
+                size="sm"
+                options={selFields.map(k=>{const m=numericFields.find((f:any)=>f.key===k);return { value:k, label:m?.label||k.replace(/_/g,' ') };})}
+              />
+            </div>
           )}
           {!windowTs&&<span style={{fontSize:9,fontFamily:'var(--font-mono)',color:'hsl(var(--primary))',opacity:0.7}}>Tip: drag on signal chart to select a window for windowed FFT</span>}
         </div>
@@ -975,9 +986,12 @@ export function AnalyticsPage() {
               <div style={{fontSize:8.5,fontFamily:'var(--font-mono)',letterSpacing:'0.12em',textTransform:'uppercase',color:'hsl(var(--muted-fg))'}}>Add Operation</div>
 
               {selFields.length>1&&<div><label style={lbl}>Apply to</label>
-                <select value={activeOp} onChange={e=>setOpField(e.target.value)} style={inp}>
-                  {selFields.map(k=>{const m=numericFields.find((f:any)=>f.key===k);return <option key={k} value={k}>{m?.label||k.replace(/_/g,' ')}</option>;})}
-                </select>
+                <Select
+                  value={activeOp}
+                  onChange={setOpField}
+                  size="sm"
+                  options={selFields.map(k=>{const m=numericFields.find((f:any)=>f.key===k);return { value:k, label:m?.label||k.replace(/_/g,' ') };})}
+                />
               </div>}
 
               <div style={{borderTop:'1px solid hsl(var(--border))',paddingTop:8}}>
@@ -1093,12 +1107,13 @@ export function AnalyticsPage() {
             return (
               <div key={axis} style={{minWidth:140}}>
                 <label style={{...lbl,color:axisColor}}>{axis} Axis</label>
-                <div style={{position:'relative'}}>
-                  <select value={val} onChange={e=>setter(e.target.value)} style={{...inp,borderColor:axisColor+'55',paddingRight:24,appearance:'none',cursor:'pointer'}}>
-                    {FEATURE_DEFS.map(f=><option key={f.key} value={f.key}>{f.label}</option>)}
-                  </select>
-                  <ChevronDown size={10} style={{position:'absolute',right:6,top:'50%',transform:'translateY(-50%)',pointerEvents:'none',color:axisColor}}/>
-                </div>
+                <Select
+                  value={val}
+                  onChange={setter}
+                  size="sm"
+                  style={{borderColor:axisColor+'55',color:axisColor}}
+                  options={FEATURE_DEFS.map(f=>({ value:f.key, label:f.label }))}
+                />
               </div>
             );
           })}
