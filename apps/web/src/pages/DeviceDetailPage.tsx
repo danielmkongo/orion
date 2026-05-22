@@ -335,7 +335,7 @@ export function DeviceDetailPage() {
       ts: typeof p.ts === 'string' ? new Date(p.ts).getTime() : p.ts,
       value: typeof p.value === 'number' ? p.value : 0,
     }));
-    return { name: fieldLabel(k), data: pts, color };
+    return { name: fieldLabel(k), data: pts, color, unit: (meta?.unit ?? '').trim() };
   });
 
   function toggleField(k: string) {
@@ -934,10 +934,11 @@ export function DeviceDetailPage() {
                   displayTz,
                   clockOffsetMin: (d as any)?.clockOffsetMin ?? 0,
                 };
+                const chartUnit = (chartFieldMeta?.unit ?? '').trim();
                 if (ct === 'scatter') {
-                  return <LineChart series={[{ name: chartFieldLabel, data: seriesPoints, color: chartColor }]} height={280} showArea={false} {...tzProps} />;
+                  return <LineChart series={[{ name: chartFieldLabel, data: seriesPoints, color: chartColor, unit: chartUnit }]} height={280} showArea={false} {...tzProps} />;
                 }
-                return <LineChart series={[{ name: chartFieldLabel, data: seriesPoints, color: chartColor }]} height={280} showArea={ct === 'area'} {...tzProps} />;
+                return <LineChart series={[{ name: chartFieldLabel, data: seriesPoints, color: chartColor, unit: chartUnit }]} height={280} showArea={ct === 'area'} {...tzProps} />;
               })()
             )}
           </div>

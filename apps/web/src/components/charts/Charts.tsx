@@ -71,6 +71,7 @@ export interface ChartSeries {
   name: string;
   data: Array<{ ts: number | string; value: number }>;
   color?: string;
+  unit?: string;
 }
 
 function splitByGaps(data: { ts: number; value: number }[]) {
@@ -132,7 +133,7 @@ export function LineChart({
   const uid = useRef(`lc-${Math.random().toString(36).slice(2)}`).current;
   const [hover, setHover] = useState<{
     x: number;
-    items: Array<{ name: string; value: number; color: string; y: number }>;
+    items: Array<{ name: string; value: number; color: string; y: number; unit?: string }>;
     tsLabel: string;
   } | null>(null);
 
@@ -241,6 +242,9 @@ export function LineChart({
   // Y axis ticks
   const Y_TICKS = 4;
   const tickVals = Array.from({ length: Y_TICKS + 1 }, (_, i) => globalMin + (i / Y_TICKS) * globalRange);
+  // Show a Y-axis unit only when every series declares the same one (mixed units stay blank).
+  const units = Array.from(new Set(series.map(s => (s.unit ?? '').trim()).filter(Boolean)));
+  const commonUnit = !normalize && units.length === 1 ? units[0] : '';
 
   // X axis ticks — pixel-distance deduplication based on actual label width
   const pivotData = prep(series[0] ?? { name: '', data: [] });
@@ -283,7 +287,7 @@ export function LineChart({
       const yFn = normalize ? makeLocalY(mapped) : globalY;
       const closest = mapped.reduce((a, b) => Math.abs(b.ts - pt.ts) < Math.abs(a.ts - pt.ts) ? b : a, mapped[0]);
       const val = closest?.value ?? 0;
-      return { name: s.name, value: val, color, y: yFn(val) };
+      return { name: s.name, value: val, color, y: yFn(val), unit: s.unit };
     });
     setHover({ x: xScale(pt.ts), items, tsLabel: fmtHoverTs(pt.ts) });
   }, [series, pivotData, w, normalize]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -354,6 +358,17 @@ export function LineChart({
               {fmtV(v)}
             </text>
           ))}
+
+          {/* Y-axis unit (shown when all series share a single unit) */}
+          {commonUnit && (
+            <text
+              x={PAD.left - 10} y={PAD.top - 8}
+              textAnchor="end"
+              fill="currentColor" fillOpacity={0.5} fontSize={9.5} fontWeight={600}
+              fontFamily="var(--font-mono, monospace)" letterSpacing="0.04em">
+              {commonUnit}
+            </text>
+          )}
 
           {/* X labels */}
           {xTicks.map((p, i) => {
@@ -496,6 +511,7 @@ export function LineChart({
                 </span>
                 <strong style={{ fontSize: 11.5, fontFamily: 'var(--font-mono, monospace)', color: item.color, letterSpacing: '-0.02em' }}>
                   {typeof item.value === 'number' ? fmtV(item.value) : item.value}
+                  {item.unit ? <span style={{ fontSize: 9.5, color: 'var(--tt-label, rgba(200,200,190,0.55))', marginLeft: 3, fontWeight: 400 }}>{item.unit}</span> : null}
                 </strong>
               </div>
             ))}

@@ -125,6 +125,12 @@ export function TelemetryPage() {
     return (lbl && lbl !== fm?.key) ? lbl : prettyKey(key);
   }, [schemaFields]);
 
+  const fieldUnit = useCallback((key: string): string => {
+    const fm = schemaFields.find((f: any) => f.key === key)
+      ?? schemaFields.find((f: any) => normalizeKey(f.key) === normalizeKey(key));
+    return (fm?.unit ?? '').trim();
+  }, [schemaFields]);
+
   // queryKey uses stable values only — Date.now() must NOT appear here
   const { data: seriesData, isLoading } = useQuery({
     queryKey: ['series-multi', deviceId, selectedFields.join(','), range.label, customFrom, customTo],
@@ -168,6 +174,8 @@ export function TelemetryPage() {
     const fMeta = schemaFields.find((f: any) => f.key === field);
     return {
       name: fieldLabel(field),
+      key: field,
+      unit: fieldUnit(field),
       data: ((seriesData?.[i] as any)?.data ?? []).map((p: any) => ({
         ts: typeof p.ts === 'string' ? new Date(p.ts).getTime() : p.ts,
         value: typeof p.value === 'number' ? p.value : 0,
@@ -272,8 +280,9 @@ export function TelemetryPage() {
             <div style={{ flex: '1 1 auto', minWidth: 0 }}>
               <div className="eyebrow" style={{ marginBottom: 6 }}>Featured telemetry</div>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: isMobile ? 10 : 16, flexWrap: 'wrap' }}>
-                <div style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(34px, 7vw, 52px)', lineHeight: 1, letterSpacing: '-0.03em' }} className="num">
+                <div style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(34px, 7vw, 52px)', lineHeight: 1, letterSpacing: '-0.03em', display: 'flex', alignItems: 'baseline', gap: 6 }} className="num">
                   {featuredCurrent.toFixed(2)}
+                  {fieldUnit(featuredField) && <span style={{ fontSize: '0.4em', fontFamily: 'var(--font-mono)', color: 'hsl(var(--muted-fg))', letterSpacing: 0 }}>{fieldUnit(featuredField)}</span>}
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                   <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: trend > 0 ? 'hsl(var(--good))' : trend < 0 ? 'hsl(var(--bad))' : 'hsl(var(--muted-fg))' }}>
@@ -281,7 +290,7 @@ export function TelemetryPage() {
                     {trend === 0 ? 'No change' : `${trend > 0 ? '+' : ''}${trend.toFixed(3)}`}
                   </span>
                   <span className="mono faint" style={{ fontSize: 10.5 }}>
-                    min {featuredMin.toFixed(2)} · max {featuredMax.toFixed(2)}
+                    min {featuredMin.toFixed(2)} · max {featuredMax.toFixed(2)}{fieldUnit(featuredField) ? ` ${fieldUnit(featuredField)}` : ''}
                   </span>
                 </div>
               </div>
@@ -331,9 +340,10 @@ export function TelemetryPage() {
                     transition: 'outline 0.1s',
                   }}
                 >
-                  <div className="eyebrow" style={{ fontSize: 9.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{fieldLabel(key)}</div>
-                  <div style={{ fontFamily: 'var(--font-display)', fontSize: isMobile ? 22 : 26, lineHeight: 1, marginTop: 4, color: on ? col : 'hsl(var(--fg))' }} className="num">
+                  <div className="eyebrow" style={{ fontSize: 9.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{fieldLabel(key)}{fieldUnit(key) ? ` · ${fieldUnit(key)}` : ''}</div>
+                  <div style={{ fontFamily: 'var(--font-display)', fontSize: isMobile ? 22 : 26, lineHeight: 1, marginTop: 4, color: on ? col : 'hsl(var(--fg))', display: 'flex', alignItems: 'baseline', gap: 4 }} className="num">
                     {value.toFixed(2)}
+                    {fieldUnit(key) && <span style={{ fontSize: isMobile ? 10 : 11, fontFamily: 'var(--font-mono)', color: 'hsl(var(--muted-fg))' }}>{fieldUnit(key)}</span>}
                   </div>
                 </button>
               );
@@ -442,7 +452,7 @@ export function TelemetryPage() {
               <thead>
                 <tr>
                   <th>Timestamp</th>
-                  {chartSeries.map(s => <th key={s.name}>{s.name}</th>)}
+                  {chartSeries.map(s => <th key={s.name}>{s.name}{s.unit ? ` (${s.unit})` : ''}</th>)}
                 </tr>
               </thead>
               <tbody>

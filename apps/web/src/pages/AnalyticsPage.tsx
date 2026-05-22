@@ -42,7 +42,7 @@ const FEATURE_DEFS = [
 type OvType = 'moving_avg'|'exp_ma'|'differentiate'|'integrate'|'lowpass'|'highpass'|'bandpass'|'notch';
 interface Overlay { id:string; type:OvType; label:string; fieldKey:string; color:string; params:Record<string,number>; }
 interface Point   { ts:number; value:number; }
-interface Series  { name:string; data:Point[]; color:string; fieldKey:string; id?:string; }
+interface Series  { name:string; data:Point[]; color:string; fieldKey:string; id?:string; unit?:string; }
 type FeatVec = Record<string,number>;
 interface FeatureCloud { name:string; color:string; vecs:FeatVec[]; }
 
@@ -621,7 +621,7 @@ function StatsStrip({series,windowTs}:{series:Series[];windowTs:[number,number]|
           <div key={s.fieldKey} style={{display:'flex',alignItems:'center',flexWrap:'wrap',padding:'10px 14px',borderRight:'1px solid hsl(var(--border))',gap:14}}>
             <div style={{display:'flex',alignItems:'center',gap:6,minWidth:80}}>
               <div style={{width:8,height:8,borderRadius:'50%',background:s.color,flexShrink:0}}/>
-              <div style={{fontFamily:'var(--font-mono)',fontSize:9,color:s.color,letterSpacing:'0.1em',textTransform:'uppercase'}}>{s.name}</div>
+              <div style={{fontFamily:'var(--font-mono)',fontSize:9,color:s.color,letterSpacing:'0.1em',textTransform:'uppercase'}}>{s.name}{s.unit?<span style={{opacity:0.6}}> · {s.unit}</span>:null}</div>
             </div>
             {fields.map(([k,v])=>(
               <div key={k} style={{display:'flex',flexDirection:'column',alignItems:'center',minWidth:38}}>
@@ -742,7 +742,7 @@ export function AnalyticsPage() {
     const meta=fieldIdx>=0?numericFields[fieldIdx]:undefined;
     const color=meta?.chartColor??COLORS[(fieldIdx>=0?fieldIdx:i)%COLORS.length];
     const pts:Point[]=(fieldQueries[i]?.data?.data??[]).map((p:any)=>({ts:new Date(p.ts).getTime(),value:p.value??0})).sort((a:Point,b:Point)=>a.ts-b.ts);
-    return{name:meta?.label??k.replace(/_/g,' '),data:pts,color,fieldKey:k};
+    return{name:meta?.label??k.replace(/_/g,' '),data:pts,color,fieldKey:k,unit:(meta?.unit??'').trim()};
   }),[selFields,fieldQueries,numericFields]);
 
   const activeOp=opField||selFields[0]||'';
@@ -914,7 +914,7 @@ export function AnalyticsPage() {
           {[...series,...overlaySeries].map((s,i)=>(
             <div key={i} style={{display:'flex',alignItems:'center',gap:5,fontSize:10,fontFamily:'var(--font-mono)',color:s.color}}>
               <svg width={18} height={6}><line x1={0} y1={3} x2={18} y2={3} stroke={s.color} strokeWidth={i<series.length?2:1.5} strokeDasharray={i<series.length?undefined:'5 3'}/></svg>
-              {s.name}
+              {s.name}{s.unit?<span style={{opacity:0.6,marginLeft:3}}>({s.unit})</span>:null}
             </div>
           ))}
           {!series.length&&<span style={{fontSize:10,fontFamily:'var(--font-mono)',color:'hsl(var(--muted-fg))',opacity:0.6}}>Select a device and parameters above — drag on the chart to select an analysis window</span>}
