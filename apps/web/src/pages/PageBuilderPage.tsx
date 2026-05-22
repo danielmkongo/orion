@@ -194,6 +194,7 @@ function WidgetContent({ widget }: { widget: Widget }) {
     enabled: !!widget.deviceId && ['line_chart', 'multi_line_chart', 'bar_chart'].includes(widget.type),
   });
   const storedTz = widgetDevice?.timestampFormat === 'utc' ? undefined : (widgetDevice?.timezone || 'Africa/Nairobi');
+  const widgetClockOffset = widgetDevice?.clockOffsetMin ?? 0;
 
   const { data: latest } = useQuery({
     queryKey: ['wpreview-latest', widget.deviceId],
@@ -391,7 +392,7 @@ function WidgetContent({ widget }: { widget: Widget }) {
     const pts = (series?.data ?? []).map((p: any) => ({ ts: new Date(p.ts).getTime(), value: p.value }));
     return (
       <ChartWrapper render={h => pts.length > 0
-        ? <LineChart series={[{ name: fieldLabel(widget.field ?? ''), data: pts, color: 'hsl(var(--primary))' }]} height={h} showArea storedTz={storedTz} displayTz={displayTz} />
+        ? <LineChart series={[{ name: fieldLabel(widget.field ?? ''), data: pts, color: 'hsl(var(--primary))' }]} height={h} showArea storedTz={storedTz} displayTz={displayTz} clockOffsetMin={widgetClockOffset} />
         : <div className="dim" style={dim}>No data yet</div>} />
     );
   }
@@ -400,7 +401,7 @@ function WidgetContent({ widget }: { widget: Widget }) {
   if (widget.type === 'multi_line_chart') {
     if (!multiData?.length) return <div className="dim" style={dim}>Add series in settings</div>;
     return (
-      <ChartWrapper render={h => <LineChart series={multiData as any} height={h} showArea={false} storedTz={storedTz} displayTz={displayTz} />} />
+      <ChartWrapper render={h => <LineChart series={multiData as any} height={h} showArea={false} storedTz={storedTz} displayTz={displayTz} clockOffsetMin={widgetClockOffset} />} />
     );
   }
 

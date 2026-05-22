@@ -700,6 +700,12 @@
   .page                           { padding: 16px; }
   /* Seg controls wrap on very small screens */
   .seg                            { flex-wrap: wrap; }
+  /* Panels: tighter padding on mobile */
+  .panel                          { padding: 14px !important; }
+  /* Tables: allow horizontal scroll inside their parent */
+  .table-wrap, .table-responsive  { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  /* Forms: stack 2-col grids into 1 col */
+  .form-2col                      { grid-template-columns: 1fr !important; }
 }
 
 @media (max-width: 640px) {

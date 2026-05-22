@@ -500,6 +500,7 @@ export function DeviceForm({ onClose }: { onClose: () => void }) {
   const [payloadFormat, setFormat] = useState<DevicePayloadFormat>('json');
   const [timezone, setTimezone] = useState<string>('Africa/Nairobi');
   const [timestampFormat, setTimestampFormat] = useState<'wallclock' | 'utc'>('wallclock');
+  const [clockOffsetMin, setClockOffsetMin] = useState<number>(0);
   const [tags, setTagsStr] = useState('');
   // Channel config
   const [mqttTopicPrefix, setMqttTopicPrefix] = useState('');
@@ -582,7 +583,7 @@ export function DeviceForm({ onClose }: { onClose: () => void }) {
       description: description.trim() || undefined,
       serialNumber: serialNumber.trim() || undefined,
       category, protocol, payloadFormat,
-      timezone, timestampFormat,
+      timezone, timestampFormat, clockOffsetMin,
       tags: tags ? tags.split(',').map(t => t.trim()).filter(Boolean) : [],
       meta: {
         dataSchema: { fields: validFields },
@@ -731,6 +732,18 @@ export function DeviceForm({ onClose }: { onClose: () => void }) {
                         {timestampFormat === 'wallclock'
                           ? `Device sends "2026-05-21T13:00:00" — server interprets in ${timezone}.`
                           : 'Device sends true UTC (with Z or offset) — server trusts as-is.'}
+                      </p>
+                    </div>
+                    <div>
+                      <label className="eyebrow text-[9px] block mb-2">Clock Offset (minutes)</label>
+                      <input
+                        type="number" step={5}
+                        className="input font-mono text-[11px]"
+                        value={clockOffsetMin}
+                        onChange={e => setClockOffsetMin(Number(e.target.value) || 0)}
+                        placeholder="0" />
+                      <p className="text-muted-foreground text-[10px] mt-1">
+                        Add this many minutes to every stored timestamp before displaying. Use a <b>negative</b> value if the device clock runs fast (e.g. <b>-120</b> if device is 2h ahead of real local time). Leave 0 if the device clock is correct.
                       </p>
                     </div>
                   </div>

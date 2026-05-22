@@ -41,6 +41,8 @@ export interface FormatTsOpts {
 export interface DeviceTzInfo {
   timezone?: string;
   timestampFormat?: 'wallclock' | 'utc';
+  /** Minutes to add to the device's reported wall-clock to get the real local time. Negative if device clock runs fast. */
+  clockOffsetMin?: number;
 }
 
 /** Default TZ assumed for legacy/unconfigured devices (matches firmware EAT default). */
@@ -98,13 +100,16 @@ export function formatDeviceTs(
   pattern?: FormatTsOpts['pattern'],
 ): string {
   const dTz = displayTz || Intl.DateTimeFormat().resolvedOptions().timeZone;
+  // Compensate for known device-clock drift (e.g., RTC running 2h fast).
+  const offsetMs = (device?.clockOffsetMin ?? 0) * 60_000;
+  const adjusted = offsetMs ? new Date(new Date(ts as any).getTime() + offsetMs) : ts;
   // Device explicitly sends real UTC → no reinterpretation
   if (device?.timestampFormat === 'utc') {
-    return formatTs(ts, { displayTz: dTz, pattern });
+    return formatTs(adjusted, { displayTz: dTz, pattern });
   }
   // Wall-clock (default): reinterpret stored digits as wall-clock in device's TZ
   const storedTz = device?.timezone || DEFAULT_DEVICE_TZ;
-  return formatTs(ts, { storedTz, displayTz: dTz, pattern });
+  return formatTs(adjusted, { storedTz, displayTz: dTz, pattern });
 }
 
 export function formatBytes(bytes: number): string {

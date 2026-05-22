@@ -113,6 +113,7 @@ export function LineChart({
   theme,
   storedTz,
   displayTz,
+  clockOffsetMin,
 }: {
   series: ChartSeries[];
   height?: number;
@@ -123,6 +124,8 @@ export function LineChart({
   storedTz?: string;
   /** TZ to format x-axis ticks in. Defaults to 'UTC'. */
   displayTz?: string;
+  /** Minutes to add to each stored ts before formatting (compensate device clock drift). */
+  clockOffsetMin?: number;
 }) {
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const w = useWidth(wrapRef);
@@ -184,8 +187,10 @@ export function LineChart({
   const totalHrs = (maxTs - minTs) / 3_600_000;
 
   const tz = displayTz || 'UTC';
+  const offsetMs = (clockOffsetMin ?? 0) * 60_000;
   const fmtTs = (ts: number): string => {
-    let d = new Date(ts);
+    const tsAdj = ts + offsetMs;
+    let d = new Date(tsAdj);
     if (storedTz) {
       // Reinterpret stored fake-UTC digits as wall-clock in storedTz, shift to real UTC
       const parts0 = new Intl.DateTimeFormat('en-US', {
@@ -195,7 +200,7 @@ export function LineChart({
       }).formatToParts(d);
       const g0 = (t: string) => Number(parts0.find(p => p.type === t)?.value);
       const wallAsUtc = Date.UTC(g0('year'), g0('month') - 1, g0('day'), g0('hour'), g0('minute'), g0('second'));
-      d = new Date(d.getTime() - (wallAsUtc - ts));
+      d = new Date(d.getTime() - (wallAsUtc - tsAdj));
     }
     if (totalHrs > 7 * 24) return d.toLocaleDateString('en', { month: 'short', day: 'numeric', timeZone: tz });
     if (totalHrs > 24)     return d.toLocaleDateString('en', { month: 'short', day: 'numeric', timeZone: tz }) + ' ' + d.toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz });

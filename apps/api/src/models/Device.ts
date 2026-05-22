@@ -33,6 +33,8 @@ export interface IDevice extends Document {
   timezone?: string;
   /** 'wallclock' = device sends local time without offset, server treats digits as device-local. 'utc' = device sends real UTC, trust as-is. */
   timestampFormat?: 'wallclock' | 'utc';
+  /** Minutes to add to the device's reported timestamp to get the true local time. Use a negative value if the device clock runs fast. */
+  clockOffsetMin?: number;
   meta: Record<string, unknown>;
   createdAt: Date;
   updatedAt: Date;
@@ -88,6 +90,7 @@ const DeviceSchema = new Schema<IDevice>(
     firstSeenAt: Date,
     timezone: { type: String, default: 'Africa/Nairobi' },
     timestampFormat: { type: String, enum: ['wallclock', 'utc'], default: 'wallclock' },
+    clockOffsetMin: { type: Number, default: 0 },
     meta: { type: Schema.Types.Mixed, default: {} },
   },
   { timestamps: true }

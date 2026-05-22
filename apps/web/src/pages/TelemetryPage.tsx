@@ -5,6 +5,7 @@ import { telemetryApi } from '@/api/telemetry';
 import apiClient from '@/api/client';
 import { getCategoryIconInfo, downloadCSV, formatDate, timeAgo } from '@/lib/utils';
 import { useFmtTs } from '@/lib/use-fmt-ts';
+import { useIsMobile } from '@/lib/use-responsive';
 import { useUIStore } from '@/store/ui.store';
 import { LineChart } from '@/components/charts/Charts';
 import { Download, TrendingUp, TrendingDown, Minus } from 'lucide-react';
@@ -22,6 +23,7 @@ const normalizeKey = (k: string) => k.toLowerCase().replace(/[_\-\s]/g, '');
 export function TelemetryPage() {
   const { timezone } = useUIStore();
   const { fmt: fmtTs, displayTz } = useFmtTs();
+  const isMobile = useIsMobile();
   const queryClient = useQueryClient();
   const { on, subscribeDevice } = useSocket();
   const [selectedDeviceId, setSelectedDeviceId] = useState('');
@@ -264,12 +266,12 @@ export function TelemetryPage() {
 
       {/* ── Featured field KPI ── */}
       {numericFields.length > 0 && (
-        <div className="panel" style={{ padding: '20px 24px', marginBottom: 24 }}>
+        <div className="panel" style={{ padding: isMobile ? '14px 16px' : '20px 24px', marginBottom: 24 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
-            <div>
+            <div style={{ flex: '1 1 auto', minWidth: 0 }}>
               <div className="eyebrow" style={{ marginBottom: 6 }}>Featured telemetry</div>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: 16 }}>
-                <div style={{ fontFamily: 'var(--font-display)', fontSize: 52, lineHeight: 1, letterSpacing: '-0.03em' }} className="num">
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: isMobile ? 10 : 16, flexWrap: 'wrap' }}>
+                <div style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(34px, 7vw, 52px)', lineHeight: 1, letterSpacing: '-0.03em' }} className="num">
                   {featuredCurrent.toFixed(2)}
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -306,11 +308,12 @@ export function TelemetryPage() {
           <div className="eyebrow" style={{ marginBottom: 4 }}>Latest values — {selectedDevice?.name}</div>
           <div style={{
             display: 'grid',
-            gridTemplateColumns: `repeat(${Math.min(6, numericFields.length)}, 1fr)`,
+            gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
             borderTop: '1px solid hsl(var(--border))',
+            borderRight: '1px solid hsl(var(--border))',
             marginBottom: 24,
           }}>
-            {numericFields.slice(0, 6).map(({ key, value }, i) => {
+            {numericFields.slice(0, isMobile ? 4 : 6).map(({ key, value }, i) => {
               const fMeta = schemaFields.find((f: any) => f.key === key);
               const col = fMeta?.chartColor ?? COLORS[i % COLORS.length];
               const on = selectedFields.includes(key);
@@ -319,8 +322,9 @@ export function TelemetryPage() {
                   key={key}
                   onClick={() => toggleField(key)}
                   style={{
-                    padding: '14px 18px',
-                    borderRight: i < Math.min(6, numericFields.length) - 1 ? '1px solid hsl(var(--border))' : 'none',
+                    padding: isMobile ? '10px 12px' : '14px 18px',
+                    borderLeft: '1px solid hsl(var(--border))',
+                    borderBottom: '1px solid hsl(var(--border))',
                     textAlign: 'left',
                     background: 'transparent',
                     cursor: 'pointer',
@@ -329,8 +333,8 @@ export function TelemetryPage() {
                     transition: 'outline 0.1s',
                   }}
                 >
-                  <div className="eyebrow" style={{ fontSize: 9.5 }}>{fieldLabel(key)}</div>
-                  <div style={{ fontFamily: 'var(--font-display)', fontSize: 26, lineHeight: 1, marginTop: 4, color: on ? col : 'hsl(var(--fg))' }} className="num">
+                  <div className="eyebrow" style={{ fontSize: 9.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{fieldLabel(key)}</div>
+                  <div style={{ fontFamily: 'var(--font-display)', fontSize: isMobile ? 22 : 26, lineHeight: 1, marginTop: 4, color: on ? col : 'hsl(var(--fg))' }} className="num">
                     {value.toFixed(2)}
                   </div>
                 </button>
@@ -400,7 +404,7 @@ export function TelemetryPage() {
       </div>
 
       {/* ── Chart ── */}
-      <div className="panel" style={{ padding: '22px 18px 14px' }}>
+      <div className="panel" style={{ padding: isMobile ? '14px 10px 10px' : '22px 18px 14px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
           <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
             {chartSeries.map(s => (
@@ -413,15 +417,16 @@ export function TelemetryPage() {
           <span className="mono faint" style={{ fontSize: 10 }}>{chartSeries.reduce((s, c) => s + c.data.length, 0).toLocaleString()} pts</span>
         </div>
         {!deviceId ? (
-          <div style={{ height: 360, display: 'flex', alignItems: 'center', justifyContent: 'center' }} className="dim">Select a device above</div>
+          <div style={{ height: isMobile ? 240 : 360, display: 'flex', alignItems: 'center', justifyContent: 'center' }} className="dim">Select a device above</div>
         ) : isLoading ? (
-          <div className="skeleton" style={{ height: 360 }} />
+          <div className="skeleton" style={{ height: isMobile ? 240 : 360 }} />
         ) : chartSeries.every(s => s.data.length === 0) ? (
-          <div style={{ height: 360, display: 'flex', alignItems: 'center', justifyContent: 'center' }} className="dim">No data for selected fields in {isCustom ? `${customFrom} → ${customTo}` : range.label}</div>
+          <div style={{ height: isMobile ? 240 : 360, display: 'flex', alignItems: 'center', justifyContent: 'center' }} className="dim">No data for selected fields in {isCustom ? `${customFrom} → ${customTo}` : range.label}</div>
         ) : (
-          <LineChart series={chartSeries} height={360} showArea={showArea} normalize={normalize}
+          <LineChart series={chartSeries} height={isMobile ? 240 : 360} showArea={showArea} normalize={normalize}
             storedTz={selectedDevice?.timestampFormat === 'utc' ? undefined : (selectedDevice?.timezone || 'Africa/Nairobi')}
-            displayTz={displayTz} />
+            displayTz={displayTz}
+            clockOffsetMin={selectedDevice?.clockOffsetMin ?? 0} />
         )}
       </div>
 

@@ -156,12 +156,17 @@ export function DeviceDetailPage() {
   const [descDraft, setDescDraft] = useState('');
   const [tagsDraft, setTagsDraft] = useState('');
   const [firmwareDraft, setFirmwareDraft] = useState('');
+  const [tzDraft, setTzDraft] = useState('Africa/Nairobi');
+  const [tsFormatDraft, setTsFormatDraft] = useState<'wallclock' | 'utc'>('wallclock');
+  const [clockOffsetDraft, setClockOffsetDraft] = useState(0);
   const [openCodeId, setOpenCodeId] = useState<string | null>(null);
   const [codeEditMode, setCodeEditMode] = useState(false);
   const [codeDraft, setCodeDraft] = useState('');
   const [codeSaving, setCodeSaving] = useState(false);
   const [tableLimit, setTableLimit] = useState(30);
   const tableScrollRef = useRef<HTMLDivElement>(null);
+  const [showRawPayloads, setShowRawPayloads] = useState(false);
+  const [expandedRow, setExpandedRow] = useState<string | null>(null);
   const { on, subscribeDevice } = useSocket();
   const queryClient = useQueryClient();
   const { fmt: fmtTs, fmtAudit, displayTz } = useFmtTs();
@@ -564,7 +569,7 @@ export function DeviceDetailPage() {
           </p>
         </div>
         <div style={{ gridColumn: 3, display: 'flex', alignItems: 'flex-end', gap: 8, paddingBottom: 20 }}>
-          <button className="btn btn-sm" style={{ gap: 6 }} onClick={() => { setSchemaEdits(schemaFields.map((f: any) => ({ ...f, _originalKey: f.key }))); setLatDraft(d.location?.lat?.toString() ?? ''); setLngDraft((d.location?.lng ?? d.location?.lon)?.toString() ?? ''); setDescDraft(d.description ?? ''); setTagsDraft((d.tags ?? []).join(', ')); setFirmwareDraft(d.firmwareVersion ?? ''); setShowEditSchema(true); }}>
+          <button className="btn btn-sm" style={{ gap: 6 }} onClick={() => { setSchemaEdits(schemaFields.map((f: any) => ({ ...f, _originalKey: f.key }))); setLatDraft(d.location?.lat?.toString() ?? ''); setLngDraft((d.location?.lng ?? d.location?.lon)?.toString() ?? ''); setDescDraft(d.description ?? ''); setTagsDraft((d.tags ?? []).join(', ')); setFirmwareDraft(d.firmwareVersion ?? ''); setTzDraft((d as any).timezone ?? 'Africa/Nairobi'); setTsFormatDraft(((d as any).timestampFormat ?? 'wallclock') as 'wallclock' | 'utc'); setClockOffsetDraft((d as any).clockOffsetMin ?? 0); setShowEditSchema(true); }}>
             <Pencil size={13} /> Edit device
           </button>
           <button className="btn btn-sm" style={{ gap: 6 }} onClick={() => setShowCodeGen(true)}>
@@ -864,7 +869,8 @@ export function DeviceDetailPage() {
                 ) : (
                   <LineChart series={chartSeries} height={280} showArea={false}
                     storedTz={(d as any)?.timestampFormat === 'utc' ? undefined : ((d as any)?.timezone || 'Africa/Nairobi')}
-                    displayTz={displayTz} />
+                    displayTz={displayTz}
+                    clockOffsetMin={(d as any)?.clockOffsetMin ?? 0} />
                 )
               ) : seriesPoints.length === 0 ? (
                 <div style={{ height: 280, display: 'flex', alignItems: 'center', justifyContent: 'center' }} className="dim">
@@ -923,6 +929,7 @@ export function DeviceDetailPage() {
                 const tzProps = {
                   storedTz: (d as any)?.timestampFormat === 'utc' ? undefined : ((d as any)?.timezone || 'Africa/Nairobi'),
                   displayTz,
+                  clockOffsetMin: (d as any)?.clockOffsetMin ?? 0,
                 };
                 if (ct === 'scatter') {
                   return <LineChart series={[{ name: chartFieldLabel, data: seriesPoints, color: chartColor }]} height={280} showArea={false} {...tzProps} />;
@@ -932,6 +939,79 @@ export function DeviceDetailPage() {
             )}
           </div>
         </div>)}
+
+        {/* Raw payloads (collapsed by default) */}
+        <div style={{ marginBottom: 20 }}>
+          <button
+            type="button"
+            onClick={() => setShowRawPayloads(v => !v)}
+            style={{
+              width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: '10px 14px', background: 'hsl(var(--surface))', border: '1px solid hsl(var(--border))',
+              cursor: 'pointer', fontFamily: 'var(--font-mono)', fontSize: 11,
+              letterSpacing: '0.1em', textTransform: 'uppercase', color: 'hsl(var(--muted-fg))',
+            }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              {showRawPayloads ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+              Raw payloads <span style={{ opacity: 0.5, marginLeft: 4, textTransform: 'none', letterSpacing: 0 }}>· what the device actually sent</span>
+            </span>
+            <span style={{ opacity: 0.6, fontSize: 10 }}>{(tableData as any[] | undefined)?.length ?? 0} entries</span>
+          </button>
+          {showRawPayloads && (
+            <div style={{ border: '1px solid hsl(var(--border))', borderTop: 'none', maxHeight: 480, overflowY: 'auto', background: 'hsl(var(--surface))' }}>
+              {!(tableData as any[] | undefined)?.length ? (
+                <div style={{ padding: 24, textAlign: 'center', color: 'hsl(var(--muted-fg))', fontFamily: 'var(--font-mono)', fontSize: 11 }}>No payloads yet</div>
+              ) : (
+                ((tableData as any[]) ?? []).map((row: any, i: number) => {
+                  const rid = String(row._id ?? i);
+                  const isOpen = expandedRow === rid;
+                  const rawObj = { timestamp: row.timestamp ?? row.ts ?? row.createdAt, ...(row.fields ?? {}) };
+                  const pretty = JSON.stringify(rawObj, null, 2);
+                  const compact = JSON.stringify(rawObj);
+                  return (
+                    <div key={rid} style={{ borderBottom: '1px solid hsl(var(--rule-ghost))' }}>
+                      <button
+                        type="button"
+                        onClick={() => setExpandedRow(isOpen ? null : rid)}
+                        style={{
+                          width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                          padding: '8px 14px', gap: 12,
+                          background: 'none', border: 'none', cursor: 'pointer',
+                          textAlign: 'left', fontFamily: 'var(--font-mono)', fontSize: 11,
+                        }}>
+                        <span style={{ color: 'hsl(var(--muted-fg))', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                          {fmtTs(row.timestamp ?? row.ts ?? row.createdAt, device as any)}
+                        </span>
+                        <span style={{ flex: 1, color: 'hsl(var(--fg))', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', opacity: isOpen ? 0.4 : 1 }}>
+                          {compact}
+                        </span>
+                        {isOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                      </button>
+                      {isOpen && (
+                        <div style={{ padding: '0 14px 12px' }}>
+                          <pre style={{
+                            margin: 0, padding: 12,
+                            background: 'hsl(var(--surface-raised))', border: '1px solid hsl(var(--rule-ghost))',
+                            fontFamily: 'var(--font-mono)', fontSize: 11, lineHeight: 1.5,
+                            color: 'hsl(var(--fg))', overflowX: 'auto', whiteSpace: 'pre',
+                          }}>{pretty}</pre>
+                          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 6 }}>
+                            <button
+                              type="button"
+                              onClick={() => { copyText(pretty); toast.success('Copied'); }}
+                              style={{ background: 'none', border: '1px solid hsl(var(--border))', padding: '3px 8px', fontSize: 9.5, fontFamily: 'var(--font-mono)', color: 'hsl(var(--muted-fg))', cursor: 'pointer', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                              <Copy size={10} style={{ verticalAlign: 'middle', marginRight: 4 }} />Copy
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          )}
+        </div>
 
         {/* Device info */}
         {ss('info', <div>
@@ -1759,6 +1839,46 @@ export function DeviceDetailPage() {
                 </div>
               </div>
 
+              {/* Time settings */}
+              <div style={{ marginBottom: 20, padding: 14, border: '1px solid hsl(var(--rule-ghost))', background: 'hsl(var(--surface))' }}>
+                <div className="eyebrow" style={{ fontSize: 9, marginBottom: 10, color: 'hsl(var(--primary))' }}>Time settings</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+                  <div>
+                    <label className="eyebrow" style={{ fontSize: 9, display: 'block', marginBottom: 6 }}>Device timezone</label>
+                    <select className="select" value={tzDraft} onChange={e => setTzDraft(e.target.value)} style={{ fontSize: 12 }}>
+                      <option value="Africa/Nairobi">Africa/Nairobi (EAT, UTC+3)</option>
+                      <option value="Africa/Cairo">Africa/Cairo (UTC+2)</option>
+                      <option value="Africa/Lagos">Africa/Lagos (UTC+1)</option>
+                      <option value="Europe/London">Europe/London (UTC+0/+1)</option>
+                      <option value="Europe/Berlin">Europe/Berlin (UTC+1/+2)</option>
+                      <option value="America/New_York">America/New_York</option>
+                      <option value="America/Los_Angeles">America/Los_Angeles</option>
+                      <option value="Asia/Dubai">Asia/Dubai (UTC+4)</option>
+                      <option value="Asia/Karachi">Asia/Karachi (UTC+5)</option>
+                      <option value="Asia/Kolkata">Asia/Kolkata (UTC+5:30)</option>
+                      <option value="Asia/Singapore">Asia/Singapore</option>
+                      <option value="UTC">UTC</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="eyebrow" style={{ fontSize: 9, display: 'block', marginBottom: 6 }}>Timestamp format</label>
+                    <select className="select" value={tsFormatDraft} onChange={e => setTsFormatDraft(e.target.value as 'wallclock' | 'utc')} style={{ fontSize: 12 }}>
+                      <option value="wallclock">Wall-clock (local, no offset)</option>
+                      <option value="utc">UTC (already converted)</option>
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className="eyebrow" style={{ fontSize: 9, display: 'block', marginBottom: 6 }}>Clock offset · minutes</label>
+                  <input className="input font-mono" type="number" step={5} value={clockOffsetDraft}
+                    onChange={e => setClockOffsetDraft(Number(e.target.value) || 0)}
+                    style={{ fontSize: 13, maxWidth: 140 }} placeholder="0" />
+                  <p style={{ fontSize: 11, color: 'hsl(var(--muted-fg))', marginTop: 6, lineHeight: 1.5 }}>
+                    Add this many minutes to every stored timestamp before display. Use a <b>negative</b> value if the device clock runs fast — e.g. enter <b>-120</b> if the device's reported time is consistently 2 hours ahead of real local time. Leave at <b>0</b> if the clock is accurate.
+                  </p>
+                </div>
+              </div>
+
               {/* Fixed location */}
               <div style={{ marginBottom: 20 }}>
                 <label className="eyebrow" style={{ fontSize: 9, display: 'block', marginBottom: 6 }}>Fixed location</label>
@@ -1963,6 +2083,9 @@ export function DeviceDetailPage() {
                   const newTags = tagsDraft.split(',').map((t: string) => t.trim()).filter(Boolean);
                   if (JSON.stringify(newTags) !== JSON.stringify(d.tags ?? [])) patch.tags = newTags;
                   if (firmwareDraft !== (d.firmwareVersion ?? '')) patch.firmwareVersion = firmwareDraft;
+                  if (tzDraft !== ((d as any).timezone ?? 'Africa/Nairobi')) patch.timezone = tzDraft;
+                  if (tsFormatDraft !== ((d as any).timestampFormat ?? 'wallclock')) patch.timestampFormat = tsFormatDraft;
+                  if (clockOffsetDraft !== ((d as any).clockOffsetMin ?? 0)) patch.clockOffsetMin = clockOffsetDraft;
                   const cleanedFields = schemaEdits
                     .filter(f => f.key?.trim())
                     .map(({ _originalKey: _, ...rest }) => ({ type: 'number', ...rest }));

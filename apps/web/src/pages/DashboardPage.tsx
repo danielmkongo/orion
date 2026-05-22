@@ -279,7 +279,8 @@ export function DashboardPage() {
           ) : (
             <LineChart series={[{ name: fieldLabel(featuredField), data: featuredPoints, color: 'hsl(var(--primary))' }]} height={260} showArea
               storedTz={featuredDeviceData?.timestampFormat === 'utc' ? undefined : (featuredDeviceData?.timezone || 'Africa/Nairobi')}
-              displayTz={displayTz} />
+              displayTz={displayTz}
+              clockOffsetMin={featuredDeviceData?.clockOffsetMin ?? 0} />
           )}
           <div style={{ display: 'flex', gap: '16px', marginTop: '12px', paddingTop: '12px', borderTop: '1px solid hsl(var(--border))' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>

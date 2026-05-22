@@ -377,8 +377,17 @@ function FeatureScatter3D({clouds,axisX,axisY,axisZ,height=440}:{clouds:FeatureC
   const [W,setW]=useState(700);
   const [az,setAz]=useState(0.6);
   const [el,setEl]=useState(0.45);
+  const [zoom,setZoom]=useState(1);
   const [dragging,setDragging]=useState<{x:number;y:number;az:number;el:number}|null>(null);
+  const [pinchDist,setPinchDist]=useState<number|null>(null);
   useEffect(()=>{if(!wRef.current)return;const ro=new ResizeObserver(([e])=>setW(Math.floor(e.contentRect.width)));ro.observe(wRef.current);return()=>ro.disconnect();},[]);
+  // Wheel zoom: need a non-passive listener to preventDefault page scroll.
+  useEffect(()=>{
+    const canvas=cRef.current;if(!canvas)return;
+    const onWheel=(e:WheelEvent)=>{e.preventDefault();const f=Math.exp(-e.deltaY*0.0012);setZoom(z=>Math.max(0.3,Math.min(5,z*f)));};
+    canvas.addEventListener('wheel',onWheel,{passive:false});
+    return()=>canvas.removeEventListener('wheel',onWheel);
+  },[]);
 
   useEffect(()=>{
     const canvas=cRef.current;if(!canvas)return;
@@ -392,7 +401,7 @@ function FeatureScatter3D({clouds,axisX,axisY,axisZ,height=440}:{clouds:FeatureC
       ctx.fillText('Each point = one time window · each cloud = one parameter',W/2,height/2+10);
       return;
     }
-    const cx=W/2,cy=height/2,scale=Math.min(W,height)*0.37;
+    const cx=W/2,cy=height/2,scale=Math.min(W,height)*0.37*zoom;
     const cosAz=Math.cos(az),sinAz=Math.sin(az),cosEl=Math.cos(el),sinEl=Math.sin(el);
     function proj([x,y,z]:[number,number,number]):{sx:number;sy:number;depth:number}{
       const x2=x*cosAz+z*sinAz,z2=-x*sinAz+z*cosAz;
@@ -441,11 +450,11 @@ function FeatureScatter3D({clouds,axisX,axisY,axisZ,height=440}:{clouds:FeatureC
     });
     // Info
     ctx.fillStyle='#4a4844';ctx.font='9px JetBrains Mono, monospace';ctx.textAlign='left';
-    ctx.fillText('drag to rotate · each point = one time window',12,height-10);
+    ctx.fillText(`drag to rotate · scroll / pinch to zoom (${zoom.toFixed(2)}x)`,12,height-10);
     // Axis labels on bottom
     ctx.fillStyle='#6b6960';ctx.textAlign='left';
     ctx.fillText(`X: ${xDef?.label??axisX}  Y: ${yDef?.label??axisY}  Z: ${zDef?.label??axisZ}`,cx-120,height-10);
-  },[clouds,axisX,axisY,axisZ,az,el,W,height]);
+  },[clouds,axisX,axisY,axisZ,az,el,zoom,W,height]);
 
   return (
     <div ref={wRef} style={{width:'100%'}}>
@@ -453,9 +462,35 @@ function FeatureScatter3D({clouds,axisX,axisY,axisZ,height=440}:{clouds:FeatureC
         onMouseDown={e=>setDragging({x:e.clientX,y:e.clientY,az,el})}
         onMouseMove={e=>{if(!dragging)return;const dx=e.clientX-dragging.x,dy=e.clientY-dragging.y;setAz(dragging.az+dx*0.008);setEl(Math.max(-1.4,Math.min(1.4,dragging.el-dy*0.008)));}}
         onMouseUp={()=>setDragging(null)} onMouseLeave={()=>setDragging(null)}
-        onTouchStart={e=>{if(e.touches.length===1){const t=e.touches[0];setDragging({x:t.clientX,y:t.clientY,az,el});e.preventDefault();}}}
-        onTouchMove={e=>{if(!dragging||e.touches.length!==1)return;const t=e.touches[0];const dx=t.clientX-dragging.x,dy=t.clientY-dragging.y;setAz(dragging.az+dx*0.008);setEl(Math.max(-1.4,Math.min(1.4,dragging.el-dy*0.008)));e.preventDefault();}}
-        onTouchEnd={()=>setDragging(null)} onTouchCancel={()=>setDragging(null)}/>
+        onTouchStart={e=>{
+          if(e.touches.length===2){
+            const t1=e.touches[0],t2=e.touches[1];
+            setPinchDist(Math.hypot(t1.clientX-t2.clientX,t1.clientY-t2.clientY));
+            setDragging(null);
+            e.preventDefault();
+          } else if(e.touches.length===1){
+            const t=e.touches[0];setDragging({x:t.clientX,y:t.clientY,az,el});setPinchDist(null);e.preventDefault();
+          }
+        }}
+        onTouchMove={e=>{
+          if(e.touches.length===2&&pinchDist!==null){
+            const t1=e.touches[0],t2=e.touches[1];
+            const d=Math.hypot(t1.clientX-t2.clientX,t1.clientY-t2.clientY);
+            const ratio=d/pinchDist;
+            setZoom(z=>Math.max(0.3,Math.min(5,z*ratio)));
+            setPinchDist(d);
+            e.preventDefault();
+          } else if(dragging&&e.touches.length===1){
+            const t=e.touches[0];const dx=t.clientX-dragging.x,dy=t.clientY-dragging.y;
+            setAz(dragging.az+dx*0.008);setEl(Math.max(-1.4,Math.min(1.4,dragging.el-dy*0.008)));
+            e.preventDefault();
+          }
+        }}
+        onTouchEnd={e=>{
+          if(e.touches.length<2)setPinchDist(null);
+          if(e.touches.length===0)setDragging(null);
+        }}
+        onTouchCancel={()=>{setDragging(null);setPinchDist(null);}}/>
     </div>
   );
 }
@@ -589,8 +624,10 @@ export function AnalyticsPage() {
   const fieldQueries=useQueries({queries:selFields.map(field=>({queryKey:['analytics-series',deviceId,field,rangeMs],queryFn:()=>telemetryApi.series(deviceId,field,from,to,2000),enabled:!!deviceId&&!!field,refetchInterval:30_000}))});
 
   const series:Series[]=useMemo(()=>selFields.map((k,i)=>{
-    const meta=numericFields.find((f:any)=>f.key===k);
-    const color=meta?.chartColor??COLORS[i%COLORS.length];
+    // Use the field's index in numericFields so colors stay stable regardless of selection order
+    const fieldIdx=numericFields.findIndex((f:any)=>f.key===k);
+    const meta=fieldIdx>=0?numericFields[fieldIdx]:undefined;
+    const color=meta?.chartColor??COLORS[(fieldIdx>=0?fieldIdx:i)%COLORS.length];
     const pts:Point[]=(fieldQueries[i]?.data?.data??[]).map((p:any)=>({ts:new Date(p.ts).getTime(),value:p.value??0})).sort((a:Point,b:Point)=>a.ts-b.ts);
     return{name:meta?.label??k.replace(/_/g,' '),data:pts,color,fieldKey:k};
   }),[selFields,fieldQueries,numericFields]);
