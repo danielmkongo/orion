@@ -3,8 +3,58 @@ import { telemetryService } from '../services/telemetry.service.js';
 import { deviceService } from '../services/device.service.js';
 import { realtimeService } from '../services/realtime.service.js';
 import { requirePermission } from '../middleware/auth.js';
+import { IngestLog } from '../models/IngestLog.js';
 
 export async function telemetryRoutes(app: FastifyInstance) {
+  // Capture every hit on /telemetry/ingest — including malformed JSON, missing API key, oversized payloads —
+  // into IngestLog so the Raw payloads panel can show full HTTP-level device debugging.
+  app.addHook('onResponse', async (req, reply) => {
+    const url = req.url.split('?')[0];
+    if (req.method !== 'POST' || !url.endsWith('/telemetry/ingest')) return;
+    try {
+      const rawBody = ((req as any).rawBody as string | undefined) ?? null;
+      const parsedBody = (typeof req.body === 'object' && req.body !== null) ? (req.body as Record<string, unknown>) : null;
+      const apiKey =
+        (req.headers['x-api-key'] as string | undefined) ??
+        ((req.query as any)?.apiKey as string | undefined) ??
+        (parsedBody && typeof parsedBody.api_key === 'string' ? (parsedBody.api_key as string) : null);
+      // Resolve device best-effort (may be null if api key missing/invalid or body unparseable)
+      let deviceId: any = null, orgId: any = null;
+      if (apiKey) {
+        try {
+          const dev = await deviceService.getByApiKey(apiKey);
+          if (dev) { deviceId = (dev as any)._id; orgId = (dev as any).orgId; }
+        } catch { /* ignore lookup errors */ }
+      }
+      const status = reply.statusCode;
+      const parseError = ((req as any).validationError?.message
+        ?? (status === 400 && !parsedBody && rawBody ? 'Body parse failed (malformed JSON)' : null)) as string | null;
+      const responseError = status >= 400 ? (((reply as any)._payloadErr as string) ?? null) : null;
+      const ip = (req.ip ?? (req.headers['x-forwarded-for'] as string) ?? null);
+      const userAgent = (req.headers['user-agent'] as string) ?? null;
+      const contentType = (req.headers['content-type'] as string) ?? null;
+      const contentLength = req.headers['content-length'] ? parseInt(req.headers['content-length'] as string, 10) : null;
+
+      // Truncate huge bodies to bound storage
+      const truncatedBody = rawBody && rawBody.length > 15_000
+        ? `${rawBody.slice(0, 15_000)}…[truncated ${rawBody.length - 15_000}B]`
+        : rawBody;
+
+      await IngestLog.create({
+        deviceId, orgId, apiKey,
+        status, contentType, contentLength,
+        rawBody: truncatedBody,
+        parsedBody,
+        parseError,
+        responseError,
+        ip, userAgent,
+      });
+    } catch (err) {
+      // Logging must never break ingest itself
+      req.log.warn({ err }, 'IngestLog write failed');
+    }
+  });
+
   // Authenticated data ingest via HTTP (for testing / HTTP devices)
   // Auth accepted as: X-API-Key header, ?apiKey query param, or api_key in JSON body
   app.post('/telemetry/ingest', async (req, reply) => {
@@ -80,6 +130,25 @@ export async function telemetryRoutes(app: FastifyInstance) {
       offset: q.offset ? parseInt(q.offset) : 0,
     });
     return reply.send({ data: docs, count: docs.length });
+  });
+
+  // Device debug log — full HTTP-level capture of every ingest hit (including malformed JSON and rejected requests)
+  app.get('/telemetry/ingest-log', { preHandler: requirePermission('telemetry:read') }, async (req, reply) => {
+    const q = req.query as any;
+    if (!q.deviceId) return reply.code(400).send({ error: 'deviceId required' });
+    const limit = q.limit ? Math.min(500, parseInt(q.limit)) : 100;
+    const filter: Record<string, unknown> = { deviceId: q.deviceId, orgId: req.user.orgId };
+    if (q.status) filter.status = parseInt(q.status);
+    const docs = await IngestLog.find(filter)
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .lean();
+    // Mask API keys before sending
+    const masked = docs.map((d: any) => ({
+      ...d,
+      apiKey: d.apiKey ? `${String(d.apiKey).slice(0, 8)}…${String(d.apiKey).slice(-4)}` : null,
+    }));
+    return reply.send({ data: masked, count: masked.length });
   });
 
   app.get('/telemetry/latest', { preHandler: requirePermission('telemetry:read') }, async (req, reply) => {

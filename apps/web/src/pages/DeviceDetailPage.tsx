@@ -171,6 +171,7 @@ export function DeviceDetailPage() {
   const [payloadFilter, setPayloadFilter] = useState('');
   const [payloadWrap, setPayloadWrap] = useState(false);
   const [onlyIncomplete, setOnlyIncomplete] = useState(false);
+  const [payloadSource, setPayloadSource] = useState<'stored' | 'http'>('stored');
   const { on, subscribeDevice } = useSocket();
   const queryClient = useQueryClient();
   const { fmt: fmtTs, fmtAudit, displayTz } = useFmtTs();
@@ -239,6 +240,14 @@ export function DeviceDetailPage() {
     queryFn: () => { const { from: f, to: t } = getRangeBounds(); return telemetryApi.query({ deviceId: id!, from: f, to: t, limit: tableLimit }); },
     enabled: !!id && (telemView === 'table' || showRawPayloads),
     refetchInterval: 10_000,
+  });
+
+  // Raw HTTP ingest log — captures EVERY hit on /telemetry/ingest including malformed JSON and rejected requests
+  const { data: ingestLogData } = useQuery({
+    queryKey: ['telemetry-ingest-log', id],
+    queryFn: () => telemetryApi.ingestLog(id!, 200),
+    enabled: !!id && showRawPayloads && payloadSource === 'http',
+    refetchInterval: 5_000,
   });
 
   // Reset table pagination when range changes
@@ -1670,11 +1679,22 @@ export function DeviceDetailPage() {
             {showRawPayloads ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
             Raw payloads <span style={{ opacity: 0.5, marginLeft: 4, textTransform: 'none', letterSpacing: 0 }}>· debug · what the device actually sent</span>
           </span>
-          <span style={{ opacity: 0.6, fontSize: 10 }}>{(tableData as any)?.data?.length ?? 0} entries</span>
+          <span style={{ opacity: 0.6, fontSize: 10 }}>
+            {payloadSource === 'http'
+              ? `${(ingestLogData?.data?.length ?? 0)} HTTP requests`
+              : `${(tableData as any)?.data?.length ?? 0} stored entries`}
+          </span>
         </button>
         {showRawPayloads && (() => {
-          const all: any[] = (tableData as any)?.data ?? [];
-          const expectedKeys: string[] = schemaFields.map((f: any) => f.key).filter(Boolean);
+          const all: any[] = payloadSource === 'http'
+            ? ((ingestLogData?.data as any[]) ?? [])
+            : ((tableData as any)?.data ?? []);
+          // Reserved keys are routing/auth metadata the server strips before storing in `fields`.
+          // Excluding them from the schema avoids flagging them as 'missing' on every payload.
+          const RESERVED_KEYS = new Set(['api_key', 'timestamp', 'device_id']);
+          const expectedKeys: string[] = schemaFields
+            .map((f: any) => f.key)
+            .filter((k: string) => k && !RESERVED_KEYS.has(k));
           const completenessOf = (row: any): { present: number; expected: number; missing: string[]; status: 'empty' | 'partial' | 'complete' } => {
             const fields = row.fields ?? {};
             const presentKeys = Object.keys(fields).filter(k => fields[k] !== null && fields[k] !== undefined && fields[k] !== '');
@@ -1687,16 +1707,25 @@ export function DeviceDetailPage() {
             return { present: presentKeys.length, expected: expectedKeys.length, missing, status };
           };
           const q = payloadFilter.trim().toLowerCase();
+          // For HTTP source, search rawBody + status + parseError. For stored, search timestamp + fields.
           let filtered = q
             ? all.filter((row: any) => {
+                if (payloadSource === 'http') {
+                  const blob = `${row.status ?? ''} ${row.rawBody ?? ''} ${row.parseError ?? ''} ${row.responseError ?? ''} ${row.userAgent ?? ''} ${row.ip ?? ''}`.toLowerCase();
+                  return blob.includes(q);
+                }
                 const rawObj = { timestamp: row.timestamp ?? row.ts ?? row.createdAt, ...(row.fields ?? {}) };
                 return JSON.stringify(rawObj).toLowerCase().includes(q);
               })
             : all;
           if (onlyIncomplete) {
-            filtered = filtered.filter((row: any) => completenessOf(row).status !== 'complete');
+            filtered = payloadSource === 'http'
+              ? filtered.filter((row: any) => (row.status ?? 0) >= 400)
+              : filtered.filter((row: any) => completenessOf(row).status !== 'complete');
           }
-          const incompleteCount = all.filter((row: any) => completenessOf(row).status !== 'complete').length;
+          const incompleteCount = payloadSource === 'http'
+            ? all.filter((row: any) => (row.status ?? 0) >= 400).length
+            : all.filter((row: any) => completenessOf(row).status !== 'complete').length;
           const copyAll = () => {
             const text = filtered.map((row: any) => {
               const rawObj = { timestamp: row.timestamp ?? row.ts ?? row.createdAt, ...(row.fields ?? {}) };
@@ -1708,23 +1737,30 @@ export function DeviceDetailPage() {
             <div style={{ border: '1px solid hsl(var(--border))', borderTop: 'none', background: 'hsl(var(--surface))' }}>
               {/* Toolbar */}
               <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, padding: '10px 14px', borderBottom: '1px solid hsl(var(--rule-ghost))' }}>
+                {/* Source toggle */}
+                <div className="seg" style={{ flexShrink: 0 }}>
+                  <button className={payloadSource === 'stored' ? 'on' : ''} onClick={() => { setPayloadSource('stored'); setExpandedRow(null); }} title="Telemetry records successfully stored in Mongo">Stored</button>
+                  <button className={payloadSource === 'http' ? 'on' : ''} onClick={() => { setPayloadSource('http'); setExpandedRow(null); }} title="Every HTTP request — including malformed JSON and rejected requests">Raw HTTP</button>
+                </div>
                 <input
                   type="text"
                   value={payloadFilter}
                   onChange={e => setPayloadFilter(e.target.value)}
-                  placeholder="Filter — match any field or value…"
+                  placeholder={payloadSource === 'http' ? 'Filter raw body, error, headers…' : 'Filter — match any field or value…'}
                   className="input"
                   style={{ flex: '1 1 200px', height: 30, fontSize: 12, fontFamily: 'var(--font-mono)' }}
                 />
                 <span className="mono" style={{ fontSize: 10.5, color: 'hsl(var(--muted-fg))', letterSpacing: '0.06em' }}>
                   {filtered.length} {q ? `of ${all.length}` : ''}
                   {incompleteCount > 0 && (
-                    <span style={{ marginLeft: 8, color: 'hsl(var(--warn, 32 95% 50%))', fontWeight: 600 }}>· {incompleteCount} incomplete</span>
+                    <span style={{ marginLeft: 8, color: 'hsl(var(--warn, 32 95% 50%))', fontWeight: 600 }}>
+                      · {incompleteCount} {payloadSource === 'http' ? 'errors' : 'incomplete'}
+                    </span>
                   )}
                 </span>
                 <label style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 10.5, fontFamily: 'var(--font-mono)', color: 'hsl(var(--muted-fg))', cursor: 'pointer', userSelect: 'none' }}>
                   <input type="checkbox" checked={onlyIncomplete} onChange={e => setOnlyIncomplete(e.target.checked)} style={{ width: 12, height: 12 }} />
-                  Only incomplete
+                  {payloadSource === 'http' ? 'Only errors' : 'Only incomplete'}
                 </label>
                 <label style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 10.5, fontFamily: 'var(--font-mono)', color: 'hsl(var(--muted-fg))', cursor: 'pointer', userSelect: 'none' }}>
                   <input type="checkbox" checked={payloadWrap} onChange={e => setPayloadWrap(e.target.checked)} style={{ width: 12, height: 12 }} />
@@ -1750,12 +1786,104 @@ export function DeviceDetailPage() {
               <div style={{ maxHeight: 600, overflowY: 'auto' }}>
                 {!filtered.length ? (
                   <div style={{ padding: 24, textAlign: 'center', color: 'hsl(var(--muted-fg))', fontFamily: 'var(--font-mono)', fontSize: 11 }}>
-                    {all.length ? `No matches for "${payloadFilter}"` : 'No payloads yet'}
+                    {all.length
+                      ? `No matches for "${payloadFilter}"`
+                      : payloadSource === 'http'
+                        ? 'No HTTP requests captured yet — start the device or wait for next ingest cycle'
+                        : 'No payloads yet'}
                   </div>
                 ) : (
                   filtered.map((row: any, i: number) => {
                     const rid = String(row._id ?? i);
                     const isOpen = expandedRow === rid;
+                    // Branch: HTTP source has a totally different shape (status, rawBody, parseError, …)
+                    if (payloadSource === 'http') {
+                      const httpStatus: number = row.status ?? 0;
+                      const httpAccent =
+                        httpStatus >= 500 ? 'hsl(var(--bad, 0 75% 55%))'
+                        : httpStatus >= 400 ? 'hsl(var(--warn, 32 95% 50%))'
+                        : httpStatus >= 200 ? 'hsl(var(--good, 142 71% 40%))'
+                        : 'hsl(var(--muted-fg))';
+                      const httpBg = isOpen
+                        ? 'hsl(var(--surface-raised))'
+                        : httpStatus >= 500 ? 'color-mix(in oklab, hsl(var(--bad, 0 75% 55%)) 8%, transparent)'
+                        : httpStatus >= 400 ? 'color-mix(in oklab, hsl(var(--warn, 32 95% 50%)) 6%, transparent)'
+                        : 'none';
+                      const errLabel = row.parseError ?? row.responseError ?? (httpStatus >= 400 ? `HTTP ${httpStatus}` : null);
+                      const summary = row.rawBody
+                        ? (row.rawBody.length > 140 ? `${row.rawBody.slice(0, 140)}…` : row.rawBody)
+                        : (errLabel ?? '(empty body)');
+                      const sizeBytes = row.contentLength ?? (row.rawBody ? new Blob([row.rawBody]).size : 0);
+                      return (
+                        <div key={rid} style={{ borderBottom: '1px solid hsl(var(--rule-ghost))', borderLeft: `3px solid ${httpAccent}` }}>
+                          <button type="button" onClick={() => setExpandedRow(isOpen ? null : rid)}
+                            style={{
+                              width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                              padding: '8px 12px', gap: 10,
+                              background: httpBg,
+                              border: 'none', cursor: 'pointer', textAlign: 'left',
+                              fontFamily: 'var(--font-mono)', fontSize: 11,
+                            }}>
+                            <span style={{ color: 'hsl(var(--muted-fg))', whiteSpace: 'nowrap', flexShrink: 0, fontSize: 10 }}>#{i + 1}</span>
+                            <span style={{
+                              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                              minWidth: 56, padding: '2px 6px',
+                              fontSize: 9, fontWeight: 700, letterSpacing: '0.08em',
+                              background: `color-mix(in oklab, ${httpAccent} 18%, transparent)`,
+                              color: httpAccent, textTransform: 'uppercase', flexShrink: 0,
+                            }}>{httpStatus || '—'}</span>
+                            <span style={{ color: 'hsl(var(--muted-fg))', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                              {fmtAudit(row.createdAt)}
+                            </span>
+                            <span style={{ flex: 1, color: 'hsl(var(--fg))', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', opacity: isOpen ? 0.4 : 1, minWidth: 0 }}>
+                              {summary}
+                            </span>
+                            <span style={{ color: 'hsl(var(--muted-fg))', whiteSpace: 'nowrap', flexShrink: 0, fontSize: 9.5, opacity: 0.7 }}>{sizeBytes}B</span>
+                            {isOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                          </button>
+                          {isOpen && (
+                            <div style={{ padding: '0 14px 12px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                              {/* Error banner */}
+                              {(row.parseError || row.responseError) && (
+                                <div style={{ padding: '8px 10px', background: `color-mix(in oklab, ${httpAccent} 10%, transparent)`, border: `1px solid color-mix(in oklab, ${httpAccent} 40%, transparent)`, color: httpAccent, fontFamily: 'var(--font-mono)', fontSize: 11 }}>
+                                  <div style={{ fontWeight: 700, fontSize: 9, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 3 }}>
+                                    {row.parseError ? 'Parse error' : 'Response error'}
+                                  </div>
+                                  {row.parseError ?? row.responseError}
+                                </div>
+                              )}
+                              {/* Raw body */}
+                              <div>
+                                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'hsl(var(--muted-fg))', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 4 }}>Raw body</div>
+                                <pre style={{
+                                  margin: 0, padding: 12,
+                                  background: 'hsl(var(--bg))', border: '1px solid hsl(var(--rule-ghost))',
+                                  fontFamily: 'var(--font-mono)', fontSize: 11, lineHeight: 1.55, color: 'hsl(var(--fg))',
+                                  overflowX: payloadWrap ? 'visible' : 'auto',
+                                  whiteSpace: payloadWrap ? 'pre-wrap' : 'pre',
+                                  wordBreak: payloadWrap ? 'break-all' : 'normal',
+                                }}>{row.rawBody ?? '(empty body)'}</pre>
+                              </div>
+                              {/* Request metadata */}
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14, fontFamily: 'var(--font-mono)', fontSize: 10, color: 'hsl(var(--muted-fg))' }}>
+                                {row.contentType && <span><span style={{ opacity: 0.6 }}>content-type:</span> {row.contentType}</span>}
+                                {row.contentLength != null && <span><span style={{ opacity: 0.6 }}>content-length:</span> {row.contentLength}B</span>}
+                                {row.apiKey && <span><span style={{ opacity: 0.6 }}>api_key:</span> {row.apiKey}</span>}
+                                {row.ip && <span><span style={{ opacity: 0.6 }}>ip:</span> {row.ip}</span>}
+                                {row.userAgent && <span><span style={{ opacity: 0.6 }}>ua:</span> {row.userAgent}</span>}
+                              </div>
+                              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6 }}>
+                                <button type="button" onClick={() => { copyText(row.rawBody ?? ''); toast.success('Copied raw body'); }}
+                                  style={{ background: 'none', border: '1px solid hsl(var(--border))', padding: '3px 8px', fontSize: 9.5, fontFamily: 'var(--font-mono)', color: 'hsl(var(--fg))', cursor: 'pointer', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                                  <Copy size={10} style={{ verticalAlign: 'middle', marginRight: 4 }} />Body
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    }
+                    // Stored telemetry shape (default)
                     const rawObj = { timestamp: row.timestamp ?? row.ts ?? row.createdAt, ...(row.fields ?? {}) };
                     const pretty = JSON.stringify(rawObj, null, 2);
                     const compact = JSON.stringify(rawObj);

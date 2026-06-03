@@ -40,6 +40,21 @@ const app = Fastify({
 });
 
 async function bootstrap() {
+  // Override JSON content-type parser to capture the raw body string on every request.
+  // Lets us log the exact bytes the device sent — including malformed JSON that would otherwise be rejected
+  // by Fastify before the route handler runs (used by /telemetry/ingest-log for device debugging).
+  app.addContentTypeParser('application/json', { parseAs: 'string' }, (req: any, body: string, done) => {
+    req.rawBody = body;
+    if (!body) return done(null, {});
+    try {
+      const parsed = JSON.parse(body);
+      done(null, parsed);
+    } catch (err) {
+      (err as any).statusCode = 400;
+      done(err as Error, undefined);
+    }
+  });
+
   // Multipart (OTA uploads)
   await app.register(multipart, { limits: { fileSize: 50 * 1024 * 1024 } });
 

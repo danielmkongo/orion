@@ -18,4 +18,24 @@ export const telemetryApi = {
       '/telemetry/location-history',
       { params: { deviceId, from, to, limit } }
     ).then(r => r.data),
+
+  ingestLog: (deviceId: string, limit?: number, status?: number) =>
+    apiClient.get<{ data: Array<{
+      _id: string;
+      deviceId: string | null;
+      apiKey: string | null;
+      status: number;
+      contentType: string | null;
+      contentLength: number | null;
+      rawBody: string | null;
+      parsedBody: Record<string, unknown> | null;
+      parseError: string | null;
+      responseError: string | null;
+      ip: string | null;
+      userAgent: string | null;
+      createdAt: string;
+    }>; count: number }>(
+      '/telemetry/ingest-log',
+      { params: { deviceId, limit, status } }
+    ).then(r => r.data),
 };
