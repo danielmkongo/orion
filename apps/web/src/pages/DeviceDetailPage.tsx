@@ -170,6 +170,7 @@ export function DeviceDetailPage() {
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
   const [payloadFilter, setPayloadFilter] = useState('');
   const [payloadWrap, setPayloadWrap] = useState(false);
+  const [onlyIncomplete, setOnlyIncomplete] = useState(false);
   const { on, subscribeDevice } = useSocket();
   const queryClient = useQueryClient();
   const { fmt: fmtTs, fmtAudit, displayTz } = useFmtTs();
@@ -1673,13 +1674,29 @@ export function DeviceDetailPage() {
         </button>
         {showRawPayloads && (() => {
           const all: any[] = (tableData as any)?.data ?? [];
+          const expectedKeys: string[] = schemaFields.map((f: any) => f.key).filter(Boolean);
+          const completenessOf = (row: any): { present: number; expected: number; missing: string[]; status: 'empty' | 'partial' | 'complete' } => {
+            const fields = row.fields ?? {};
+            const presentKeys = Object.keys(fields).filter(k => fields[k] !== null && fields[k] !== undefined && fields[k] !== '');
+            if (expectedKeys.length === 0) {
+              // No schema declared — fall back to "empty" if 0 fields, else "complete"
+              return { present: presentKeys.length, expected: presentKeys.length, missing: [], status: presentKeys.length === 0 ? 'empty' : 'complete' };
+            }
+            const missing = expectedKeys.filter(k => !presentKeys.includes(k));
+            const status = presentKeys.length === 0 ? 'empty' : (missing.length > 0 ? 'partial' : 'complete');
+            return { present: presentKeys.length, expected: expectedKeys.length, missing, status };
+          };
           const q = payloadFilter.trim().toLowerCase();
-          const filtered = q
+          let filtered = q
             ? all.filter((row: any) => {
                 const rawObj = { timestamp: row.timestamp ?? row.ts ?? row.createdAt, ...(row.fields ?? {}) };
                 return JSON.stringify(rawObj).toLowerCase().includes(q);
               })
             : all;
+          if (onlyIncomplete) {
+            filtered = filtered.filter((row: any) => completenessOf(row).status !== 'complete');
+          }
+          const incompleteCount = all.filter((row: any) => completenessOf(row).status !== 'complete').length;
           const copyAll = () => {
             const text = filtered.map((row: any) => {
               const rawObj = { timestamp: row.timestamp ?? row.ts ?? row.createdAt, ...(row.fields ?? {}) };
@@ -1701,7 +1718,14 @@ export function DeviceDetailPage() {
                 />
                 <span className="mono" style={{ fontSize: 10.5, color: 'hsl(var(--muted-fg))', letterSpacing: '0.06em' }}>
                   {filtered.length} {q ? `of ${all.length}` : ''}
+                  {incompleteCount > 0 && (
+                    <span style={{ marginLeft: 8, color: 'hsl(var(--warn, 32 95% 50%))', fontWeight: 600 }}>· {incompleteCount} incomplete</span>
+                  )}
                 </span>
+                <label style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 10.5, fontFamily: 'var(--font-mono)', color: 'hsl(var(--muted-fg))', cursor: 'pointer', userSelect: 'none' }}>
+                  <input type="checkbox" checked={onlyIncomplete} onChange={e => setOnlyIncomplete(e.target.checked)} style={{ width: 12, height: 12 }} />
+                  Only incomplete
+                </label>
                 <label style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 10.5, fontFamily: 'var(--font-mono)', color: 'hsl(var(--muted-fg))', cursor: 'pointer', userSelect: 'none' }}>
                   <input type="checkbox" checked={payloadWrap} onChange={e => setPayloadWrap(e.target.checked)} style={{ width: 12, height: 12 }} />
                   Wrap JSON
@@ -1716,7 +1740,7 @@ export function DeviceDetailPage() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => { setExpandedRow(null); setPayloadFilter(''); }}
+                  onClick={() => { setExpandedRow(null); setPayloadFilter(''); setOnlyIncomplete(false); }}
                   style={{ background: 'none', border: '1px solid hsl(var(--border))', padding: '4px 10px', fontSize: 10, fontFamily: 'var(--font-mono)', color: 'hsl(var(--muted-fg))', cursor: 'pointer', letterSpacing: '0.08em', textTransform: 'uppercase' }}
                 >
                   Reset
@@ -1736,20 +1760,46 @@ export function DeviceDetailPage() {
                     const pretty = JSON.stringify(rawObj, null, 2);
                     const compact = JSON.stringify(rawObj);
                     const bytes = new Blob([compact]).size;
+                    const c = completenessOf(row);
+                    const accent = c.status === 'empty'
+                      ? 'hsl(var(--bad, 0 75% 55%))'
+                      : c.status === 'partial'
+                        ? 'hsl(var(--warn, 32 95% 50%))'
+                        : 'hsl(var(--good, 142 71% 40%))';
+                    const rowBg = isOpen
+                      ? 'hsl(var(--surface-raised))'
+                      : c.status === 'empty'
+                        ? 'color-mix(in oklab, hsl(var(--bad, 0 75% 55%)) 6%, transparent)'
+                        : c.status === 'partial'
+                          ? 'color-mix(in oklab, hsl(var(--warn, 32 95% 50%)) 5%, transparent)'
+                          : 'none';
                     return (
-                      <div key={rid} style={{ borderBottom: '1px solid hsl(var(--rule-ghost))' }}>
+                      <div key={rid} style={{ borderBottom: '1px solid hsl(var(--rule-ghost))', borderLeft: `3px solid ${accent}` }}>
                         <button
                           type="button"
                           onClick={() => setExpandedRow(isOpen ? null : rid)}
                           style={{
                             width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                            padding: '8px 14px', gap: 12,
-                            background: isOpen ? 'hsl(var(--surface-raised))' : 'none',
+                            padding: '8px 12px', gap: 10,
+                            background: rowBg,
                             border: 'none', cursor: 'pointer',
                             textAlign: 'left', fontFamily: 'var(--font-mono)', fontSize: 11,
                           }}>
                           <span style={{ color: 'hsl(var(--muted-fg))', whiteSpace: 'nowrap', flexShrink: 0, fontSize: 10 }}>
                             #{i + 1}
+                          </span>
+                          {/* Status badge */}
+                          <span style={{
+                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                            minWidth: 56, padding: '2px 6px',
+                            fontSize: 9, fontWeight: 700, letterSpacing: '0.08em',
+                            background: `color-mix(in oklab, ${accent} 16%, transparent)`,
+                            color: accent, textTransform: 'uppercase',
+                            flexShrink: 0,
+                          }}>
+                            {c.status === 'empty' ? 'EMPTY'
+                              : c.status === 'partial' ? `${c.present}/${c.expected}`
+                              : `${c.present}`}
                           </span>
                           <span style={{ color: 'hsl(var(--muted-fg))', whiteSpace: 'nowrap', flexShrink: 0 }}>
                             {fmtTs(row.timestamp ?? row.ts ?? row.createdAt, device as any)}
@@ -1773,9 +1823,21 @@ export function DeviceDetailPage() {
                               whiteSpace: payloadWrap ? 'pre-wrap' : 'pre',
                               wordBreak: payloadWrap ? 'break-all' : 'normal',
                             }}>{pretty}</pre>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 }}>
+                            {c.missing.length > 0 && (
+                              <div style={{ marginTop: 8, padding: '8px 10px', background: `color-mix(in oklab, ${accent} 8%, transparent)`, border: `1px solid color-mix(in oklab, ${accent} 35%, transparent)`, fontFamily: 'var(--font-mono)', fontSize: 10.5 }}>
+                                <div style={{ color: accent, fontWeight: 600, marginBottom: 4, letterSpacing: '0.05em', textTransform: 'uppercase', fontSize: 9 }}>
+                                  Missing fields ({c.missing.length})
+                                </div>
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                                  {c.missing.map(k => (
+                                    <span key={k} style={{ padding: '2px 6px', background: 'hsl(var(--surface-raised))', color: 'hsl(var(--fg))', border: '1px solid hsl(var(--rule-ghost))' }}>{k}</span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, flexWrap: 'wrap', gap: 8 }}>
                               <span className="mono" style={{ fontSize: 9.5, color: 'hsl(var(--muted-fg))' }}>
-                                {Object.keys(row.fields ?? {}).length} field{Object.keys(row.fields ?? {}).length !== 1 ? 's' : ''} · {bytes} bytes
+                                {c.present} of {c.expected} field{c.expected !== 1 ? 's' : ''} present · {bytes} bytes
                               </span>
                               <div style={{ display: 'flex', gap: 6 }}>
                                 <button
