@@ -1669,10 +1669,10 @@ export function DeviceDetailPage() {
             {showRawPayloads ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
             Raw payloads <span style={{ opacity: 0.5, marginLeft: 4, textTransform: 'none', letterSpacing: 0 }}>· debug · what the device actually sent</span>
           </span>
-          <span style={{ opacity: 0.6, fontSize: 10 }}>{(tableData as any[] | undefined)?.length ?? 0} entries</span>
+          <span style={{ opacity: 0.6, fontSize: 10 }}>{(tableData as any)?.data?.length ?? 0} entries</span>
         </button>
         {showRawPayloads && (() => {
-          const all = (tableData as any[] | undefined) ?? [];
+          const all: any[] = (tableData as any)?.data ?? [];
           const q = payloadFilter.trim().toLowerCase();
           const filtered = q
             ? all.filter((row: any) => {
